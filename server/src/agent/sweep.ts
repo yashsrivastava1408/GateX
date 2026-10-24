@@ -3,6 +3,7 @@ import { keyStems } from './findingCheck.js';
 import { profileWorkbook, stems, type ColumnProfile, type SheetProfile, type WorkbookProfile } from '../excel/profile.js';
 import { columnLetters, type WorkbookModel } from '../excel/workbook.js';
 import type { DraftFinding } from './types.js';
+import { recountTallies } from './tallies.js';
 
 /**
  * A row-by-row sweep done in code, whatever the scorecard asks. Models that read a whole sheet skim it and miss a blank cell or a repeated
@@ -22,7 +23,9 @@ import type { DraftFinding } from './types.js';
  */
 
 export interface SweepFinding {
-  kind: 'empty_cell' | 'duplicate_id' | 'dangling_reference' | 'wrong_count' | 'vague_words' | 'missing_target' | 'stated_count' | 'conditional_empty' | 'invalid_value';
+  kind: 'empty_cell' | 'duplicate_id' | 'dangling_reference' | 'wrong_count' | 'vague_words' | 'missing_target' | 'stated_count' | 'conditional_empty' | 'invalid_value' | 'tally_mismatch'
+    // Deep checks (sweepDeep.ts): counted into exact scores only, never listed as report issues.
+    | 'bad_id_format' | 'cross_reference' | 'orphan_row' | 'near_miss_value' | 'too_wide' | 'restated_reason';
   location: CellRef;
   title: string;
   detail: string;
@@ -32,8 +35,32 @@ export interface SweepFinding {
   topic: string;
 }
 
+/**
+ * How much the sweep looked at, for the exact scores: the share of what was looked at that was clean. `all` lifts the per-column display
+ * limit so every defect is counted, not just the first few that are listed in the report.
+ */
+export interface SweepStats {
+  /** Data rows of the sheets the sweep ran over (sheets with too few rows to say what is usual are not counted). */
+  rows: number;
+  /** Id cells looked at for repeats. */
+  ids: number;
+  /** Cells looked at in reference columns, plus the distinct ids cited in running text. */
+  references: number;
+  /** Rows that state a children count. */
+  childCounts: number;
+  /** Cells looked at in required/optional columns. */
+  obligations: number;
+  /** Tallies the file states about itself that were recounted (right or wrong). */
+  tallies: number;
+}
+export interface SweepOptions {
+  all?: boolean;
+  stats?: SweepStats;
+}
+export const emptyStats = (): SweepStats => ({ rows: 0, ids: 0, references: 0, childCounts: 0, obligations: 0, tallies: 0 });
+
 /** Sheets smaller than this have too few rows to say what is "usual" in a column. */
-const MIN_ROWS = 12;
+export const MIN_ROWS = 12;
 /** A column counts as always-filled at or above this share, and at most this many cells (or 3% of rows) may be empty. */
 const FILLED_AT = 0.95;
 const MAX_EMPTY = 3;
@@ -43,13 +70,13 @@ const VAGUE_WORDS = /\b(?:various|etc\.?|and so on|as needed|stuff|things|someho
 const ESSENTIAL = /definition|reason|description|name|type|required|source|owner|unit|id\b/i;
 const SUMMARY_LABEL = /^(?:counts?|totals?|sum|subtotal|grand total|average|avg|summary)\s*:?$/i;
 
-const norm = (t: string) => t.trim();
+export const norm = (t: string) => t.trim();
 /** Columns that say whether something is required, and the plain ways a register says it. A value outside these is a typo or an invention. */
 const OBLIGATION_COLUMN = /^(?:required|mandatory|optional)\??$|^m\/o\/c$/i;
 const OBLIGATION_VALUE = /^(?:required|optional|conditional|conditionally required|mandatory|recommended|yes|no|true|false|y|n|m|o|c|m\/o\/c|n\/a|not applicable|tbd|(?:required|conditional|optional)\b.*)$/i;
 const address = (col: ColumnProfile, row: number): CellRef & { cell: string } => ({ sheet: '', cell: `${col.letter}${row}` });
 
-function dataRowsOf(wb: WorkbookModel, sheet: SheetProfile): number[] {
+export function dataRowsOf(wb: WorkbookModel, sheet: SheetProfile): number[] {
   const rows = new Set<number>();
   for (const [r] of wb.cells(sheet.name)) if (r > sheet.headerRow) rows.add(r);
   const firstCol = sheet.columns.find((c) => c.title);
@@ -57,12 +84,15 @@ function dataRowsOf(wb: WorkbookModel, sheet: SheetProfile): number[] {
 }
 
 // Nearly unique is enough: the whole point is to find the few that repeat.
-const idColumnOf = (s: SheetProfile) => s.columns.find((c) => c.title === s.idColumn) ?? s.columns.find((c) => c.title && /\bid\b|^path|^ref/i.test(c.title) && c.filled > 0 && c.distinct / c.filled >= 0.95);
+export const idColumnOf = (s: SheetProfile) => s.columns.find((c) => c.title === s.idColumn) ?? s.columns.find((c) => c.title && /\bid\b|^path|^ref/i.test(c.title) && c.filled > 0 && c.distinct / c.filled >= 0.95);
 
-export function sweepSheet(wb: WorkbookModel, sheet: SheetProfile): SweepFinding[] {
+export function sweepSheet(wb: WorkbookModel, sheet: SheetProfile, options: SweepOptions = {}): SweepFinding[] {
   const out: SweepFinding[] = [];
   const rows = dataRowsOf(wb, sheet);
   if (rows.length < MIN_ROWS) return out;
+  const stats = options.stats;
+  const perColumn = options.all ? Infinity : MAX_PER_COLUMN;
+  if (stats) stats.rows += rows.length;
   const text = (col: ColumnProfile, row: number) => norm(wb.cellText(sheet.name, `${col.letter}${row}`) ?? '');
   const at = (col: ColumnProfile, row: number): CellRef => ({ ...address(col, row), sheet: sheet.name });
   const titled = sheet.columns.filter((c) => c.title && c.kind !== 'empty' && c.kind !== 'formula');
@@ -79,7 +109,7 @@ export function sweepSheet(wb: WorkbookModel, sheet: SheetProfile): SweepFinding
     const full = (r: number) => usual.length === 0 || usual.filter((c) => text(c, r) !== '').length / usual.length >= 0.8;
     // A row with no id is not an entry of the register (a total, a note, a blank line), so nothing is "missing" from it.
     const isEntry = (r: number) => !idCol || idCol === col || text(idCol, r) !== '';
-    for (const r of empty.filter((x) => full(x) && isEntry(x)).slice(0, MAX_PER_COLUMN)) {
+    for (const r of empty.filter((x) => full(x) && isEntry(x)).slice(0, perColumn)) {
       const who = idCol ? ` (row ${text(idCol, r) || r})` : '';
       out.push({
         kind: 'empty_cell', location: at(col, r), severity: ESSENTIAL.test(col.title) ? 'MEDIUM' : 'LOW', topic: col.title,
@@ -114,7 +144,7 @@ export function sweepSheet(wb: WorkbookModel, sheet: SheetProfile): SweepFinding
       if (exceptions.length > 0 && exceptions.length <= MAX_EMPTY && (!best || exceptions.length < best.exceptions.length)) best = { by, exceptions };
     }
     if (!best) continue;
-    for (const r of best.exceptions.slice(0, MAX_PER_COLUMN)) {
+    for (const r of best.exceptions.slice(0, perColumn)) {
       const who = idCol ? ` (row ${text(idCol, r) || r})` : '';
       out.push({
         kind: 'conditional_empty', location: at(col, r), severity: ESSENTIAL.test(col.title) ? 'MEDIUM' : 'LOW', topic: col.title,
@@ -131,7 +161,8 @@ export function sweepSheet(wb: WorkbookModel, sheet: SheetProfile): SweepFinding
     const fine = values.filter((x) => OBLIGATION_VALUE.test(x.v));
     // Only a column that is plainly an obligation column (most values are the usual words): "Maybe" in it is the odd one out.
     if (values.length < MIN_ROWS || fine.length / values.length < 0.8) continue;
-    for (const x of values.filter((y) => !OBLIGATION_VALUE.test(y.v)).slice(0, MAX_PER_COLUMN)) {
+    if (stats) stats.obligations += values.length;
+    for (const x of values.filter((y) => !OBLIGATION_VALUE.test(y.v)).slice(0, perColumn)) {
       const who = idCol ? ` (row ${text(idCol, x.r) || x.r})` : '';
       out.push({
         kind: 'invalid_value', location: at(col, x.r), severity: 'MEDIUM', topic: col.title,
@@ -145,6 +176,7 @@ export function sweepSheet(wb: WorkbookModel, sheet: SheetProfile): SweepFinding
   // 2. Duplicate ids.
   const idValues = idCol ? rows.map((r) => text(idCol, r)).filter(Boolean) : [];
   if (idCol && idValues.length >= MIN_ROWS && new Set(idValues).size / idValues.length >= 0.97) {
+    if (stats) stats.ids += idValues.length;
     const first = new Map<string, number>();
     for (const r of rows) {
       const v = text(idCol, r);
@@ -167,10 +199,11 @@ export function sweepSheet(wb: WorkbookModel, sheet: SheetProfile): SweepFinding
     for (const col of titled.filter((c) => c !== idCol && /parent|reference|\bref\b|link|depends|belongs/i.test(c.title))) {
       const used = rows.map((r) => ({ r, v: text(col, r) })).filter((x) => x.v !== '');
       if (used.length < MIN_ROWS) continue;
+      if (stats) stats.references += used.length;
       const bad = used.filter((x) => !x.v.split(/[,;|]/).map(norm).filter(Boolean).every((p) => ids.has(p)));
       // A reference column is one where nearly everything resolves; a column of free text mentions is left alone.
       if (bad.length === 0 || bad.length > MAX_EMPTY || (used.length - bad.length) / used.length < 0.9) continue;
-      for (const x of bad.slice(0, MAX_PER_COLUMN)) {
+      for (const x of bad.slice(0, perColumn)) {
         out.push({
           kind: 'dangling_reference', location: at(col, x.r), severity: 'MEDIUM', topic: col.title,
           title: `"${col.title}" ${x.v} does not exist (${sheet.name})`,
@@ -186,6 +219,7 @@ export function sweepSheet(wb: WorkbookModel, sheet: SheetProfile): SweepFinding
   if (idCol && countCol) {
     const ids = rows.map((r) => ({ r, v: text(idCol, r) }));
     if (ids.filter((x) => /^\d+(\.\d+)+$/.test(x.v) || /^\d+$/.test(x.v)).length / Math.max(ids.length, 1) > 0.9) {
+      if (stats) stats.childCounts += ids.filter((x) => /^\d+$/.test(text(countCol, x.r))).length;
       for (const x of ids) {
         const stated = text(countCol, x.r);
         if (!/^\d+$/.test(stated)) continue;
@@ -242,7 +276,7 @@ const canon = (token: string) => token.replace(/\d+/g, (n) => String(Number(n)))
  * id counts as a definition; an id inside a sentence is a mention. Mentions in example and pattern columns are skipped (they invent ids on
  * purpose), and so are shapes with fewer than MIN_FAMILY defined ids (too few to say what exists). One result per missing id.
  */
-export function sweepMissingTargets(wb: WorkbookModel, profile: WorkbookProfile): SweepFinding[] {
+export function sweepMissingTargets(wb: WorkbookModel, profile: WorkbookProfile, options: SweepOptions = {}): SweepFinding[] {
   const defined = new Set<string>();
   const mentions: Array<{ token: string; sheet: string; cell: string }> = [];
   for (const sheet of profile.sheets) {
@@ -262,10 +296,12 @@ export function sweepMissingTargets(wb: WorkbookModel, profile: WorkbookProfile)
   const family = new Map<string, number>();
   for (const id of defined) family.set(shapeOf(id), (family.get(shapeOf(id)) ?? 0) + 1);
   const seen = new Set<string>();
+  const looked = new Set<string>();
   const out: SweepFinding[] = [];
   for (const m of mentions) {
-    if (defined.has(canon(m.token)) || seen.has(m.token) || isPlaceholder(m.token)) continue;
-    if ((family.get(shapeOf(m.token)) ?? 0) < MIN_FAMILY) continue;
+    if (isPlaceholder(m.token) || (family.get(shapeOf(m.token)) ?? 0) < MIN_FAMILY) continue;
+    looked.add(canon(m.token));
+    if (defined.has(canon(m.token)) || seen.has(m.token)) continue;
     seen.add(m.token);
     out.push({
       kind: 'missing_target', location: { sheet: m.sheet, cell: m.cell }, severity: 'MEDIUM', topic: 'reference id link',
@@ -273,8 +309,9 @@ export function sweepMissingTargets(wb: WorkbookModel, profile: WorkbookProfile)
       detail: `${m.sheet}!${m.cell} cites "${m.token}", but no cell in the file defines it, although ${family.get(shapeOf(m.token))} other ids of the same form are defined.`,
       fix: `Point ${m.sheet}!${m.cell} at the id that exists, or add ${m.token}.`,
     });
-    if (out.length >= MAX_MISSING_TARGETS) break;
+    if (!options.all && out.length >= MAX_MISSING_TARGETS) break;
   }
+  if (options.stats) options.stats.references += looked.size;
   return out;
 }
 
@@ -290,7 +327,7 @@ const STATED_COUNT = /(?<![\w.-])(\d{1,3}(?:,\d{3})+|\d{2,6})\s+((?:[A-Za-z][A-Z
  * accept such a figure (a perfect score for a tally the file wrote about itself), so each one is compared with the sheet it names. Only a noun
  * whose every word is in exactly one sheet's name counts, so "85 leaves" or "12 weeks" never matches a sheet by accident.
  */
-export function sweepStatedCounts(wb: WorkbookModel, profile: WorkbookProfile): SweepFinding[] {
+export function sweepStatedCounts(wb: WorkbookModel, profile: WorkbookProfile, options: SweepOptions = {}): SweepFinding[] {
   // Rows are counted the way the sweep counts them: a TOTAL or COUNT row under the table is not an entry.
   const sheets = profile.sheets.map((s) => ({ s, rows: dataRowsOf(wb, s).length, words: new Set(plainStems(s.name.replace(/_/g, ' '))) })).filter((x) => x.rows >= 5);
   const out: SweepFinding[] = [];
@@ -306,10 +343,12 @@ export function sweepStatedCounts(wb: WorkbookModel, profile: WorkbookProfile): 
         const matches = sheets.filter((x) => x.s.name !== sheet.name && x.words.size === new Set(nounWords).size && nounWords.every((w) => x.words.has(w)));
         if (matches.length !== 1) continue;
         const target = { name: matches[0]!.s.name, dataRows: matches[0]!.rows };
-        if (target.dataRows === stated || seen.has(`${target.name}:${stated}`)) continue;
         // A tally that is slightly off is a slip. A figure far from the row count is about something else ("14 attributes" per record), not this sheet.
         if (stated < 10 || Math.abs(target.dataRows - stated) > Math.max(3, Math.round(target.dataRows * 0.15))) continue;
+        if (seen.has(`${target.name}:${stated}`)) continue;
         seen.add(`${target.name}:${stated}`);
+        if (options.stats) options.stats.tallies += 1;
+        if (target.dataRows === stated) continue;
         // Only the words that name the sheet: "parameters", not "parameters in all".
         const noun = m[2]!.trim().split(/\s+/).filter((w) => plainStems(w).some((s) => matches[0]!.words.has(s))).join(' ') || m[2]!.trim();
         out.push({
@@ -321,13 +360,20 @@ export function sweepStatedCounts(wb: WorkbookModel, profile: WorkbookProfile): 
       }
     }
   }
-  return out.slice(0, 6);
+  return options.all ? out : out.slice(0, 6);
 }
 
-export function sweepWorkbook(wb: WorkbookModel, profile: WorkbookProfile = profileWorkbook(wb)): SweepFinding[] {
-  return [...profile.sheets.flatMap((sheet) => sweepSheet(wb, sheet)), ...sweepMissingTargets(wb, profile), ...sweepStatedCounts(wb, profile)];
+export function sweepWorkbook(wb: WorkbookModel, profile: WorkbookProfile = profileWorkbook(wb), options: SweepOptions = {}): SweepFinding[] {
+  return [...profile.sheets.flatMap((sheet) => sweepSheet(wb, sheet, options)), ...sweepMissingTargets(wb, profile, options), ...sweepStatedCounts(wb, profile, options)];
 }
 
+
+/** The sweep over the whole file: every real sheet row by row, plus the tallies the file states about itself (a PDF's field dictionary, "283 of 426 (66%)"). */
+export function sweepAll(wb: WorkbookModel, options: SweepOptions = {}): SweepFinding[] {
+  const profile = profileWorkbook(wb);
+  const real = { sheets: profile.sheets.filter((s) => !isPdfPage(s.name)) };
+  return [...sweepWorkbook(wb, real, options), ...recountTallies(wb, profile, options)];
+}
 
 /** Pages of a PDF are "sheets" with one column; a sweep by column means nothing there. */
 const isPdfPage = (name: string) => /^Page \d+$/.test(name);
@@ -350,9 +396,7 @@ function questionFor(finding: SweepFinding, questions: DimensionSpec[]): Dimensi
  */
 export function sweepFindings(scorecard: Scorecard, questions: DimensionSpec[], wb: WorkbookModel, returnTo: ReturnTo): DraftFinding[] {
   if (questions.length === 0) return [];
-  const profile = profileWorkbook(wb);
-  const real = { sheets: profile.sheets.filter((s) => !isPdfPage(s.name)) };
-  const found = sweepWorkbook(wb, real).sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]).slice(0, MAX_SWEEP_FINDINGS);
+  const found = sweepAll(wb).sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]).slice(0, MAX_SWEEP_FINDINGS);
   return found.flatMap((f): DraftFinding[] => {
     const q = questionFor(f, questions);
     if (!q) return [];
