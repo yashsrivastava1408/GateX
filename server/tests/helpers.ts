@@ -58,6 +58,7 @@ export interface RunOptions {
   scorecard?: { scorecard: Scorecard; hash: string };
   models?: ModelsConfig;
   sources?: string;
+  env?: NodeJS.ProcessEnv;
 }
 
 export async function runEvaluation(options: RunOptions): Promise<EvaluationOutput & { workbookPath: string }> {
@@ -75,7 +76,7 @@ export async function runEvaluation(options: RunOptions): Promise<EvaluationOutp
     sources: options.sources ?? '',
     models,
     providers: createProviderFactory(models, { mockDelayMs: 0 }),
-    env: {},
+    env: options.env ?? {},
   });
   return { ...output, workbookPath };
 }

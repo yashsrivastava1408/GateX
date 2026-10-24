@@ -105,7 +105,7 @@ export const STAGES = [
   { stage: 'checks', title: 'Checking the facts', detail: 'Counting what can be counted exactly: blanks, repeats and allowed values' },
   { stage: 'rating', title: 'Three examiners mark it', detail: 'Each one marks the questions that need judgement, alone' },
   { stage: 'consolidating', title: 'Final review', detail: 'The final reviewer compares the three sets of marks' },
-  { stage: 'reporting', title: 'Writing the report', detail: 'A fixed rule decides the result, then your report and the steps to green are written' },
+  { stage: 'reporting', title: 'Writing the report', detail: 'Each finding gets a second look against your file, a fixed rule decides the result, then your report and the steps to green are written' },
 ] as const;
 
 export const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 ? one : many}`;

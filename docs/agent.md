@@ -40,6 +40,7 @@ server/src/agent/
 │
 ├── rater.ts            step 3: runs one Examiner, keeps only evidence-backed claims
 ├── fallback.ts           backup models: same Examiner, same family, tried in order
+├── twoRuns.ts            the optional "run twice" mode: two full evaluations, their average, the gap and the unstable note
 ├── repeats.ts            the median of one Examiner's repeated runs of a section, and how far they differed
 ├── sectionPlanner.ts     groups questions into sections by the sheets and columns they `reads`
 ├── autoReads.ts          gives a question that names no sheets the sheets that match it, when the whole file is large
@@ -54,9 +55,15 @@ server/src/agent/
 ├── verdict.ts          step 5: weighted score, must-pass questions, green / amber / red
 ├── findings.ts         step 6: issues from code checks, ids, ordering
 ├── findingCheck.ts     step 6: sets aside issues the file contradicts or that say nothing, and merges repeats
+├── claimCheck.ts       step 6: code-only checks: a named field or id the file does define, a cited cell that says something else, a gap the file already marks as open
 ├── presence.ts         step 6: sets aside "the file has no X" issues when a cell really holds X (the Final reviewer finds it, code proves the quote)
+├── verifyFindings.ts   step 6: the second look: a separate model reads each Examiner issue against the file; set aside only on a cell and words that code finds in the file
 ├── reliability.ts      step 6: the lone-examiner rule, from what the test library measured
 ├── sweep.ts            step 2/6: the row-by-row sweep in code (empty cells, repeated ids, dangling references, ids cited but defined nowhere, wrong counts, filler)
+├── sweepDeep.ts        step 5: more exact counts used only for scores (id pattern, cross-sheet references, orphan rows, slipped values, parent width, repeated reasons)
+├── exactScore.ts       step 5: counted criteria scored by an exact count (a ceiling the Examiners cannot raise)
+├── anchorFloor.ts      step 5: a score below the lowest rung the scorecard's own scale describes is raised to it (when the cited cells are there)
+├── tallies.ts          step 2/6: recounts the figures a file states about itself ("68 fields", "283 of 426 (66%)", "COUNT ... 50 L4 leaves")
 ├── pathToGreen.ts      step 6: smallest set of fixes that lifts the colour
 └── types.ts            internal types (Examiner outcomes, draft issues, call metadata)
 ```
@@ -180,6 +187,16 @@ listed first as **Needs attention** notes. They do not change the colour. When t
 version of this rule coloured differently. The score is compared unrounded and shown rounded **down**, so 74.96 is never shown as 75. An
 optional override (API only, with a written reason) is shown next to GateX's own verdict, which stays on record.
 
+#### Optional: run twice  (`twoRuns.ts`)
+
+Scores move a little from run to run, and a score near a line (75) can land on either side of it. **Run twice** (`evaluateTwice`) does two full
+evaluations in a row with the same Examiners and settings, and scores each with the rule above. The report's score is the **average** of the two,
+and the colour comes from that average by score alone. The report also shows both scores and the **gap** between them. If the gap is **8 points or
+more**, or the two runs land on different colours, the report adds a "Needs attention" note, "Result is unstable, treat it as a range"; the colour
+does not change. The areas, issues and path to green come from the run closest to the average. It is off by default (API `runTwice=1`, CLI `--twice`,
+a tick box on the upload page), costs about twice as much, and works with adaptive repeats and Quick check unchanged, since each run is an ordinary
+evaluation. Both runs' tokens and timings are added together in the run log.
+
 ### Step 6 · Explain  (`findings.ts`, `pathToGreen.ts`)
 
 - **Issues.** Every code check that is not perfect becomes an issue pointing at the failing cells, with a fix taken from the scorecard.
@@ -199,6 +216,70 @@ cell, attached to the scorecard question with the most words in common, and the 
 The sweep also keeps the score honest (`capByExactFindings`): a question the sweep found mistakes under keeps a mark of at most 4 (one or two
 mistakes), 3 (three to five) or 2 (six or more), whatever the Examiners gave it. The cap is named in the question's rationale and in the run notes.
 
+**Exact scores for counted criteria** (`exactScore.ts`). A criterion that is a count ("no duplicate ids", "every field has a definition, a type and a
+reason", "every reference resolves", "list fields hold only allowed values") is counted by code over every row, and its score is set from a fixed
+rule that the Examiners cannot raise. Before the criteria are combined into their dimension, each Examiner-scored criterion is compared with the
+ceiling the count allows and lowered to it if it is higher; a score is never raised (a clean count proves only that these mistakes are absent). The
+rule is the same everywhere:
+
+| Clean share of the rows looked at | Score | | Wrong tallies | Score |
+|---|---|---|---|---|
+| 100% | 5 | | 0 | 5 |
+| 99% or more | 4 | | 1 | 4 |
+| 97.5% or more | 3 | | 2 | 3 |
+| 95% or more | 2 | | 3 | 2 |
+| 90% or more | 1 | | 4 | 1 |
+| below 90% | 0 | | 5 or more | 0 |
+
+Any mistake at all caps a share-scored criterion at 4. "Rows looked at" is every data row of the sheets the sweep ran over (every id for repeats, every
+reference cell for references, every Required cell for allowed values); a row with two mistakes in one family counts once. A criterion is made exact
+only when its own words name the count:
+
+| Family | The criterion says | Counted by the sweep |
+|---|---|---|
+| empty cells | "no blank cells", "every field has a value / a definition, a type and a reason" (only the columns it names) | empty cell in a full column; empty cell on rows of a kind that always has it |
+| repeated ids | "unique", "no duplicates" | the same id on two rows |
+| references | "resolves", "no dangling / orphan / broken reference", "ids cited exist" | reference to an id that does not exist; id cited in text and defined nowhere |
+| allowed values | "hold only allowed / valid values" | a value in a Required column that is not required / optional / conditional |
+| child counts | "children count matches / is correct" | a "Children" figure that is not the rows under that id |
+| tallies | "counts match", "reconciled", "totals add up" | a tally the file states that its own rows contradict |
+| id pattern | "ids follow NFR-nnn", "id pattern", "well-formed ids" | an id that breaks the pattern the criterion states (else the one shape 97% of the ids share) |
+| parent width | "no parent has more than 10 children", "15 children or fewer", "<= 15 children" | a parent with more children than the limit the criterion states (path ids or a Parent column) |
+| reasons | "reasons that do not restate the definition" | a Reason cell that is the definition of the same row copied over |
+| filled cells (wider wording) | "Definition present", "Cell fill", "Fields with a type", "Atomic leaves with definition, type, reason" | same as empty cells, only the columns named |
+| references (wider) | "foreign key", "cross-sheet", "no orphan rows", "every row has a parent" | a value that is not an id of the sheet the rest of its column points at; a path id (1.2.3) whose parent (1.2) is not a row |
+| allowed values (wider) | "controlled vocabulary", "from the allowed list" | a value used once or twice that is only a case or one-letter slip of a value most rows use ("high" among "High"), in a column the question names |
+
+Everything else stays a judgement. "Every allowed value has a plain meaning" and "no section has more than 10 children" are not counts of the
+families above, so they get no ceiling. The ceiling is named in the criterion's rationale and in the run notes ("SC-03 was set to 3 (the examiners
+gave 5): code counted 1 of 79 (1.3%) repeated ids"). Only the Examiners' score moves; the issues the sweep found are listed exactly as before.
+
+**Deep checks** (`sweepDeep.ts`) feed those ceilings only; they are not listed as report issues, so a rule that is wrong about an unseen layout can lower one
+criterion's ceiling but never adds an issue for the author to chase (the ceiling's note names up to three of the wrong cells). Each stays silent unless the column
+plainly follows the rule almost everywhere (for example a cross-sheet reference needs 90% of the column to be ids of one other sheet, and the column or the sheet must
+share a word with the other; an id shape needs 97% of 30+ ids). Wording is matched by whole words, and a deep check counts for a question only when the question
+names its column or sheet (or says "orphan"). Wording about a limit, a choice or a mechanism is never a fill count: "every table stays small (at most 40 columns)",
+"every rule states X or a schema-wide rule covers it", "the gate detects duplicate and orphan requirements" get no ceiling.
+
+**The anchor floor** (`anchorFloor.ts`). A scorecard that describes its scale as "5 a machine-readable schema matches the prose; 3 structured tables but no machine
+format; 1 prose only" has 1 as its lowest rung, so a 0 for a file that has the prose is below the scale's own bottom. (The converter spreads "1 prose only" over 0
+and 1, so the same floor is found in the converted anchors.) Code raises such a score to the rung when all of these hold: the lowest described rung is 1 and does not
+say absent / none / missing; the question is scored and is not one that needs evidence from outside the file; and at least one cited cell exists, holds text and
+contains the quote given with it. The note ("G07-C05 was raised from 0 to 1: ...") is in the report notes and the question's rationale. A scale that starts at 2
+("2 several") leaves 0 and 1 undescribed, so nothing is raised there. The floor is applied before the exact ceilings, so a counted mistake can still lower the score.
+**Self-reported tallies** (`tallies.ts`, and `sweepStatedCounts` in `sweep.ts`). A file that says "278 parameters", "68 fields" or "100% covered" makes a
+claim its own rows can settle, and Examiners tend to accept it. Four kinds are recounted, each only where a deterministic rule exists; a mismatch is
+a MEDIUM code issue at the cell that states it, and it caps a criterion that asks for correct counts (table above):
+
+- **a count next to a sheet's name** ("278 parameters" beside a sheet called `L2_Parameters`): compared with that sheet's data rows (a slip of up to 15% is read as a tally; a far figure is about something else);
+- **arithmetic** ("283 of 426 fields (66%)", "71/71 100%"): the percentage must be the first number over the second;
+- **a field dictionary** (a PDF page listing `name | definition | type | allowed | M or C | source` under "S2 · Workflow register" headings): each overview tile ("14 fields"), the totals ("8 sections · 68 fields") and "Mandatory · conditional fields 56 · 12" are compared with the rows counted under the headings;
+- **section tables** ("L1·2 ... L4=50" with "COUNT | ... 50 L4 leaves" at the bottom): the leaf ids (STEP-01, WF-02, a prefix that opens cells of the table) are counted per table and in all ("92 leaves").
+
+A recount from a PDF is trusted only where it agrees with the document on most of its tiles or tables (60% of tiles, two thirds of tables); where it
+agrees with few it is probably misreading the layout and claims nothing. Percentages of coverage ("100% covered") are recounted only when they are a
+fraction written out ("N of M"); a bare percentage with no rows to count is left alone.
+
 **Supporting rows** (`supporting.ts`). A question that names sheets to read shows the examiners only those, but what it asks about is often defined on another
 sheet. So each section also receives the few rows of the rest of the file that share the most distinctive words with its questions (rare words count more),
 shown with their header row and cut to fit beside the section for an examiner with a small prompt limit. Decision logs, corrections and comparisons are never
@@ -212,6 +293,29 @@ comparisons, open questions) never count, and neither does a cell that is itself
 ("D3-S04-P27..P29 are not defined"), the rows that define them are looked up first. "Incomplete" and "not yet added" wordings are checked like "missing". Only then is the issue set aside, with the cell named in the set-aside list. This check can only remove
 issues, and if the proof does not hold the issue stays. `npm run presence:eval` repeats the measurement on the labelled examples in
 `data/presence/step2-labels.json` (39 labelled issues). Repeated, it sets aside 6 to 8 of the 21 issues the file already answers and none of the 18 real gaps.
+
+**The second look at every issue** (`verifyFindings.ts`, after the presence check; on by default). The presence check only covers "the file has no X". This pass
+reads every remaining issue the Examiners wrote, whatever it claims, next to the rows of the file it is about. Issues found by code (the row-by-row sweep, exact counts,
+recounted tallies) and issues that already carry a code fact-check note are never sent, and never set aside. For each issue, code picks the rows (the sheet's header row, the cited
+row and its neighbours, and the rows holding the claim's rarest words, with the rows that define any id it names first), several issues go to the model in one call, and the model
+answers true, false or unsure. An issue is set aside only when four things all hold:
+1. the model says the claim is **false** and names one cell and copies, word for word, the words in it that show that;
+2. code finds those words in that cell (or its row), the cell is not on a discussion sheet (decisions, logs, comparisons), and it is not itself a placeholder (proposed, TBD, still to add);
+3. the quote, its cell or the name of its column shares a distinctive word with the claim;
+4. a **second reading** agrees: two other models are each shown the claim, the cell the issue points at and the full text of the quoted cell, and both must answer that the cell contradicts the claim.
+   "Partly", "no", a reply that cannot be read, or a model that is down all keep the issue.
+No quote, a quote that is not in the file, or "not sure" keeps the issue. The pass can only remove issues. Each issue it sets aside is listed with its cell and quote in the report's
+set-aside list and in `run-log.json` (`verification`: the model, the number checked and set aside, the calls, the tokens in and out, and each set-aside issue with its quote). A model that
+is down, or an over-long list (more than 120 issues, the most serious are checked first), leaves the rest as they are, with a note. Models: `verifier` in the models file (default: the
+Final reviewer, with its fallbacks); `verifier.confirmers` lists the models for the second reading. A **Quick check** skips the pass; so does `"verifyFindings": false` under
+`settings` in the models file, or the environment variable `VERIFY_FINDINGS=0`. About 100,000 tokens a run, a few cents to about ten cents on the shipped Bedrock models.
+`npm run verify:eval` measures it on every labelled issue (see `CHANGELOG.md`, [Unreleased]).
+
+**Names the file defines, cited cells, disclosed gaps** (`claimCheck.ts`, by code only, before the presence check). Three rules, each needing a cell of the file as proof:
+an issue that says a field name (`source_of_truth`) or an id (`D3-S04-P27..P29`) is itself "not defined" is set aside when every such name is a whole cell of the file (in a PDF, a column of
+a table row) with a description beside it; an issue that says what its cited cell holds ("H5 contains 'Atomic'") gets a fact-check note when the cell does not hold that (usually the claim is
+about another file: the scorecard's H5, not the schema's); an issue whose cited cell is the file's own marker for a gap (UNKNOWN, UNSPECIFIED, To add, CONFLICT, ...) gets a note that the file already marks it
+as open. Only the first rule removes an issue; none raises a severity. Measured in `CHANGELOG.md` ([Unreleased]); `npm run replay:blind` scores the rules against the blind labels.
 
 **Cleaning the Examiners' issues** (`findingCheck.ts`, by code, before they are numbered). No model marks its own homework:
 

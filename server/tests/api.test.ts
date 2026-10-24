@@ -52,12 +52,13 @@ async function start(models = mockModels()): Promise<Harness> {
   };
 }
 
-async function submit(h: Harness, files: { workbook?: Buffer; scorecard?: string | Buffer; name?: string; scorecardName?: string; projectName?: string; instructions?: string }) {
+async function submit(h: Harness, files: { workbook?: Buffer; scorecard?: string | Buffer; name?: string; scorecardName?: string; projectName?: string; instructions?: string; runTwice?: boolean }) {
   const form = new FormData();
   if (files.workbook) form.append('workbook', new Blob([new Uint8Array(files.workbook)]), files.name ?? 'schema.xlsx');
   if (files.scorecard !== undefined) form.append('scorecard', new Blob([typeof files.scorecard === 'string' ? files.scorecard : new Uint8Array(files.scorecard)]), files.scorecardName ?? 'scorecard.yaml');
   if (files.instructions !== undefined) form.append('instructions', files.instructions);
   if (files.projectName) form.append('projectName', files.projectName);
+  if (files.runTwice) form.append('runTwice', '1');
   const res = await fetch(`${h.base}/api/runs`, { method: 'POST', body: form });
   return { status: res.status, body: (await res.json()) as { runId?: string; iteration?: number; projectId?: string; error?: string } };
 }
@@ -358,6 +359,17 @@ describe('Excel scorecards and the instructions box', () => {
     const none = await done(h, (await submit(h, { workbook: await makeWorkbook({ Tree: CLEAN_TREE }), scorecard: CLEAN_SCORECARD_YAML, projectName: 'No notes' })).body.runId!);
     expect(none.report!.header.instructions).toBeUndefined();
     expect(none.report!.header.instructionsHash).toBeUndefined();
+  });
+
+  it('runs the check twice when asked, and records both scores and the average', async () => {
+    const res = await submit(h, { workbook: await makeWorkbook({ Tree: CLEAN_TREE }), scorecard: CLEAN_SCORECARD_YAML, projectName: 'Twice', runTwice: true });
+    const run = await done(h, res.body.runId!);
+    expect(run.status).toBe('done');
+    const two = run.report!.twoRuns!;
+    expect(two.scores).toHaveLength(2);
+    expect(run.report!.verdict.weightedScore).toBe(two.average);
+    const single = await done(h, (await submit(h, { workbook: await makeWorkbook({ Tree: CLEAN_TREE }), scorecard: CLEAN_SCORECARD_YAML, projectName: 'Once' })).body.runId!);
+    expect(single.report!.twoRuns).toBeUndefined();
   });
 
   it('refuses instructions that are too long, with the numbers', async () => {

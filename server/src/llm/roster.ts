@@ -102,3 +102,16 @@ export function assertRosterReady(status: RosterStatus): void {
   const lines = status.problems.filter((p) => p.level === 'error').map((p) => `  • ${p.message}`);
   throw new UserError(`The evaluator roster is not ready:\n${lines.join('\n')}`, 409);
 }
+
+/**
+ * The models that may double-check findings, in the order they are tried: the configured verifier and its fallbacks, else the consolidator
+ * and its fallbacks. Only approved models with a key are returned, because they receive parts of the project document.
+ */
+export function verifierCandidates(models: ModelsConfig, env: NodeJS.ProcessEnv = process.env, role: 'finder' | 'confirmers' = 'finder'): Array<{ provider: string; model: string }> {
+  const usable = (c: { provider: string; model: string }) => isApproved(models, c) && hasKey(models, c.provider, env);
+  if (role === 'confirmers' && models.verifier?.confirmers) return models.verifier.confirmers.filter(usable).map((c) => ({ provider: c.provider, model: c.model }));
+  const list = models.verifier
+    ? [{ provider: models.verifier.provider, model: models.verifier.model }, ...(models.verifier.fallbacks ?? [])]
+    : [{ provider: models.consolidator.provider, model: models.consolidator.model }, ...(models.consolidator.fallbacks ?? [])];
+  return list.filter(usable).map((c) => ({ provider: c.provider, model: c.model }));
+}

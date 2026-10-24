@@ -16,11 +16,21 @@
     "scorecard:xlsx": "tsx scripts/scorecardToExcel.ts",
     "scorecard:import": "tsx scripts/importScorecard.ts",
     "survey": "tsx scripts/survey.ts",
+    "exact:measure": "tsx scripts/exactMeasure.ts",
     "reliability": "tsx scripts/measureReliability.ts",
     "planted": "tsx scripts/plantedTest.ts",
     "replay": "tsx scripts/replay.ts",
+    "wrongs": "tsx scripts/wrongs.ts",
+    "replay:all": "tsx scripts/replayAll.ts",
+    "replay:blind": "tsx scripts/replayBlind.ts",
+    "spotcheck:make": "tsx scripts/spotCheck.ts make",
+    "spotcheck:read": "tsx scripts/spotCheck.ts read",
+    "calibration:make": "tsx scripts/calibration.ts make",
+    "calibration:read": "tsx scripts/calibration.ts read",
     "review:dump": "tsx scripts/dumpFindings.ts",
     "presence:eval": "tsx scripts/presenceEval.ts",
+    "verify:report": "tsx scripts/verifyReport.ts",
+    "verify:eval": "tsx scripts/verifyEval.ts",
     "dump": "tsx scripts/dumpWorkbook.ts"
   },
   "dependencies": {
@@ -33,6 +43,7 @@
     "multer": "^2.5.0",
     "pdfkit": "^0.20.2",
     "pg": "^8.23.1",
+    "pg-mem": "^3.0.14",
     "tsx": "^4.23.15",
     "unpdf": "^1.9.1",
     "yaml": "^2.9.1",
@@ -44,7 +55,6 @@
     "@types/node": "^26.6.5",
     "@types/pdfkit": "^0.17.7",
     "@types/pg": "^8.23.1",
-    "pg-mem": "^3.0.14",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"
   }

@@ -322,6 +322,23 @@ export interface PathToGreen {
 }
 
 /** The immutable result of one evaluation. Verdict-related sections are derived from it. */
+/** "Run twice" mode: two full evaluations with the same examiners. The report shows their average. */
+export interface TwoRuns {
+  /** Score of each run, one decimal. */
+  scores: [number, number];
+  /** Colour of each run, by score alone. */
+  decisions: [Decision, Decision];
+  /** The mean of the two scores. The verdict colour comes from this. */
+  average: number;
+  /** Difference between the two scores. */
+  gap: number;
+  /** The gap is 8 points or more, or the two runs landed on different colours. */
+  unstable: boolean;
+}
+
+/** A gap of this many points or more between two runs means the result is a range, not a number. */
+export const UNSTABLE_GAP = 8;
+
 export interface EvaluationCore {
   header: ReportHeader;
   scorecard: Scorecard;
@@ -332,6 +349,8 @@ export interface EvaluationCore {
   notes: string[];
   /** Examiner findings the fact check dropped (absent in runs made before it existed). */
   droppedFindings?: DroppedFinding[];
+  /** Present only when the check was run twice. */
+  twoRuns?: TwoRuns;
 }
 
 /** The eight-section report (PDF page 11), assembled from the core (and an optional override). */
@@ -347,6 +366,8 @@ export interface Report {
   notes: string[];
   /** Examiner findings the fact check dropped, with the reason. */
   droppedFindings?: DroppedFinding[];
+  /** Present only when the check was run twice: both scores, the average (which sets the colour) and the gap. */
+  twoRuns?: TwoRuns;
 }
 
 /* -------------------------------- API -------------------------------- */
@@ -403,6 +424,24 @@ export interface RunLog {
   timings: { totalMs: number; checksMs: number; ratingMs: number; consolidationMs: number };
   /** How repeats were spent: adaptive runs repeat only disputed questions. Absent when nothing went to the raters. */
   repeats?: { mode: 'all' | 'adaptive'; repeats: number; planned: number; made: number; saved: number; repeated: string[] };
+  /** The second check that reads each examiner finding against the file. Absent when it was off or nothing was left to check. */
+  verification?: {
+    /** The model that answered. */
+    model?: string;
+    checked: number;
+    skipped: number;
+    calls: number;
+    failed: number;
+    dropped: number;
+    /** What the first look said about the checked findings, how many "false" answers code proved, and how many the second reading confirmed. */
+    said?: { true: number; false: number; unsure: number; falseProven: number; confirmed: number };
+    /** The models that gave the second reading, when any finding needed one. */
+    confirmModel?: string;
+    inputTokens: number;
+    outputTokens: number;
+    /** Each finding set aside, with the cell and words that showed the claim is wrong. */
+    droppedFindings: Array<{ title: string; dimensionId: string; reason: string }>;
+  };
   participants: Array<{
     id: string;
     role: 'rater' | 'consolidator';

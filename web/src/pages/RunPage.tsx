@@ -114,7 +114,7 @@ export function RunPage() {
           onConfirm={async () => {
             await api.deleteRun(r.id);
             toast('Report deleted');
-            navigate('/');
+            navigate('/projects');
           }}
         >
           The scores, issues and saved report files for this check are removed for good. This cannot be undone.

@@ -144,7 +144,7 @@ You need Node 22 or newer.
 3. **Start GateX.** This demo mode needs no keys and no Docker. The sidebar says **Mock models (demo)** so a demo run is always labelled.
 
    ```bash
-   MOCK_LLM=1 npm run start           # then open http://localhost:4000
+   MOCK_LLM=1 npm run start           # then open http://localhost:4000 (the GateX home page; the dashboard is at /projects)
    ```
 
 4. **Run a check.** Open **New check**, add a file and a scorecard (try `samples/talentra/Talentra-Feature-Discovery-Dashboard.xlsx` with

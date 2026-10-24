@@ -35,7 +35,8 @@ ddd/
 │
 └── web/                          React dashboard
     └── src/
-        ├── pages/                  Projects · NewEvaluation · Run · Project · Models  (+ report/ sections)
+        ├── pages/                  Landing · Projects · NewEvaluation · Run · Project · Models  (+ report/ sections)
+        ├── landing/                the home page's sections, hooks (smooth scroll, reveal, tilt) and scenery (see below)
         ├── components/             Layout · Charts · Chip · DropZone · Pipeline · SectionNav · Icons
         ├── styles/                 tokens.css · base.css · layout.css · components.css · charts.css · pipeline.css · pages.css · report.css
         ├── api.ts  hooks.ts  format.ts  App.tsx  main.tsx
@@ -194,7 +195,17 @@ The test library (`/library` in the dashboard) is how you tell better from worse
 5. Change the filter or a prompt, then `npm run replay -- --run data/live-<name> --workbook <file> --labels data/reviews/<case>.json --show`
    re-runs the finding filter on that run for free and says whether it dropped anything real. Only a prompt change needs a new live run.
 
-6. `npm run reliability` re-measures how often each model family's issues were right and saves `data/library/reliability.json`, which
+6. `npm run replay:all` replays the filter on every labelled run at once (the list is `data/replay-runs.json`) and prints the useful and wrong shares of what is kept; it fails if a real
+   or partly-right issue is dropped. `npm run wrongs -- --run <dir> --workbook <file> --labels <review.json>` lists the wrong issues of a run, which is how new filter patterns are found.
+   A new filter is kept only if replay shows it never drops a real or partly-right issue and removes at least two wrong ones.
+   `npm run replay:blind` scores the claim rules of `agent/claimCheck.ts` against the blind labels in `data/review-sheet/spot-check-filled-agent.csv` (rule by rule, before and after); `replay:all -- --rules=none` shows the filter without them.
+7. `npm run spotcheck:make` writes the 40-row sheet for a person to label blind (`data/review-sheet/`), and `npm run spotcheck:read -- --file <filled csv>` reports how often they agree with our labels.
+   `data/review-sheet/spot-check-filled-agent2.csv` is a second blind AI pass and `data/review-sheet/consensus.md` / `consensus.csv` compare it with the first pass and our labels. Agent labels are not a human check.
+   `npm run calibration:make` writes `data/calibration-pack/` (a README, `calibration-form.csv` and, apart, `answer-key.json`): 5 file + scorecard pairs, about 10 judged criteria each for a person to score 0 to 5 with cell evidence,
+   and up to 15 findings each to label real / partly / wrong / vague. `npm run calibration:read -- --file <filled form csv>` prints the mean absolute difference between the tool's criterion scores and the person's,
+   the share within 1 point, the bias (tool higher or lower), and how often the finding labels match ours. Code: `server/scripts/calibration.ts`, `server/scripts/calibrationLib.ts`, `server/tests/calibration.test.ts`. No model is called.
+
+8. `npm run reliability` re-measures how often each model family's issues were right and saves `data/library/reliability.json`, which
    every later run reads (an issue only a rarely-right Examiner raised is set aside). Re-run it after adding verdicts.
 
 ### What runs on every push (CI)
@@ -233,10 +244,30 @@ filter sets aside an issue labelled real or partly right). `npm run release:chec
 whether the issues in `data/presence/step2-labels.json` are already answered by the file; it fails if a labelled real gap is dropped. It costs a few cents.
 Add a labelled issue to that file whenever GateX wrongly keeps or drops one.
 
+### Measuring the second look at every issue
+
+`npm run verify:eval` runs `verifyFindings.ts` on every labelled issue in `data/replay-runs.json` (our labels in `data/reviews/`, the blind labels in
+`data/review-sheet/spot-check-filled-agent.csv`) and prints, for each label set, how many issues were set aside by label and the useful and wrong shares before and after.
+The model's raw answers are saved (`--cache`), so `--reuse` judges them again with the current proof rules in code, free of cost. `--confirm` adds the second reading only for
+answers that lack it. `--finder` and `--confirmers` try other models without editing the models file; `--dry` counts prompt sizes and makes no call. A real or partly right issue set aside is a failure: read it,
+and either tighten the proof or, if the file does show the issue is false, record the label correction in `data/verify/label-corrections.json` with the cells that prove it.
+`VERIFY_DEBUG=1` prints every answer. Tests: `server/tests/verifyFindings.test.ts` (scripted models built from known cases).
+
 ### Reading a workbook as text
 
 `npm run dump -- --workbook <file.xlsx> --out <folder>` writes every sheet as a plain text file (one line per row, `A5=value | B5=value`). A reviewer can search
 the real cells with any text tool, which is how a fresh reviewer checks findings without opening Excel.
+
+### The home page
+
+`web/src/pages/LandingPage.tsx` is the first page a visitor sees, at `/`; the dashboard lives at `/projects` and the sidebar brand links there. Its sections are in
+`web/src/landing/` (hero scene, how it works, the result bar, the report fan, filterable issue rows, the rising path-to-green blocks, scorecard conversion, the proof
+panel, the progress chart and history, FAQ, closing call to action) and its styles in `web/src/styles/landing.css`, which only touches `.lp` and its own class names.
+Motion is plain CSS switched on by classes the components add when something scrolls into view (`Reveal`, `useInView`: fade and rise, charts that draw, numbers that
+count, report pages that fan open by themselves), cards that lean toward the pointer (`Tilt`) and a few CSS variables the pointer writes (`usePointerParallax`).
+Scrolling is the browser's own, so it follows the visitor's trackpad and system settings. To keep it light, nothing on the page loops for ever or repaints a filter
+every frame, and only the fixed menu bar is translucent. Everything falls back to its finished state under `prefers-reduced-motion`. To check it in a browser without a server: `npm run build -w web`, `npx vite preview
+-w web`, then open the page; stop the preview when done.
 
 ### Test with planted defects
 

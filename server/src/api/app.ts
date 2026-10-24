@@ -115,6 +115,7 @@ export function createApp(deps: AppDeps): express.Express {
         instructions: body.instructions,
         projectName: body.projectName,
         quick: body.quick === '1' || body.quick === 'true',
+        runTwice: body.runTwice === '1' || body.runTwice === 'true',
       });
       res.status(202).json(created);
     },

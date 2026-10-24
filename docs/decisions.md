@@ -254,3 +254,20 @@ a small part of the scorecard are listed at the top of the verdict as "Needs att
 **Consequences.** This is a deliberate choice that differs from the PDF's decision table (green needs every gate passed and no high-risk issue open). Old runs are
 recoloured when their report is opened, because the verdict is worked out then. The "Needs attention" lines, which the report puts first, carry the
 detail that the colour leaves out.
+
+
+## ADR-19: Accuracy target for a labelled run
+
+**Status: Proposed, needs owner sign-off.** Nothing below is in force until the owner accepts it. The table in `docs/development.md` ("The accuracy targets") stays as it is until then.
+
+**Context.** GateX has no agreed line for "accurate enough". The working targets in `docs/development.md` were set by the builders, and the last measured run (Step 2, one labelled run of 24 issues) reached about 50% useful and 38% wrong before the later filters; the latest estimate is about 63% useful and 21 to 26% wrong. Scores of the same file also vary from run to run (Step 2 gave 63.8, 75.2, 80.4, 72.2, and 76 to 81 on one file after the same prompts).
+
+**Proposed decision.** A build is accurate enough to hand over when, on the labelled runs in `data/library` (each issue checked against the real file, by a person or a fresh reviewer):
+1. At least 60% of the issues listed are useful (real or partly right).
+2. At most 10% of the issues listed are wrong.
+3. Two or more runs of the same file and scorecard differ by 8 points or less in the total score.
+4. The planted-defect test finds at least 7 of the 8 planted defects (today the code sweep finds all 8; the 7 of 8 line leaves room for one new check that is still being tuned).
+
+**Consequences if accepted.** `docs/development.md` and `npm run release:check` would be changed to these four numbers (the current table says 5 points and all 8). The 8-point spread is wide enough to be met by a three-examiner panel today; the 10% wrong limit is not met yet (about 21 to 26%) and would be the main work left. The labels so far were made by the builders and a fresh reviewer, not by a second person, so the owner may also want a teammate to check about 20 of them before the numbers are used for sign-off.
+
+**Alternatives.** Keep the current table (stricter on spread: 5 points; stricter on recall: 8 of 8). Or require two runs averaged for the score, which lowers spread but doubles cost (about $2 a run).

@@ -28,7 +28,7 @@ export function ProjectPage() {
   return (
     <>
       <PageHeader
-        eyebrow={<Link to="/" className="crumb"><Icon name="back" size={13} /> Projects</Link>}
+        eyebrow={<Link to="/projects" className="crumb"><Icon name="back" size={13} /> Projects</Link>}
         title={h.project.name}
         actions={
           <>
@@ -105,13 +105,13 @@ export function ProjectPage() {
             if (removing.kind === 'project') {
               await api.deleteProject(h.project.id);
               toast('Project deleted');
-              navigate('/');
+              navigate('/projects');
             } else {
               await api.deleteRun(removing.id);
               toast('Report deleted');
               // Deleting a project's last report removes the project too.
               if (h.runs.length === 1) {
-                navigate('/');
+                navigate('/projects');
               } else {
                 setRemoving(null);
                 history.reload();

@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { ParticipantProgress, RunProgress } from '@ddd/shared';
 import type { AppConfig } from '../config.js';
 import type { DeletedRun, Store } from '../db/store.js';
-import { evaluate, preflight, type ProgressEvent } from '../agent/index.js';
+import { evaluate, evaluateTwice, preflight, type ProgressEvent } from '../agent/index.js';
 import { serializeSheets } from '../excel/serialize.js';
 import { resolvePageRanges } from '../excel/pageRanges.js';
 import { addRelevantPages } from '../excel/pageSelect.js';
@@ -25,8 +25,10 @@ export interface SubmitInput {
   /** Extra instructions for the examiners (the "prompt box"). */
   instructions?: string;
   projectName?: string;
-  /** Quick check: every question is scored once, so a repeat run is faster. Scores are a little less steady. */
+  /** Quick check: every question is scored once and findings are not double-checked, so a repeat run is faster. Scores are a little less steady. */
   quick?: boolean;
+  /** Run twice: two full checks with the same examiners; the report shows the average and the gap. */
+  runTwice?: boolean;
 }
 
 export interface ServiceDeps {
@@ -149,7 +151,7 @@ export class EvaluationService {
       await this.deps.store.addPin(created.projectId, sourceHash, { sourceName: input.scorecard.name, scorecardHash: hash, scorecard: parsed, iteration: created.iteration });
     }
 
-    const job = this.execute(created.runId, projectName, created.iteration, workbookPath, name, input.sources, instructions, parsed, hash, progress, scorecardNotes, Boolean(input.quick))
+    const job = this.execute(created.runId, projectName, created.iteration, workbookPath, name, input.sources, instructions, parsed, hash, progress, scorecardNotes, Boolean(input.quick), Boolean(input.runTwice))
       .catch((error) => this.deps.log?.(`run ${runId} crashed: ${errorMessage(error)}`))
       .finally(() => this.running.delete(job));
     this.running.add(job);
@@ -207,6 +209,7 @@ export class EvaluationService {
     progress: RunProgress,
     scorecardNotes: string[],
     quick = false,
+    runTwice = false,
   ): Promise<void> {
     const { store, config, providers, env } = this.deps;
     // Progress writes are queued so they reach the database in the order they happened.
@@ -231,10 +234,10 @@ export class EvaluationService {
     };
 
     try {
-      const output = await evaluate({
+      const output = await (runTwice ? evaluateTwice : evaluate)({
         runId, projectName, iteration, workbookPath, artifactName, scorecard, scorecardHash, sources, instructions, scorecardNotes,
         // A quick check scores each question once; the other settings are the roster's own.
-        models: quick ? { ...config.models, settings: { ...config.models.settings, repeats: 1 } } : config.models, providers, env, onProgress, reliability: await loadReliability(this.deps.config.dataDir),
+        models: quick ? { ...config.models, settings: { ...config.models.settings, repeats: 1, verifyFindings: false } } : config.models, providers, env, onProgress, reliability: await loadReliability(this.deps.config.dataDir),
       });
       await chain;
       await store.completeRun(runId, output, progress);

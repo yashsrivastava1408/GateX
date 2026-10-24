@@ -166,7 +166,7 @@ describe('when models misbehave', () => {
   it('leaves out a rater that never returns JSON, after one repair attempt, and says so', async () => {
     const run = await runEvaluation({ workbook: TALENTRA_XLSX, models: mockModels(['mock-mid', 'mock-garbage', 'mock-strict']) });
     const garbage = run.calls.find((c) => c.model.model === 'mock-garbage')!;
-    expect(garbage).toMatchObject({ status: 'failed', attempts: 3 });
+    expect(garbage).toMatchObject({ status: 'failed', attempts: 2 });
     expect(run.core.notes.join(' ')).toMatch(/Rater B .* failed and was left out/);
     expect(run.core.dimensions.find((d) => d.id === 'J01')).toMatchObject({ raterScores: { A: 4, B: null, C: 3 }, consolidated: 4 });
   });

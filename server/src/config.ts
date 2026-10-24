@@ -29,12 +29,22 @@ const providerSchema = z.object({
   region: z.string().optional(),
 });
 
+/** The model that double-checks findings. Optional: without it the consolidator does the job. Must be on the approved list. */
+const verifierSchema = z.object({
+  provider: z.string().min(1),
+  model: z.string().min(1),
+  fallbacks: z.array(fallbackSchema).optional(),
+  /** Models that each give a second reading of a finding about to be set aside; all must agree. Default: the verifier itself. */
+  confirmers: z.array(z.object({ provider: z.string().min(1), model: z.string().min(1) })).optional(),
+});
+
 export const modelsConfigSchema = z.object({
   /** "provider:model" or "provider:*". Only these may receive project documents. */
   approved: z.array(z.string()),
   providers: z.record(z.string(), providerSchema),
   raters: z.array(modelEntrySchema).length(3, 'the 3 + 1 model needs exactly three raters'),
   consolidator: modelEntrySchema,
+  verifier: verifierSchema.optional(),
   settings: z
     .object({
       temperature: z.number().min(0).max(2).default(0),
@@ -51,8 +61,10 @@ export const modelsConfigSchema = z.object({
        * "all": every question is scored `repeats` times.
        */
       repeatMode: z.enum(['all', 'adaptive']).default('adaptive'),
+      /** Double-check every examiner finding against the file with a separate model call (on by default; a quick check skips it). The VERIFY_FINDINGS=0 variable also turns it off. */
+      verifyFindings: z.boolean().default(true),
     })
-    .default({ temperature: 0, maxOutputTokens: 8192, timeoutMs: 120_000, retries: 3, sectionConcurrency: 1, repeats: 1, repeatMode: 'adaptive' }),
+    .default({ temperature: 0, maxOutputTokens: 8192, timeoutMs: 120_000, retries: 3, sectionConcurrency: 1, repeats: 1, repeatMode: 'adaptive', verifyFindings: true }),
 });
 
 export type ModelsConfig = z.infer<typeof modelsConfigSchema>;

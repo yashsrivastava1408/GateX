@@ -68,6 +68,8 @@ export class MockProvider implements LlmProvider {
       ? this.importDraft()
       : request.system.includes('You check claims')
         ? this.presence(request)
+        : request.system.includes('You are a fact checker')
+        ? this.verify(request)
         : request.system.includes('You are the consolidator')
         ? this.consolidate(request)
         : this.rate(request);
@@ -80,6 +82,16 @@ export class MockProvider implements LlmProvider {
       const first = /\[([^\]]+)\] ([A-Z]+\d+)=("(?:[^"\\]|\\.)*")/.exec(m[2]!);
       if (m[2]!.includes('(mock-present)') && first) return { id: m[1], present: true, cell: `${first[1]}!${first[2]}`, quote: (JSON.parse(first[3]!) as string).slice(0, 30) };
       return { id: m[1], present: false, cell: '', quote: '' };
+    });
+    return JSON.stringify({ results });
+  }
+
+  /** The "is the claim true?" double-check: every finding is answered "unsure" (so none is dropped), except one whose text says "(mock-false)", which cites the first cell of its first row. */
+  private verify(request: LlmRequest): string {
+    const results = [...request.user.matchAll(/<finding id="([^"]+)">\n([\s\S]*?)<\/finding>/g)].map((m) => {
+      const first = /\[([^\]]+)\] ([A-Z]+\d+)=("(?:[^"\\]|\\.)*")/.exec(m[2]!);
+      if (m[2]!.includes('(mock-false)') && first) return { id: m[1], verdict: 'false', cell: `${first[1]}!${first[2]}`, quote: (JSON.parse(first[3]!) as string).slice(0, 30), why: 'mock' };
+      return { id: m[1], verdict: 'unsure', cell: '', quote: '', why: '' };
     });
     return JSON.stringify({ results });
   }

@@ -13,7 +13,7 @@ import type {
 import { runCodeChecks } from './checks/index.js';
 import type { ModelsConfig } from '../config.js';
 import { WorkbookModel } from '../excel/workbook.js';
-import { inspectRoster, assertRosterReady } from '../llm/roster.js';
+import { inspectRoster, assertRosterReady, verifierCandidates } from '../llm/roster.js';
 import type { ProviderFactory } from '../llm/registry.js';
 import { candidatesFor, describeFailures, runWithFallback } from './fallback.js';
 import { buildRaterPrompt, buildRaterPromptForSection } from './prompt.js';
@@ -24,10 +24,14 @@ import { UserError } from '../util/errors.js';
 import { buildRaterResultsJson, disputedDimensions, consolidateInBatches } from './consolidate.js';
 import { defaultReturnTo, finalizeFindings, findingsFromChecks } from './findings.js';
 import { checkFindings, complainsAboutOutsideEvidence } from './findingCheck.js';
+import { checkClaims } from './claimCheck.js';
 import { checkPresence } from './presence.js';
+import { verifyFindings, type VerifyStats } from './verifyFindings.js';
 import { withAutoReads } from './autoReads.js';
 import { loneFindingReason } from './reliability.js';
 import { capByExactFindings, sweepFindings } from './sweep.js';
+import { applyAnchorFloors } from './anchorFloor.js';
+import { applyExactCeilings, exactCeilingsFor } from './exactScore.js';
 import { collapseCriteria, expandCriteria, findingsToDimensions, retypeOutsideCriteria } from './aggregate.js';
 import { runRater } from './rater.js';
 import type { CallMeta, DraftFinding, RaterOutcome } from './types.js';
@@ -72,6 +76,7 @@ export interface EvaluationOutput {
   runLog: RunLog;
 }
 
+type DroppedFindingLike = { title: string; dimensionId: string; reason: string };
 const APP_VERSION = '1.0.0';
 /** Repeated scoring needs some randomness, or every repeat would be the same answer. */
 const REPEAT_TEMPERATURE = 0.4;
@@ -329,7 +334,7 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
   const byId = new Map<string, DimensionResult>();
   for (const { result } of codeOutcomes) byId.set(result.id, result);
   for (const dim of consolidatedDims) byId.set(dim.id, dim);
-  const collapsed = collapseCriteria(retyped.scorecard, scorecard.dimensions.map((spec): DimensionResult => {
+  const working = scorecard.dimensions.map((spec): DimensionResult => {
     return (
       byId.get(spec.id) ?? {
         id: spec.id,
@@ -347,7 +352,12 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
         evidence: [],
       }
     );
-  }));
+  });
+  // A counted criterion ("no duplicate ids", "every field has a definition") is counted by code over every row; the examiners can only lower it.
+  // A score below the lowest rung the criterion's own scale describes ("1 prose only" scored 0) is pulled back to that rung first, when the cited cells show it.
+  const floored = applyAnchorFloors(working, scorecard.dimensions, wb, new Set(retyped.scorecard.dimensions.flatMap((d) => (d.criteria ?? []).filter((c) => c.outside).map((c) => c.id))));
+  const exact = applyExactCeilings(floored.results, exactCeilingsFor(scorecard.dimensions, wb));
+  const collapsed = collapseCriteria(retyped.scorecard, exact.results);
   // The examiners tag a finding with the question it answers, which is a criterion id ("AU-01") when the dimension has criteria.
   const parentOf = new Map(retyped.scorecard.dimensions.flatMap((d) => (d.criteria ?? []).map((c) => [c.id, d.id] as const)));
   // A row-by-row sweep in code: models skim a long sheet and miss a blank cell or a repeated id; code reads every row.
@@ -365,6 +375,11 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
     wb,
     { loneReason: (f) => loneFindingReason(f, roster.raters, args.reliability), schemaDesign: scorecard.gate === 'D1' },
   );
+  // Names the file defines, a cited cell that says something else, a gap the file already marks as open: proved or noted by code.
+  const claims = checkClaims(checked.findings, wb);
+  checked.findings = claims.findings;
+  checked.dropped.push(...claims.dropped);
+  checked.notes.push(...claims.notes);
   // "The file has no X" said about X that the file does define: a model finds the row, code proves the quote is really in the cell.
   if (rated.length > 0) {
     const presence = await checkPresence({
@@ -376,6 +391,21 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
     checked.findings = presence.findings;
     checked.dropped.push(...presence.dropped);
     checked.notes.push(...presence.notes);
+  }
+  // Every remaining examiner finding is read by a separate model call against the rows of the file it is about. It is set aside only when the
+  // model quotes a cell that code finds in the file and that shows the claim is wrong; anything less keeps the finding.
+  let verification: VerifyStats | undefined;
+  let verifiedDrops: DroppedFindingLike[] = [];
+  const env = args.env ?? process.env;
+  if (rated.length > 0 && args.models.settings.verifyFindings && env.VERIFY_FINDINGS !== '0') {
+    const checkers = verifierCandidates(args.models, env).map((c) => ({ model: c.model, provider: args.providers(c.provider) }));
+    const confirmers = verifierCandidates(args.models, env, 'confirmers').map((c) => ({ model: c.model, provider: args.providers(c.provider) }));
+    const verified = await verifyFindings({ findings: checked.findings, wb, models: checkers, confirmers, settings });
+    checked.findings = verified.findings;
+    checked.dropped.push(...verified.dropped);
+    checked.notes.push(...verified.notes);
+    verification = verified.stats;
+    verifiedDrops = verified.dropped;
   }
   for (const f of raterFindings.filter(aboutUnmeasurable)) {
     checked.dropped.push({
@@ -453,7 +483,7 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
     findings,
     strengths: consolidation?.strengths ?? [],
     consolidatorFailed: consolidation?.consolidatorFailed ?? false,
-    notes: [...notes, ...capNotes, ...checked.notes],
+    notes: [...notes, ...floored.notes, ...exact.notes, ...capNotes, ...checked.notes],
     ...(checked.dropped.length > 0 ? { droppedFindings: checked.dropped } : {}),
   };
 
@@ -468,6 +498,9 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
     scorecardHash: args.scorecardHash,
     timings: { totalMs: finishedAt.getTime() - startedAt.getTime(), checksMs, ratingMs, consolidationMs },
     ...(rated.length > 0 ? { repeats: repeatStats } : {}),
+    ...(verification && verification.checked > 0
+      ? { verification: { ...verification, droppedFindings: verifiedDrops.map((d) => ({ title: d.title, dimensionId: d.dimensionId, reason: d.reason })) } }
+      : {}),
     participants: calls.map((c) => ({
       id: c.model.id,
       role: c.role,

@@ -19,3 +19,4 @@ export { buildPathToGreen } from './pathToGreen.js';
 export { preflight, MIN_RATERS } from './preflight.js';
 export type { PreflightResult, RaterLimit } from './preflight.js';
 export { PROMPT_VERSION } from './prompts/rater.js';
+export { evaluateTwice, summariseTwoRuns } from './twoRuns.js';

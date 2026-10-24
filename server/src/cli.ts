@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import './env.js';
 import { loadAppConfig, loadModelsConfig } from './config.js';
-import { evaluate } from './agent/index.js';
+import { evaluate, evaluateTwice } from './agent/index.js';
 import { createProviderFactory } from './llm/registry.js';
 import { assembleReport } from './report/assemble.js';
 import { renderMarkdown } from './report/markdown.js';
@@ -28,6 +28,8 @@ const USAGE = `Usage: npm run evaluate -- --workbook <file.xlsx|file.csv|file.pd
   --sources    optional text file with the problem statement or docket
   --instructions  optional extra instructions for the examiners (text, or @file to read a file)
   --out        folder for report.xlsx, report.md and report.json (default ./data/cli/<run id>)
+  --twice      run the whole check twice and report the average score and the gap between the runs (about double the time and cost)
+  --quick      score every question once and skip the double-check of findings (faster, a little less steady)
   --mock       use the scripted mock models instead of live APIs
   --models     path to a models config (default server/config/models.json)`;
 
@@ -39,6 +41,8 @@ async function main(): Promise<void> {
       sources: { type: 'string' },
       instructions: { type: 'string' },
       out: { type: 'string' },
+      twice: { type: 'boolean', default: false },
+      quick: { type: 'boolean', default: false },
       mock: { type: 'boolean', default: false },
       models: { type: 'string' },
       help: { type: 'boolean', default: false },
@@ -51,7 +55,8 @@ async function main(): Promise<void> {
 
   const env = { ...process.env, ...(values.mock ? { MOCK_LLM: '1' } : {}) };
   const config = loadAppConfig(env);
-  const models = values.models ? loadModelsConfig(resolveFromUser(values.models)) : config.models;
+  const chosen = values.models ? loadModelsConfig(resolveFromUser(values.models)) : config.models;
+  const models = values.quick ? { ...chosen, settings: { ...chosen.settings, repeats: 1, verifyFindings: false } } : chosen;
   const workbookPath = resolveFromUser(values.workbook);
   const scorecardPath = resolveFromUser(values.scorecard);
   const providers = createProviderFactory(models, { env, mockDelayMs: 0 });
@@ -70,7 +75,7 @@ async function main(): Promise<void> {
   const out = values.out ? resolveFromUser(values.out) : path.join(config.dataDir, 'cli', runId);
   console.log(`Evaluating ${path.basename(workbookPath)} against ${parsed.scorecard.id} (${config.mock || values.mock ? 'mock models' : 'live models'})`);
 
-  const result = await evaluate({
+  const result = await (values.twice ? evaluateTwice : evaluate)({
     runId,
     projectName: path.basename(workbookPath, path.extname(workbookPath)),
     iteration: 1,

@@ -8,12 +8,15 @@ Each question has a weight, which says how much it matters. GateX marks every qu
 
 ## 1. Add your file and your scorecard
 
-1. Open GateX and click **New check**.
+1. Open GateX. The home page shows how a check works; click **Check a file** (or open the dashboard from the footer and click **New check**).
 2. Add **your file** (the work you want checked) and **your scorecard**. They must be two different files. The scorecard can be in almost any
    layout: Excel, CSV, PDF or text. GateX reads it for you.
 3. Give the work a **project name**, and use the same name every time you check the same work. GateX keeps every round under that name, so you
    can watch your score climb.
-4. Click **Start the check**. For a repeat run, tick **Quick check**: every question is marked once, which is about a third faster.
+4. Click **Start the check**. For a repeat run, tick **Quick check**: every question is marked once and the second look at each issue is skipped, which is about a third faster.
+   For a steadier score, tick **Check twice for a steadier score**: GateX does the whole check two times and shows the average of the two scores. It takes about
+   twice as long. The report shows both scores and how far apart they are. If they are 8 or more points apart, or fall in different colours, a note says
+   "Result is unstable, treat it as a range", so read the score as a range and not a single number.
 
 Want to guide the Examiners? Type a few words in the **extra instructions** box, for example "Treat the Notes column as out of scope". The same
 words go to all three Examiners and are saved with the report.
@@ -46,7 +49,7 @@ a repeated id, a reference to something that does not exist, a child count that 
 points at exactly the cells that need the fix.
 
 **Issues from the Examiners are good leads.** When two or three Examiners raised the same thing, it is usually worth fixing. When only one did,
-take a quick look at the cell it points to. The report also lists the issues GateX set aside, with the reason for each.
+take a quick look at the cell it points to. The report also lists the issues GateX set aside, with the reason for each. GateX takes a second look at every issue the examiners raise: if the file itself shows an issue is wrong, GateX sets it aside and shows the cell and the exact words that prove it.
 
 ## 4. Fix and check again
 

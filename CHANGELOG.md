@@ -4,6 +4,151 @@ All notable changes to GateX (earlier entries call it the DDD Evaluator). Format
 
 ## [Unreleased]
 
+### Added: the anchor floor, and more criteria scored by an exact count (24 Oct 2026)
+- **Anchor floor** (`server/src/agent/anchorFloor.ts`, applied in `orchestrator.ts` just before the exact ceilings). When a scored criterion is below the lowest rung that the
+  scorecard's own scale describes, it is raised to that rung. Real case: G07-C05 "Machine-readable specification" in `data/inputs/step2-v32` ("5 a machine-readable schema matches the
+  prose; 3 structured tables but no machine format; 1 prose only") was scored 0 by the examiners; the converter spreads "1 prose only" over 0 and 1. Applied only when the lowest rung is 1
+  and does not say absent / none / missing, the question is not one that needs outside evidence, and at least one cited cell exists, holds text and contains its quote. A scale that starts at
+  2 is left alone. The adjustment is written in the report notes and in the question's rationale. Tests: `tests/anchorFloor.test.ts` (11, including the real wording and the cached real conversion).
+- **New exact families** (`server/src/agent/sweepDeep.ts`, `exactScore.ts`): id pattern ("ids follow NFR-nnn", or the one shape 97% of 30+ ids share), parent width ("no parent has more than 10
+  children"), reasons that only repeat the definition, cross-sheet references and orphan rows (a path id 1.2.3 whose parent 1.2 is missing), values that are a case or one-letter slip of the usual ones.
+  "Definition present", "Cell fill" and "Fields with a type" are now read as filled-cell counts. These checks feed the score ceilings only: they add no issue to the report (the ceiling note names up to
+  three wrong cells), and each stays silent unless the column plainly follows the rule almost everywhere. Planted tests: `tests/exactDeep.test.ts` (20). The planted Step 4 fixture still scores 10.4
+  points below the clean register when every examiner gives a clean 5 (100 vs 89.6); the new planted register (bad ids, copied reasons, slipped values, blanks) 10+ below its clean one.
+- **Wording fixes (fewer false "exact" criteria).** A limit or a choice is not a fill count ("every table stays small: at most 40 columns", "every rule states X or a schema-wide rule covers it"), and
+  wording about what a gate detects ("detects duplicate and orphan requirements") gets no ceiling. These three step 2 criteria (G06-C03, G07-C03, G11-C04) were counted as exact and are judgement.
+- **Measured offline** with the new `npm run exact:measure` (no model; the cached scorecard conversions of `data/inputs`). Exact share = criteria measured by code or with a ceiling from an exact count,
+  of the criteria that can be measured from the file (outside-evidence ones left out). Before -> after:
+
+  | Pair | Criteria (measurable) | Exact before | Exact after |
+  |---|---|---|---|
+  | step2-v32 | 58 (47) | 17 = 36% | 14 = 30% (3 criteria that are judgements stop being counted as exact; nothing new to count: its countable criteria are already code checks) |
+  | step3 | 27 (27) | 4 = 15% | 4 = 15% |
+  | step4 | 20 (17) | 9 = 53% | 9 = 53% (SD-02 now counted as parent width; SC-03 also checks the id pattern) |
+  | step5 | 11 (9) | 4 = 44% | 5 = 56% |
+  | docket | 38 (34) | 1 = 3% | 8 = 24% |
+  | raw-step1 / 2 / 3 / 4 / 5 | 8 (6) each | 2 / 0 / 1 / 1 / 1 | 2 / 0 / 1 / 1 / 1 (generic dimensions, no counts to make) |
+
+  The two clean files with a workbook (step 2, step 3) and the clean Step 4 register produce no new ceiling; step 2's known dangling id (`Value_Codes!E130`, `D3-S14-P15`) is still found.
+- Still judged on purpose, or not buildable offline: conditions that cite declared ids (G05-C02, needs the condition column parsed), the 13 vague terms (the term list is in the file), "at least three
+  competitors" (S03-01-C01) and "7 areas covered" (CP-02) (need a column mapping the scorecard does not give), cross-file questions (SC-01), and every docket / step 5 criterion that reads a PDF table
+  (the row sweep does not run over PDF pages).
+- No live run for this change (see the lead's note); `npm run test` has 5 failing `adaptiveRepeats` tests that count model calls and are not touched by this work.
+
+### Added: a second look at every issue the Examiners raise (24 Oct 2026)
+- New `server/src/agent/verifyFindings.ts`, run in `orchestrator.ts` right after the presence check. A separate model call reads each remaining Examiner issue next to the rows of the file it is about
+  (header row, cited row and neighbours, rows holding the claim's rarest words, defining rows for any id named; machinery from `presence.ts`) and says true / false / unsure. Several issues go in one call.
+  An issue is set aside only when ALL hold: the model says false and names a cell and copies the words that show it; code finds those words in that cell (or its row), not on a discussion sheet and not a placeholder;
+  the quote, its cell or its column name shares a distinctive word with the claim; and two other models (second reading, `verifier.confirmers`) each answer that the cell contradicts the claim.
+  No quote, an unproven quote, "partly", "unsure", a failed call: the issue stays. Issues found by code (sweep, exact counts, tallies) and issues carrying a code fact-check note are never sent and never dropped.
+- Every issue set aside is listed with its cell and quote in the report's set-aside list and in `run-log.json` under `verification` (model, checked, skipped, calls, what the first look said, tokens in and out, each set-aside issue with its quote).
+- On by default. Off with a Quick check (CLI `--quick`, form field `quick=1`, the upload-page box), with `"verifyFindings": false` under `settings` in the models file, or with `VERIFY_FINDINGS=0`. Models: optional `verifier` in the models file (default: the Final reviewer and its fallbacks), with `verifier.confirmers`; `server/config/models.bedrock.json` uses Nova Pro for the first look and GLM-5 + Qwen3-next-80B for the second reading.
+  UI wording is plain (no model names): the Quick check line and the "Writing the report" step mention the second look.
+- Measured offline on every labelled issue (`npm run verify:eval`, 255 issues of 14 runs, our labels; 40 of them with blind labels), real Bedrock calls, files in `data/verify/`:
+  as written, 8 set aside (7 wrong, 1 labelled partly); useful 31% -> 32%, wrong 24% -> 21% of what is kept. The one "partly" (step 2 run 1 F-25, "no approver is not the author requirement") is false on re-check:
+  `Value_Codes` CHANGE-CONTROL says "One approver other than the author" / "Two distinct approvers, neither of them the author" (correction recorded in `data/verify/label-corrections.json`); with it, 0 real or partly set aside.
+  Blind labels: 1 wrong set aside, useful 35% -> 36%, wrong 40% -> 38%, 0 real or partly. A first-look model alone (Nova Pro, no second reading) proposed 19 and 3 were labelled partly; GLM-5 as first look set 3 labelled-partly aside; the second reading is what keeps real issues.
+  Tried and rejected: showing a small cited sheet whole (set aside fewer wrong issues, 2 labelled partly); GLM-5 as the first look.
+  The gain is small: the issues left after the earlier filters are mostly judgement calls ("unclear", "should be required"), which a quote cannot disprove. The three blind cases S25 (degraded_behaviour), S28 and S37 (CtO legend) are in the tests with scripted models, but the live model did not set them aside.
+- Live check on the step 2 v3.2 pair (`data/verify/live-cli-step2-v32/`): the pass checked 12 issues in 2 calls (about 32,000 tokens), set 0 aside (8 true, 3 unsure, 1 false that the second reading kept: F-15 "never-reuse rule", which is partly right).
+- Tests: `server/tests/verifyFindings.test.ts` (15). New scripts: `npm run verify:eval`, `npm run verify:report`.
+
+### Added: calibration pack for a human, and a second blind AI pass on the spot-check sheet (24 Oct 2026)
+- `npm run calibration:make` writes `data/calibration-pack/`: `README.txt`, `calibration-form.csv` (5 pairs: docket, step 2 v3.2, step 3, step 4, step 5; about 10 judged criteria each, chosen where the examiners disagreed, one examiner alone backed the mark or the dimension is heavy, for a person to score 0 to 5 with cell evidence; up to 15 findings each to label real / partly / wrong / vague; step 4 has 12 and step 5 has 14 because that is all the tool produced) and `answer-key.json` (the tool's scores and our labels, kept out of the form).
+- `npm run calibration:read -- --file <filled form csv>` prints mean absolute difference, share within 1 point, share exact and bias (tool higher or lower) overall and per pair, the criteria that differ by 2 or more, and the finding-label agreement with ours. Code: `server/scripts/calibration.ts`, `server/scripts/calibrationLib.ts`, `server/tests/calibration.test.ts` (6). Not yet filled by a person.
+- `data/review-sheet/spot-check-filled-agent2.csv` (second blind AI reviewer) and `data/review-sheet/consensus.md` / `consensus.csv` (three-way comparison). Both reviewers are AI agents: this is not a human check.
+
+### Added: code-only claim checks for "X is not defined" and for cited cells (24 Oct 2026)
+- New `server/src/agent/claimCheck.ts`, run in `orchestrator.ts` right after the finding fact check and before the presence check. No model is called. Kept rules:
+  - `definedNames` (drops): a finding says a snake_case field name or an id (ranges such as `D3-S04-P27..P29` expanded) is itself "not defined" / "missing" / "lacks a definition for ...",
+    and every one of those names is the whole content of a cell of the file (or, in a PDF, a column of a table row) with a description beside it. Decision logs, corrections and gap sheets
+    never count, and a mention in prose is not a definition. One name the file lacks keeps the finding. A finding about the values of a field ("X and Y have UNKNOWN values") names nothing here.
+  - `citedCellContent` (flags, no drop): a finding says what its cited cell holds ("H5 contains 'Atomic'") and the cell does not hold it (the S14/S22 case: the limit is in the scorecard's H5, the schema's H5 is empty). A note is added to the detail.
+  - `alreadyDisclosed` (flags, no drop): the cited cell is the file's own marker for a known gap (UNKNOWN, UNSPECIFIED, None stated, To add, Partial, CONFLICT, To be confirmed ...) and the finding quotes it. A note is added; the gap is real.
+- Measured with `npm run replay:all` (14 labelled runs, our labels): kept 172 -> 170, useful 43.0% -> 43.5%, wrong 20.9% -> 20.0%; 2 wrong dropped (docket F-01 "source_of_truth / data_stored lack definitions", step 2 R4 F-03 "D3-S04-P27..P29 not defined"), 0 real or partly dropped.
+  Flags: `alreadyDisclosed` 12 findings (4 real, 4 partly, 2 vague, 1 wrong, 1 unlabelled), `citedCellContent` 2 (both labelled partly by us, both wrong in the blind check).
+  Against the blind labels (`npm run replay:blind`, the 40 rows of `data/review-sheet/spot-check-filled-agent.csv`): useful 35% -> 36%, wrong 40% -> 38% (1 wrong dropped). The 5 `alreadyDisclosed` flags in that sample were all blind "partly" (true but already disclosed).
+- Tried and rejected (each would drop a finding we labelled partly, or removes fewer than two wrong): ids named as having "missing source statements" while their rows hold a source (1 hit, labelled partly); a quoted single word found as part of a field name ("degradation" / `degraded_behaviour`, also fires on "purpose" / `run_purpose`); an abbreviation said to be undefined that a legend defines ("CtO", 1 hit, labelled vague); dropping on `citedCellContent` (would drop 2 findings we labelled partly); a loose "all words appear in the file" search (hits real findings: "privilege" appears 198 times).
+- New `npm run replay:blind` (`server/scripts/replayBlind.ts`) scores each rule alone and together against the blind labels. `npm run replay:all` now applies the claim rules too (`--rules=none` shows the filter without them, `--rules=a,b` picks some) and prints the flags by label.
+- Tests: `server/tests/claimCheck.test.ts` (12).
+
+### Added: counted criteria are scored by an exact count, and the figures a file states about itself are recounted (24 Oct 2026)
+- A criterion that is a count ("ids are unique", "every field has a definition, a type and a reason", "no blank cells", "every reference resolves", "hold only allowed
+  values", "child counts match", "counts reconciled") now gets a ceiling computed by code from every row: clean share 100% -> 5, 99% -> 4, 97.5% -> 3, 95% -> 2, 90% -> 1,
+  below -> 0, any mistake caps at 4; tallies: 5 minus the number wrong. The Examiners' mark is lowered to the ceiling and never raised. New: `server/src/agent/exactScore.ts`,
+  hooked in `orchestrator.ts` before the criteria are combined. A judgement criterion is never touched. The older cap per dimension (`capByExactFindings`) is unchanged.
+- The sweep can now count every mistake (`all`) and what it looked at (`SweepStats`), not only the first few it lists in the report.
+- New `server/src/agent/tallies.ts` recounts figures a file states about itself: "283 of 426 (66%)" arithmetic, a PDF field dictionary ("14 fields" tiles, "8 sections - 68 fields",
+  "Mandatory - conditional 56 - 12"), and section tables ("COUNT | ... 50 L4 leaves", "92 leaves") counted by leaf id. A mismatch is a MEDIUM code issue (`tally_mismatch`) and caps
+  a criterion that asks for correct counts. A PDF recount is trusted only where it agrees with the document on most tiles or tables.
+- Measured: on the saved Step 5 documents (`data/inputs/step5`, `raw-step5`) and `raw-step1/2/3` every tally the document states is true, so the recount changes no score there.
+- Real runs (live Bedrock, same Step 4 pair, `data/live-exact-step4-clean`, `data/planted/exact-scoring`): clean register 95.6 green; the same register with 8 planted mistakes 75.1 (the
+  first rule version also lowered one criterion by a loose word match, "defined" with "Definition"; matching is now whole words, which gives about 79.0 on the same run's marks, not re-run). Before:
+  planted 90.7-95.6 against clean about 93-96. All 8 planted mistakes are in the report. Step 5 (pdf + xlsx, `data/live-exact-step5`): 96.8; the recount found every tally in the document true, so it changed nothing.
+- Tests: `server/tests/exactScore.test.ts` (scale, wording of each family, planted register, regression on the saved planted fixture, tallies).
+
+### Added: a human spot-check sheet for our labels (24 Oct 2026)
+- Every label in `data/library` and `data/reviews` was written by an AI agent. `npm run spotcheck:make` now writes `data/review-sheet/spot-check.csv` (40 findings the app would
+  show, spread over the test pairs and balanced across our labels, shuffled; finding text, cited cell and its text, the file to open, blank real / partly / wrong / vague
+  columns and notes) and `data/review-sheet/answer-key.json` (our label for each row, kept apart so the teammate stays blind), plus a plain `README.txt` in the same folder.
+- `npm run spotcheck:read -- --file <filled csv>` reads the filled sheet back and prints agreement with our labels (exact and "useful or not"), the useful and wrong rates for
+  both, a confusion table, a per-pair table and every row where the teammate and we differ. Blank rows, rows with two marks and unknown ids are left out with the reason.
+  Code: `server/scripts/spotCheck.ts`, `server/src/library/spotCheck.ts`, `server/tests/spotCheck.test.ts`. Nobody has filled the sheet yet, so the labels are still unchecked by a person.
+
+### Changed: two more finding filters, built from the findings labelled wrong (24 Oct 2026)
+- `npm run wrongs -- --run <dir> --workbook <file> --labels <review.json>` lists the wrong findings of a run with the cell they cite; `npm run replay:all` replays the filter on all
+  14 labelled runs listed in `data/replay-runs.json` (the 13 library runs plus the blind-labelled R4 check) and fails if one real or partly-right finding is dropped.
+- **Asks the file for work done outside it** (`asksFileForOutsideWork`): "no evidence of two independent runs", "no author interview", "no reviewer spot-checks", "no blind
+  second derivation (Run B)". A file cannot hold that, and the scorecard already caps such a question. Removed 11 wrong findings and 1 vague one on replay, 0 real or partly right.
+  Not applied when the workbook has a sheet named for such work (runs, interview, agreement, spot-check, blind, derivation).
+- **A finding that says the work is fine** (`saysTheWorkIsFine`): "which appears consistent. However, this should be verified", "TH-008 (SPOOFING) is present ... despite its presence".
+  Removed 2 wrong findings, 0 real or partly right.
+- Tried and rejected because replay showed they would drop real or partly-right findings: cited cell is a bare id, cited cell is empty, cited cell is in row 1, "to add" wording,
+  and loosening "the file names it in 3 places" to 1 or 2. A third pattern, "no example shows the field", removed nothing because the PDF reader holds too little of the examples.
+- Measured on the 14 labelled runs, filter only (the lone-examiner rule and the live model checks are not part of replay), labels ours: of the 186 labelled findings kept before,
+  39.8% were useful and 26.3% wrong; of the 172 kept now, 43.0% are useful and 20.9% wrong (43.5% and 20.0% with the schema-design rule the app uses). The newest run (R4, 22 kept):
+  55% useful, 32% wrong. The targets (60% useful, 10% wrong) are still not met. These filters were written from the same labels they are measured on, so on a new run expect less.
+
+### Fixed: an examiner's broken JSON no longer loses the section so easily (24 Oct 2026)
+- Real failures in the logs: GLM-5 wrote a rationale without its opening quote (`Unexpected token 'O', ..."tionale": Only the c"...`) and a review batch had two objects with no
+  comma between them (`Expected ',' or ']' after array element ... line 210 column 6`). `extractJson` now also repairs a missing comma between items and a comma left after the last
+  item (`repairListPunctuation`, which never touches text inside a string). A reply that was cut off is still refused, not guessed.
+- A reply that is not valid JSON is asked again **once**, with `STRICT_JSON_RULES` added to the system prompt (one JSON object only, every text in double quotes, commas, short
+  sentences) and the parse problem named. If that is also broken, the examiner's model is given up on for that section and the next model of the same examiner (its fallback)
+  takes the section. A reply that is JSON in the wrong shape keeps the old extra ask. Code: `server/src/agent/callModel.ts` (`JsonSyntaxError`, `syntaxRetries`), `server/src/agent/rater.ts`. A rater that never returns JSON
+  now makes 2 calls, not 3. Tests: `server/tests/jsonRecovery.test.ts`, `server/tests/wrongPatterns.test.ts`.
+
+### Added: "Run twice" for a steadier score (24 Oct 2026)
+- Scores move from run to run (Step 2: 63.8, 75.2, 80.4, 72.2, 78.4, 76.0), and near the 75 line that decides the colour. An optional **Run twice** mode does two
+  full checks with the same Examiners and shows the **average** (the colour comes from the average, by score alone), both scores and the gap. A gap of 8 points or
+  more, or two runs in different colours, adds a "Needs attention" note, "Result is unstable, treat it as a range"; the colour does not change.
+- Off by default, next to Quick check: `runTwice=1` on `POST /api/runs`, `--twice` (and `--quick`) on `npm run evaluate`, and a tick box on the upload page. It is in the
+  web report, PDF, Excel and Markdown. `twoRuns` is part of the shared report types. Adaptive repeats are untouched: each run is an ordinary evaluation (`agent/twoRuns.ts`).
+
+### Fixed: the Docker image could not start without a database (24 Oct 2026)
+- `pg-mem`, the in-memory database used for the demo and for tests, was a dev-only dependency, but the image installs production dependencies only. Started without
+  `DATABASE_URL` (for example `docker run -e MOCK_LLM=1 -e DB_MODE=memory`), the container exited at once with a missing-module error. The compose setup uses Postgres,
+  so it never showed. It is now a normal dependency, so the demo mode works in the image too. CI's `docker` job caught it; it now passes (health check, one whole check
+  through the container, and the three reports).
+
+### Home page: lighter scrolling, a calmer hero, pages that open by themselves (24 Oct 2026)
+- Scrolling is native again. The wheel-smoothing layer doubled up with a trackpad's own inertia and felt laggy, so it is gone, along with the scroll-linked
+  re-rendering of the report section, the blur on every reveal, the blurred and animated glow layers, the translucent blur behind every card, and the looping
+  float and shine animations. Measured with a browser trace over six seconds of scrolling at retina size: painting fell about 65%, building layers about 74%,
+  layout about 75% and per-frame animation work about 82%.
+- The hero scene is tidy and still: cards sit in an aligned layout, nothing floats or follows the mouse, and the check plays through once and stays settled. The
+  score ring shows a dash and "checking" until the result arrives, then counts up to 81 and stays there (it used to restart from zero every 14 seconds).
+- The five report pages fan open on their own about half a second after the section appears, instead of waiting for a scroll position.
+
+### A home page for GateX (24 Oct 2026)
+- GateX now opens on a landing page at `/` (React, no new libraries): a glowing gate scene that plays a check through (file and scorecard in, three Examiners
+  marking, the Final reviewer settling, the score arriving), how it works, the result bar you can drag, the report that fans out as you scroll, issue rows you can
+  filter, blocks rising along the path to green, scorecard conversion, the proof panel with the highlighted cell, the progress chart and check history, FAQ and a
+  closing call to action. The dashboard moved to `/projects`; every link inside the app was updated.
+- Motion: reveal on scroll, count-ups, drawn lines and charts, floating cards, cards that lean toward the pointer, a scene that drifts with the pointer, and inertial
+  wheel scrolling that gives way to keyboard, scrollbar and script scrolling. All of it is off under reduced motion. It was checked in a real headless Chrome
+  (hero sequence, count to 81, filter chips, chart growth, tilt, parallax, scroll hand-over) and at phone width.
+
 ### GateX: new name, new documentation (24 Oct 2026)
 - **The product is now called GateX**, with the tagline "Checks your work against a scorecard". The README and every page under `docs/` use the new name.
   Folder and package names such as `ddd` and `@ddd/*` are unchanged.

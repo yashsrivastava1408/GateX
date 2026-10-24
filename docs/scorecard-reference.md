@@ -280,6 +280,26 @@ no values), the question becomes **unscored** (counts as 0) and a HIGH issue say
 
 Failing cells are listed in the issue (up to 25), so the author can go straight to them.
 
+### Criteria that are counts: scored by an exact count
+
+A criterion whose own words ask for a count the sweep can make (see [agent.md](agent.md#3-inputs-and-outputs): empty cells, unique ids, references that resolve,
+allowed values, child counts, tallies that match) is counted by code over every row, even when it is marked `raters`. The Examiners still score it, but their
+mark can only be **lowered** to the ceiling the count allows: 5 for a clean count, then 4 for 99% of rows clean, 3 for 97.5%, 2 for 95%, 1 for 90%, 0 below
+(any mistake caps it at 4); for tallies the file states about itself, 5 minus the number that are wrong. To get an exact score on purpose, write the
+criterion the way the count is said: "Ids are unique", "No blank cells: every field has a definition and a reason", "Every reference resolves to an existing id".
+A criterion worded as a judgement ("the definitions are clear") is not affected.
+
+More counts that are made exact when the criterion says them: "ids follow NFR-nnn" (every id of the id column must match the pattern the criterion states),
+"no parent has more than 10 children" (or "15 children or fewer", "<= 15 children"), "reasons that do not restate the definition", "no orphan rows" /
+"cross-sheet references resolve" / "foreign key", and "hold only values from the allowed list". "Definition present", "Cell fill" and "Fields with a type" are
+read as filled-cell counts. Wording that sets a limit or a choice ("at most 40 columns", "or a schema-wide rule covers it") or describes what a gate detects is
+never a count. See [agent.md](agent.md#3-inputs-and-outputs) for what each one counts.
+
+### Writing a scale so the lowest rung is kept
+
+If the lowest rung you describe is 1 ("1 prose only"), a score of 0 for a file that has that prose is raised to 1 when the cells the examiners cite exist and hold
+text. If 0 means something (absent, contradicted), describe it ("0 absent") and it is never raised.
+
 ## Bands: ratio to score
 
 For a code dimension, the check's pass ratio (passed ÷ total) is turned into 0-5 by `bands`. The first band, from

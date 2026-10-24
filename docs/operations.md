@@ -32,7 +32,7 @@ npm run build                    # builds the dashboard into web/dist
 MOCK_LLM=1 npm run start         # demo: scripted models, in-memory database
 ```
 
-Open http://localhost:4000. The sidebar says **Mock models (demo)**. The demo keeps its history in memory while the server runs; use Postgres (below) to keep it for good.
+Open http://localhost:4000: the GateX home page opens first, and the dashboard is at http://localhost:4000/projects. The dashboard sidebar says **Mock models (demo)**. The demo keeps its history in memory while the server runs; use Postgres (below) to keep it for good.
 
 For real use:
 
@@ -58,6 +58,7 @@ variable always wins over the file, so CI and containers can override it.
 | `PORT` | `4000` | HTTP port |
 | `DATA_DIR` | `./data` (project root) | Where uploaded files are kept (`data/uploads/<run id>/`) |
 | `MODELS_CONFIG` | `server/config/models.json` | Use a different roster file |
+| `VERIFY_FINDINGS` | on | `0` = skip the second look at every issue (also `settings.verifyFindings` in the models file; a Quick check skips it too) |
 | `MOCK_LLM` | unset | `1` = scripted models from `models.mock.json`, no API calls |
 | `MOCK_DELAY_MS` | `700` | Pause per mock call so live progress is visible |
 | `DB_MODE` | derived | `memory` forces the in-memory database even if `DATABASE_URL` is set |

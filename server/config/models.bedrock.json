@@ -57,6 +57,26 @@
     "model": "us.amazon.nova-pro-v1:0",
     "family": "amazon"
   },
+  "verifier": {
+    "provider": "bedrock",
+    "model": "us.amazon.nova-pro-v1:0",
+    "fallbacks": [
+      {
+        "provider": "bedrock",
+        "model": "qwen.qwen3-next-80b-a3b"
+      }
+    ],
+    "confirmers": [
+      {
+        "provider": "bedrock",
+        "model": "zai.glm-5"
+      },
+      {
+        "provider": "bedrock",
+        "model": "qwen.qwen3-next-80b-a3b"
+      }
+    ]
+  },
   "settings": {
     "temperature": 0,
     "maxOutputTokens": 8192,

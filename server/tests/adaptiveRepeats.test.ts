@@ -52,7 +52,8 @@ async function run(models: ModelsConfig, overrides: Record<string, Record<string
 
 const withRepeats = (repeats: number, repeatMode: 'all' | 'adaptive', raters: [string, string, string] = ['mock-mid', 'mock-mid', 'mock-mid']) => {
   const models = mockModels(raters);
-  models.settings = { ...models.settings, repeats, repeatMode };
+  // These tests count the rater calls, so the second look at the issues (more model calls) is switched off.
+  models.settings = { ...models.settings, repeats, repeatMode, verifyFindings: false };
   return models;
 };
 
