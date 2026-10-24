@@ -1,5 +1,5 @@
 # The whole evaluator in one small image. Stage 1 builds the dashboard; stage 2 carries only what runs.
-FROM node:22-slim AS build
+FROM node:25-slim AS build
 
 WORKDIR /app
 
@@ -14,7 +14,7 @@ COPY . .
 RUN npm run build
 
 
-FROM node:22-slim
+FROM node:25-slim
 
 WORKDIR /app
 ENV NODE_ENV=production
