@@ -41,6 +41,8 @@ export interface ReportView {
   strengths: ViewStrength[];
   leftOut: ViewLeftOut[];
   examinerCount: number;
+  /** Present when the check was run twice: a one-line summary for the report headers. */
+  twoRuns?: { line: string; unstable: boolean; first: number; second: number; average: number; gap: number };
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -185,6 +187,18 @@ export function buildView(source: Report): ReportView {
     strengths: report.strengths.map((s) => ({ area: areaName.get(s.dimensionId) ?? '', text: scrub(s.text), where: s.location ? `Sheet "${s.location.sheet}", cell ${s.location.cell}` : '' })),
     leftOut: report.notMeasurable.map((n) => ({ name: n.name, critical: n.critical, reason: scrub(n.reason), treatment: n.treatment === 'zero' ? 'Counted as 0 in the score' : 'Left out of the score' })),
     examinerCount: examinerIds.length,
+    ...(report.twoRuns
+      ? {
+          twoRuns: {
+            line: `Run twice: ${num(report.twoRuns.scores[0])} and ${num(report.twoRuns.scores[1])}, average ${num(report.twoRuns.average)}, gap ${num(report.twoRuns.gap)} points${report.twoRuns.unstable ? '. Result is unstable, treat it as a range.' : '.'}`,
+            unstable: report.twoRuns.unstable,
+            first: report.twoRuns.scores[0],
+            second: report.twoRuns.scores[1],
+            average: report.twoRuns.average,
+            gap: report.twoRuns.gap,
+          },
+        }
+      : {}),
   };
 }
 

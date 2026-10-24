@@ -55,6 +55,7 @@ export interface SubmitForm {
   instructions: string;
   /** Score every question once: faster, slightly less steady. */
   quick?: boolean;
+  runTwice?: boolean;
 }
 
 interface ImportedQuestion {
@@ -105,6 +106,7 @@ export const api = {
     body.append('sources', form.sources);
     body.append('instructions', form.instructions);
     if (form.quick) body.append('quick', '1');
+    if (form.runTwice) body.append('runTwice', '1');
     return request<{ runId: string; projectId: string; iteration: number }>('/api/runs', { method: 'POST', body });
   },
 

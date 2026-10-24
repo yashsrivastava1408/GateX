@@ -6,6 +6,7 @@ import type {
   Finding,
   Override,
   Scorecard,
+  TwoRuns,
   VerdictSection,
 } from '@ddd/shared';
 import { floor1 } from '../util/text.js';
@@ -137,10 +138,17 @@ export function buildVerdictSection(
   dimensions: DimensionResult[],
   override: Override | null,
   findings: Finding[] = [],
+  twoRuns?: TwoRuns,
 ): VerdictSection {
   const blocking = blockingFindings(findings);
   const verdict = decide(scorecard, effectiveDimensions(scorecard, dimensions), blocking);
   const reasons = [...verdict.reasons];
+  if (twoRuns) {
+    // Run twice: the average sets the score and the colour (by score alone); an unstable pair is a note, not a colour.
+    verdict.score = twoRuns.average;
+    verdict.decision = bandOf(twoRuns.average);
+    reasons.splice(0, 1, ...twoRunsReasons(twoRuns));
+  }
   if (override) {
     reasons.push(`A person overrode the verdict to ${override.decision.toUpperCase()}: ${override.reason}`);
   }
@@ -155,4 +163,21 @@ export function buildVerdictSection(
     reasons,
     override,
   };
+}
+
+const pts = (n: number) => floor1(n).toFixed(1);
+const colourWord = { green: 'green', amber: 'amber', red: 'red' } as const;
+
+/** The plain-words lines for a two-run result: how the average was reached, and the unstable note when it applies. */
+export function twoRunsReasons(t: TwoRuns): string[] {
+  const { accept, refine } = SCORE_BANDS;
+  const band = bandOf(t.average);
+  const lines = [
+    `The check was run twice: ${pts(t.scores[0])} and ${pts(t.scores[1])}. The score shown is the average, ${pts(t.average)}, which is in the ${colourWord[band]} band (${band === 'green' ? `${accept} and above` : band === 'amber' ? `${refine} to ${accept - 1}` : `below ${refine}`}). The two runs differ by ${pts(t.gap)} points.`,
+  ];
+  if (t.unstable) {
+    const colours = t.decisions[0] !== t.decisions[1] ? ` The two runs landed on different colours (${t.decisions[0]} and ${t.decisions[1]}).` : '';
+    lines.push(`Needs attention: Result is unstable, treat it as a range (${pts(Math.min(...t.scores))} to ${pts(Math.max(...t.scores))}).${colours}`);
+  }
+  return lines;
 }

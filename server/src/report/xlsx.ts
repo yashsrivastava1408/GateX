@@ -31,6 +31,16 @@ export async function renderXlsx(input: Report): Promise<Buffer> {
   verdictRow.getCell(2).fill = solid(STRONG[v.decision]);
   verdictRow.getCell(2).font = { bold: true, color: { argb: 'FFFFFFFF' } };
   s.addRow(['Score', `${formatNumber(v.score)} out of 100`, `Green needs ${v.thresholds.accept} or more. Amber is ${v.thresholds.refine} to ${v.thresholds.accept - 1}. Red is below ${v.thresholds.refine}.`]);
+  if (v.twoRuns) {
+    s.addRow(['Run 1 score', formatNumber(v.twoRuns.first), '']);
+    s.addRow(['Run 2 score', formatNumber(v.twoRuns.second), '']);
+    s.addRow(['Average (shown above)', formatNumber(v.twoRuns.average), `The two runs differ by ${formatNumber(v.twoRuns.gap)} points.`]);
+    if (v.twoRuns.unstable) {
+      const r = s.addRow(['Needs attention', 'Result is unstable', 'Treat it as a range: the two runs are 8 or more points apart, or landed on different colours.']);
+      r.getCell(2).fill = solid(SEV_SOFT.MEDIUM);
+      r.getCell(2).font = { bold: true };
+    }
+  }
   s.addRow(['File', v.fileName, '']);
   s.addRow(['Scorecard', v.scorecard, '']);
   s.addRow(['Checked on', v.finishedLong, '']);

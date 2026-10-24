@@ -13,6 +13,7 @@ export function renderMarkdown(input: Report): string {
   out.push(`# ${BRAND.name} report: ${v.fileName}`, '', `_${BRAND.tagline}_`, '');
   out.push(`**${BAND_WORD[v.decision]} - ${v.headline}** | Score **${formatNumber(v.score)} out of 100**`, '');
   out.push(`${v.subline} (Green needs ${v.thresholds.accept} or more. Amber is ${v.thresholds.refine} to ${v.thresholds.accept - 1}. Red is below ${v.thresholds.refine}.)`, '');
+  if (v.twoRuns) out.push(`**${v.twoRuns.line}**`, '');
   out.push(`| | |`, `|---|---|`, `| File | ${cell(v.fileName)} |`, `| Scorecard | ${cell(v.scorecard)} |`, `| Checked on | ${v.finishedLong} |`, `| Check number | ${v.checkNumber} |`);
   if (v.report.header.instructions) out.push(`| Extra instructions | ${cell(v.report.header.instructions)} |`);
   out.push('');

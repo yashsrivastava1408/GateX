@@ -46,6 +46,7 @@ export function NewEvaluationPage() {
   const [sources, setSources] = useState('');
   const [instructions, setInstructions] = useState('');
   const [quick, setQuick] = useState(false);
+  const [runTwice, setRunTwice] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,7 +62,7 @@ export function NewEvaluationPage() {
     setBusy(true);
     setError(null);
     try {
-      const created = await api.submit({ workbook, scorecard, projectName: projectName.trim(), sources, instructions, quick });
+      const created = await api.submit({ workbook, scorecard, projectName: projectName.trim(), sources, instructions, quick, runTwice });
       navigate(`/runs/${created.runId}`);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Your check could not start. Please try again.');
@@ -75,7 +76,7 @@ export function NewEvaluationPage() {
         eyebrow="New check"
         title="Check a new file"
         actions={
-          <Link to="/" className="btn btn-ghost">
+          <Link to="/projects" className="btn btn-ghost">
             <Icon name="back" /> Projects
           </Link>
         }
@@ -182,7 +183,14 @@ export function NewEvaluationPage() {
               <input type="checkbox" checked={quick} onChange={(e) => setQuick(e.target.checked)} />
               <span>
                 <strong>Quick check</strong>
-                <small className="faint">Marks each question once, so it finishes sooner.</small>
+                <small className="faint">Marks each question once and skips the second look at each finding, so it finishes sooner.</small>
+              </span>
+            </label>
+            <label className="check-row">
+              <input type="checkbox" checked={runTwice} onChange={(e) => setRunTwice(e.target.checked)} />
+              <span>
+                <strong>Check twice for a steadier score</strong>
+                <small className="faint">Does the whole check two times and shows the average. It takes about twice as long. If the two results are far apart, the report says so.</small>
               </span>
             </label>
             <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={!canSubmit}>

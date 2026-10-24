@@ -156,6 +156,10 @@ export function renderPdf(input: Report): Promise<Buffer> {
   write('Amber', xAt((refine + accept) / 2) - 20, y + 31, { size: 9, bold: true, color: BAND.amber, width: 40, align: 'center' });
   write('Green', xAt((accept + 100) / 2) - 20, y + 31, { size: 9, bold: true, color: BAND.green, width: 40, align: 'center' });
   y += 56;
+  if (v.twoRuns) {
+    write(v.twoRuns.line, MX, y, { size: 10, bold: true, color: v.twoRuns.unstable ? BAND.amber : MUTED, width: CW });
+    y += 22;
+  }
 
   // What this means
   write('What this means', MX, y, { size: 14, bold: true, color: NAVY });
