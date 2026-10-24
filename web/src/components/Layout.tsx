@@ -8,7 +8,7 @@ import { Icon } from './Icons';
 
 function Brand() {
   return (
-    <NavLink to="/" className="brand" aria-label="GateX home">
+    <NavLink to="/projects" className="brand" aria-label="GateX projects">
       <span className="brand-mark">
         <Icon name="cpu" size={18} strokeWidth={2.2} />
       </span>
@@ -36,7 +36,7 @@ function Sidebar() {
         <NavLink to="/new" className="btn btn-primary nav-cta">
           <Icon name="plus" /> New check
         </NavLink>
-        <NavLink to="/" end className="nav-link">
+        <NavLink to="/projects" end className="nav-link">
           <Icon name="folder" /> Projects
         </NavLink>
         <NavLink to="/import-scorecard" className="nav-link">

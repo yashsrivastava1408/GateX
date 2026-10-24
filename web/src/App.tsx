@@ -1,4 +1,5 @@
 import { Link, Route, Routes } from 'react-router-dom';
+import { LandingPage } from './pages/LandingPage';
 import { Layout } from './components/Layout';
 import { LibraryPage } from './pages/LibraryPage';
 import { ImportScorecardPage } from './pages/ImportScorecardPage';
@@ -12,7 +13,7 @@ function NotFound() {
   return (
     <div className="empty">
       <h3>That page does not exist</h3>
-      <Link to="/" className="btn btn-secondary">Back to projects</Link>
+      <Link to="/projects" className="btn btn-secondary">Back to projects</Link>
     </div>
   );
 }
@@ -20,8 +21,9 @@ function NotFound() {
 export function App() {
   return (
     <Routes>
+      <Route path="/" element={<LandingPage />} />
       <Route element={<Layout />}>
-        <Route index element={<ProjectsPage />} />
+        <Route path="projects" element={<ProjectsPage />} />
         <Route path="new" element={<NewEvaluationPage />} />
         <Route path="import-scorecard" element={<ImportScorecardPage />} />
         <Route path="library" element={<LibraryPage />} />
