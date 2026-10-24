@@ -197,6 +197,20 @@ The test library (`/library` in the dashboard) is how you tell better from worse
 6. `npm run reliability` re-measures how often each model family's issues were right and saves `data/library/reliability.json`, which
    every later run reads (an issue only a rarely-right Examiner raised is set aside). Re-run it after adding verdicts.
 
+### What runs on every push (CI)
+
+`.github/workflows/ci.yml` runs four jobs, none of which calls a real model or needs a secret:
+
+| Job | What it proves |
+|---|---|
+| `check` | The types, every test on the in-memory database, the dashboard build and the docs check |
+| `postgres` | The server tests again, against a real Postgres 16 |
+| `docker` | The real image builds, starts, and runs one whole check through `scripts/smokeTest.mjs` (health, a check, the PDF, Excel and Markdown reports); the report it produced is kept as a download on the run |
+| `security` | `npm audit` on production dependencies (high or critical fails) and a scan for committed secrets |
+
+`.github/dependabot.yml` opens a weekly batch of dependency updates for the libraries, the Actions and the Node base image.
+Run the smoke test on your own machine against any running GateX with `npm run smoke -- http://localhost:4000`.
+
 ### The accuracy targets
 
 GateX is measured against five targets, all checked on real files:

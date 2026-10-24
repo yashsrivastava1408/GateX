@@ -13,6 +13,13 @@ All notable changes to GateX (earlier entries call it the DDD Evaluator). Format
   and where to read more. Scorecard conversion and PDF checking moved to `docs/scorecard-reference.md`; the Amazon Bedrock setup moved to `docs/operations.md`.
 - **Redrawn diagrams** (`docs/diagrams/*.mmd`, the rendered `docs/images/*.svg` and the hand-drawn `docs/images/architecture.svg`) use the new names.
 
+### Stronger CI (24 Oct 2026)
+- `.github/workflows/ci.yml` now has four jobs: `check` (as before), `postgres` (the server tests on a real Postgres 16), `docker` (builds the image, starts it with scripted
+  demo models, runs `scripts/smokeTest.mjs` through it, validates the compose file and keeps the report PDF, Excel and Markdown it produced as a download) and
+  `security` (`npm audit` on production dependencies at high and above, and a secret scan).
+- `.github/dependabot.yml` opens a weekly batch of updates for the npm libraries, the Actions and the Docker base image.
+- `npm run smoke -- <url>` runs the end-to-end smoke test against any running GateX.
+
 ### Two cheap fixes for misread findings (24 Oct 2026, prompts `l1-prompts/1.8`)
 - Examiners are told that a column recording the state of the work against a source (for example "In this master?" holding "To add") is a status, not a missing
   field, and that a schema defines fields, so example rows or instance data not being filled in is not a defect.

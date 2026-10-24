@@ -33,6 +33,7 @@
     "review:dump": "npm run review:dump -w server --",
     "release:check": "node scripts/releaseCheck.mjs",
     "presence:eval": "npm run presence:eval -w server --",
-    "dump": "npm run dump -w server --"
+    "dump": "npm run dump -w server --",
+    "smoke": "node scripts/smokeTest.mjs"
   }
 }
