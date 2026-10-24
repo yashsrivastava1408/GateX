@@ -20,7 +20,8 @@
     "planted": "tsx scripts/plantedTest.ts",
     "replay": "tsx scripts/replay.ts",
     "review:dump": "tsx scripts/dumpFindings.ts",
-    "presence:eval": "tsx scripts/presenceEval.ts"
+    "presence:eval": "tsx scripts/presenceEval.ts",
+    "dump": "tsx scripts/dumpWorkbook.ts"
   },
   "dependencies": {
     "@ddd/shared": "^1.0.0",

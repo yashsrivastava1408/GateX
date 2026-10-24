@@ -2,6 +2,10 @@ import type { DroppedFinding } from '@ddd/shared';
 import { columnLetters, type WorkbookModel } from '../excel/workbook.js';
 import { callJsonModel, type CallSettings } from './callModel.js';
 import { claimsAbsence, keyStems } from './findingCheck.js';
+
+/** Wordings that say a thing is only partly there ("incomplete mapping", "fields not yet added"): checked like a missing claim. */
+const INCOMPLETE = /\b(?:incomplete|not (?:yet )?(?:added|mapped|populated|defined|shown)|still to add|only partly|partially (?:defined|mapped))\b/i;
+const claimsMissingOrIncomplete = (f: Pick<DraftFinding, 'title' | 'detail'>) => claimsAbsence(f) || INCOMPLETE.test(f.title) || INCOMPLETE.test(f.detail);
 import type { LlmProvider } from '../llm/types.js';
 import type { DraftFinding } from './types.js';
 
@@ -35,6 +39,9 @@ const MIN_QUOTE = 8;
  * it. "A JSON Schema will be generated" in a decision log is not a JSON Schema, so such a sheet never proves that something is present.
  */
 const DISCUSSION_SHEET = /decision|log\b|_log|comparison|question|gap|interpretation|conflict|corrections?|pdf_vs|checks?$/i;
+
+/** A cell that says the thing is a placeholder, proposed, unspecified or still to add is the gap itself, never proof that it is there. */
+const PLACEHOLDER_CELL = /\b(?:proposed|unspecified|tbd|todo|to add|to be filled|not in any (?:source|file)|team to confirm)\b/i;
 
 const norm = (s: string) => s.toLowerCase().replace(/[\s"'“”‘’`]+/g, ' ').trim();
 
@@ -70,28 +77,45 @@ export function indexRows(wb: WorkbookModel): RowDoc[] {
 }
 
 /** The rows most likely to hold what the claim says is missing: rare words count more than common ones. */
+/**
+ * Ids a claim names ("D3-S04-P27..P29 are not defined"), ranges expanded. The rows that define them are the best evidence there is, so they come first
+ * whatever words they use.
+ */
+export function namedIds(text: string): string[] {
+  const out = new Set<string>();
+  for (const m of text.matchAll(/\b([A-Z]\d?-[A-Z]*\d+-[A-Z]?)(\d+)\s*(?:\.\.|–|-|to)\s*[A-Z]?(\d+)\b/g)) {
+    const [from, to] = [Number(m[2]), Number(m[3])];
+    if (to >= from && to - from < 30) for (let n = from; n <= to; n++) out.add(`${m[1]}${String(n).padStart(m[2]!.length, '0')}`);
+  }
+  for (const m of text.matchAll(/\b[A-Z]{1,4}\d?-[A-Z]?\d+(?:-[A-Z]?\d+)*\b/g)) out.add(m[0]);
+  return [...out];
+}
+
 export const documentFrequency = (docs: RowDoc[]): Map<string, number> => {
   const df = new Map<string, number>();
   for (const d of docs) for (const s of d.stems) df.set(s, (df.get(s) ?? 0) + 1);
   return df;
 };
 
-export function candidateRows(docs: RowDoc[], claim: string, df: Map<string, number> = documentFrequency(docs)): RowDoc[] {
+export function candidateRows(docs: RowDoc[], claim: string, df: Map<string, number> = documentFrequency(docs), limit = ROWS_PER_CLAIM, perSheet = MAX_PER_SHEET): RowDoc[] {
   const want = keyStems(claim);
-  if (want.length === 0) return [];
+  const named = namedIds(claim);
+  const defining = named.length > 0 ? docs.filter((d) => named.some((id) => d.text.includes(`"${id}"`))).slice(0, Math.ceil(limit / 2)) : [];
+  if (want.length === 0) return defining;
   const n = docs.length;
   const weight = (s: string) => Math.log(1 + n / (1 + (df.get(s) ?? 0)));
   const scored = docs
     .map((d) => ({ d, score: want.reduce((sum, s) => sum + (d.stems.has(s) ? weight(s) : 0), 0) }))
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score);
-  const perSheet = new Map<string, number>();
-  const out: RowDoc[] = [];
+  const taken = new Map<string, number>();
+  const out: RowDoc[] = [...defining];
+  for (const d of defining) taken.set(d.sheet, (taken.get(d.sheet) ?? 0) + 1);
   for (const { d } of scored) {
-    if ((perSheet.get(d.sheet) ?? 0) >= MAX_PER_SHEET) continue;
-    perSheet.set(d.sheet, (perSheet.get(d.sheet) ?? 0) + 1);
+    if (out.includes(d) || (taken.get(d.sheet) ?? 0) >= perSheet) continue;
+    taken.set(d.sheet, (taken.get(d.sheet) ?? 0) + 1);
     out.push(d);
-    if (out.length >= ROWS_PER_CLAIM) break;
+    if (out.length >= limit) break;
   }
   return out;
 }
@@ -139,6 +163,8 @@ export function proofOfPresence(wb: WorkbookModel, claim: DraftFinding, answer: 
   const holder = wb.cells(sheet).find(([r, c, text]) => r === row && norm(text).includes(want) && `${columnLetters(c)}` !== '' );
   if (!holder) return { ok: false };
   const text = holder[2];
+  // A short cell that is itself a placeholder, or a quote that says so, is the gap. A long definition that merely contains such a word is not.
+  if (PLACEHOLDER_CELL.test(quote) || (text.length <= 160 && PLACEHOLDER_CELL.test(text))) return { ok: false };
   const claimStems = new Set(keyStems(`${claim.title} ${claim.fix}`));
   const shared = keyStems(`${quote} ${text}`).some((s) => claimStems.has(s));
   return shared ? { ok: true, cell: `${sheet}!${columnLetters(holder[1])}${row}`, quote } : { ok: false };
@@ -154,7 +180,7 @@ export interface PresenceArgs {
 
 export async function checkPresence(args: PresenceArgs): Promise<PresenceResult> {
   const result: PresenceResult = { findings: args.findings, dropped: [], notes: [], inputTokens: 0, outputTokens: 0 };
-  const claims = args.findings.filter((f) => f.source === 'raters' && claimsAbsence(f));
+  const claims = args.findings.filter((f) => f.source === 'raters' && claimsMissingOrIncomplete(f));
   if (claims.length === 0 || args.models.length === 0) return result;
 
   const docs = indexRows(args.wb);

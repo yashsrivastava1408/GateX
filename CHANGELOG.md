@@ -13,6 +13,35 @@ All notable changes to GateX (earlier entries call it the DDD Evaluator). Format
   and where to read more. Scorecard conversion and PDF checking moved to `docs/scorecard-reference.md`; the Amazon Bedrock setup moved to `docs/operations.md`.
 - **Redrawn diagrams** (`docs/diagrams/*.mmd`, the rendered `docs/images/*.svg` and the hand-drawn `docs/images/architecture.svg`) use the new names.
 
+### Two cheap fixes for misread findings (24 Oct 2026, prompts `l1-prompts/1.8`)
+- Examiners are told that a column recording the state of the work against a source (for example "In this master?" holding "To add") is a status, not a missing
+  field, and that a schema defines fields, so example rows or instance data not being filled in is not a defect.
+- A code filter sets aside "not shown populated" and "no filled instance rows" complaints about a schema's own templates or definitions (`asksSchemaForFilledData`
+  in `agent/findingCheck.ts`), only for a scorecard that judges schema design, and never for sample content the workbook does hold (personas, actors,
+  permission rows). On the labelled R4 run it matches two findings, both labelled wrong, and no useful one.
+- A broader pass that tested every other claim against the file the same way was measured on 45 labelled findings and wrongly dropped a real gap in both runs while
+  catching none of the new wrong ones, so it is not part of the pipeline. "The file already has it" stays: 9 of 24 dropped, 0 of 21 real gaps, identical on two runs.
+
+### Examiners now see the rows that relate to their question (24 Oct 2026, prompts `l1-prompts/1.7`)
+- A question that names sheets to read ("Validation_Rules, Permission_Matrix") showed the examiners only those, although what it asks about (a data class, a
+  purpose, a masking rule) is defined on another sheet (`L2_Parameters`). Examiners then reported it "not in the sheets given", and one gave the privacy
+  question a 0 (a live check scored it 0 and the run fell to 72.2). Now each section also gets **supporting rows** (`agent/supporting.ts`): the few rows
+  of the rest of the file that share the most distinctive words with the section's questions, shown with their header row (`rows` on a sheet spec,
+  `excel/serialize.ts`). They are cut to fit beside the section for an examiner with a small prompt limit, never include decision-log or comparison sheets,
+  and are cited like any other cell. A section that already reads the whole workbook gets nothing extra.
+- **"Already has it" check sharpened:** claims that name ids get the rows that define them first (ranges such as `D3-S04-P27..P29` expanded), "incomplete" and
+  "not yet added" wordings are checked too, and a cell that is a placeholder (proposed, unspecified, still to add) never counts as proof. On 39 labelled findings it
+  sets aside 6 to 8 of the 21 the file already answers and none of the 18 real gaps.
+- **Measured on the same R4 file:** prompts 1.6 without supporting rows scored 72.2 AMBER (privacy 0); prompts 1.7 with supporting rows scored 86.4 GREEN with every
+  key check at 4 or more. A fresh reviewer then labelled that run's 24 findings: 5 real, 7 partly right, 9 wrong, 3 vague (50% useful).
+- `npm run dump -- --workbook <file> --out <folder>` writes a workbook as plain text, one file per sheet, for reviewers who cannot open Excel.
+
+### Scoring a zero fairly (24 Oct 2026, prompts `l1-prompts/1.6`)
+- Two examiners gave "Machine-readable specification" a 0 for a workbook of structured tables, although the scorecard's own anchors put "structured tables but no
+  machine format" at 2 to 3 and its reference assessment scores this workbook 3. A single 0 caps the whole question at 2, so a critical question lost its pass.
+  Examiners are now told to score against the anchors as written (0 is for a file with nothing on the point, or one that contradicts it), and the final
+  reviewer will not keep a 0 when the cited cells show what a higher anchor describes. Earlier runs used `l1-prompts/1.5` and are not directly comparable.
+
 ### Phases 1 to 4 after the R3 report (24 Oct 2026)
 - **"The file already has it" check** (`agent/presence.ts`): a finding that says something is missing is set aside when a model points at a cell that really
   holds it and code proves the quote is in that cell. On 23 labelled findings it dropped 8 of 15 the file already answers and 0 of 8 real gaps; it keeps

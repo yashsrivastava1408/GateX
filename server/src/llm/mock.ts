@@ -66,7 +66,7 @@ export class MockProvider implements LlmProvider {
 
     const text = request.system.includes('SCORECARD_IMPORT')
       ? this.importDraft()
-      : request.system.includes('You check claims that something is missing')
+      : request.system.includes('You check claims')
         ? this.presence(request)
         : request.system.includes('You are the consolidator')
         ? this.consolidate(request)

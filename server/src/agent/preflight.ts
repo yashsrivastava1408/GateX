@@ -38,7 +38,8 @@ export function preflight(input: {
   instructions?: string;
   raters: RaterLimit[];
 }): PreflightResult {
-  const prompts = buildAllRaterPrompts(input);
+  const limits = input.raters.map((r) => r.maxInputTokens).filter((n): n is number => n !== undefined);
+  const prompts = buildAllRaterPrompts({ ...input, ...(limits.length > 0 ? { limit: Math.min(...limits) } : {}) });
   if (prompts.every((p) => p.prompt.rated.length === 0)) return { tokens: 0, sections: 0, ok: true, fits: input.raters.map((r) => ({ ...r, fits: true })) };
 
   const sizes = prompts.map((p) => ({ label: p.label, tokens: estimateTokens(RATER_SYSTEM) + estimateTokens(p.prompt.user) }));

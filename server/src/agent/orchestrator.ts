@@ -35,7 +35,8 @@ import { idsToRepeat, medianOutcome, type RepeatStats } from './repeats.js';
 import { mapWithConcurrency } from '../util/concurrency.js';
 import { resolvePageRanges } from '../excel/pageRanges.js';
 import { addRelevantPages } from '../excel/pageSelect.js';
-import { planSections, sheetsForDisagreements } from './sectionPlanner.js';
+import { sheetsForDisagreements } from './sectionPlanner.js';
+import { planSectionsWithSupport } from './supporting.js';
 import { serializeSheets } from '../excel/serialize.js';
 
 export type ProgressEvent =
@@ -150,6 +151,8 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
     model: roster.consolidator.model,
     family: roster.consolidator.family,
   };
+  const raterLimits = roster.raters.map((r) => r.maxInputTokens).filter((n): n is number => n !== undefined);
+  const smallestLimit = raterLimits.length > 0 ? Math.min(...raterLimits) : undefined;
   const repeats = args.models.settings.repeats;
   const repeatMode = args.models.settings.repeatMode ?? 'adaptive';
   let callsMade = 0;
@@ -168,7 +171,7 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
 
     // One prompt per section (a scorecard without `reads` is a single section holding the whole workbook).
     // The raters work in parallel inside a section; sections run one at a time unless the roster allows more (settings.sectionConcurrency).
-    const sections = planSections(scorecard);
+    const sections = planSectionsWithSupport(scorecard, wb, { limit: smallestLimit });
     const perRater = roster.raters.map((member) => ({ member, outcomes: [] as RaterOutcome[] }));
     // Repeats need some randomness to be independent samples, so every scoring call uses it when there are repeats.
     const runSettings = repeats > 1 ? { ...settings, temperature: Math.max(settings.temperature, REPEAT_TEMPERATURE) } : settings;
@@ -266,7 +269,7 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
     const consolidatorCandidates = candidatesFor(roster.consolidator);
     // A sectioned scorecard keeps the consolidator's prompt small too: it only needs the sheets behind the
     // dimensions the raters disagree on. Without `reads` it is sent the whole artifact, as before.
-    const sections = planSections(scorecard);
+    const sections = planSectionsWithSupport(scorecard, wb, { limit: smallestLimit });
     // One prompt per batch of questions: only their results, and for disputes only the sheets behind them.
     const buildUser = (batch: DimensionSpec[], batchOutcomes: RaterOutcome[]) => {
       const partial = sheetsForDisagreements(sections, disputedDimensions(batch, batchOutcomes));
@@ -360,7 +363,7 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
   const checked = checkFindings(
     raterFindings.filter((f) => !aboutUnmeasurable(f)),
     wb,
-    { loneReason: (f) => loneFindingReason(f, roster.raters, args.reliability) },
+    { loneReason: (f) => loneFindingReason(f, roster.raters, args.reliability), schemaDesign: scorecard.gate === 'D1' },
   );
   // "The file has no X" said about X that the file does define: a model finds the row, code proves the quote is really in the cell.
   if (rated.length > 0) {

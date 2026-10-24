@@ -197,6 +197,20 @@ The test library (`/library` in the dashboard) is how you tell better from worse
 6. `npm run reliability` re-measures how often each model family's issues were right and saves `data/library/reliability.json`, which
    every later run reads (an issue only a rarely-right Examiner raised is set aside). Re-run it after adding verdicts.
 
+### The accuracy targets
+
+GateX is measured against five targets, all checked on real files:
+
+| Target | How it is checked |
+|---|---|
+| At least 60% of the issues listed are useful (real or partly right) | Each issue is checked against the real file, by a person or by a fresh reviewer with no context, and saved under `data/reviews/` |
+| At most 10% of the issues listed are wrong | The same check |
+| No real issue is ever dropped by the filters | `npm run release:check` replays the filters on every labelled run and fails if one is lost |
+| All eight planted defects are found by the code sweep | The planted-defect test inside `npm test` |
+| The same file scores within 5 points on two runs | Two runs of one file side by side (the project history lists the score of every run) |
+
+Add a labelled issue to the library whenever GateX gets one wrong, so the target stays honest.
+
 ### Before handing a build over: the release check
 
 `npm run release:check` runs, with no model call: the type-check, every server and web test (including the planted-defect test, where the code sweep must find all
@@ -204,6 +218,11 @@ eight planted defects and nothing in a clean register), the docs check, and the 
 filter sets aside an issue labelled real or partly right). `npm run release:check -- --live` also runs `npm run presence:eval`, which asks the live final reviewer
 whether the issues in `data/presence/step2-labels.json` are already answered by the file; it fails if a labelled real gap is dropped. It costs a few cents.
 Add a labelled issue to that file whenever GateX wrongly keeps or drops one.
+
+### Reading a workbook as text
+
+`npm run dump -- --workbook <file.xlsx> --out <folder>` writes every sheet as a plain text file (one line per row, `A5=value | B5=value`). A reviewer can search
+the real cells with any text tool, which is how a fresh reviewer checks findings without opening Excel.
 
 ### Test with planted defects
 

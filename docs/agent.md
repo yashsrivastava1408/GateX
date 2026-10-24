@@ -199,18 +199,25 @@ cell, attached to the scorecard question with the most words in common, and the 
 The sweep also keeps the score honest (`capByExactFindings`): a question the sweep found mistakes under keeps a mark of at most 4 (one or two
 mistakes), 3 (three to five) or 2 (six or more), whatever the Examiners gave it. The cap is named in the question's rationale and in the run notes.
 
+**Supporting rows** (`supporting.ts`). A question that names sheets to read shows the examiners only those, but what it asks about is often defined on another
+sheet. So each section also receives the few rows of the rest of the file that share the most distinctive words with its questions (rare words count more),
+shown with their header row and cut to fit beside the section for an examiner with a small prompt limit. Decision logs, corrections and comparisons are never
+used. Examiners cite these cells like any other.
+
 **"The file already has it"** (`presence.ts`, after the cleaning below). An Examiner may say "the file has no X" about an X the file defines in
 other words or on a sheet it did not read. For each such issue, code picks the eight rows most likely to hold X (rare words count more) and the
 Final reviewer is asked whether one of them does. Its answer is never trusted alone: it must give a cell and copy the words that define X, and
 code checks that the cell (or its row) holds those words and shares a distinctive word with the claim. Cells on discussion sheets (decisions, logs,
-comparisons, open questions) never count. Only then is the issue set aside, with the cell named in the set-aside list. This check can only remove
+comparisons, open questions) never count, and neither does a cell that is itself a placeholder (proposed, unspecified, still to add). When an issue names ids
+("D3-S04-P27..P29 are not defined"), the rows that define them are looked up first. "Incomplete" and "not yet added" wordings are checked like "missing". Only then is the issue set aside, with the cell named in the set-aside list. This check can only remove
 issues, and if the proof does not hold the issue stays. `npm run presence:eval` repeats the measurement on the labelled examples in
-`data/presence/step2-labels.json`.
+`data/presence/step2-labels.json` (39 labelled issues). Repeated, it sets aside 6 to 8 of the 21 issues the file already answers and none of the 18 real gaps.
 
 **Cleaning the Examiners' issues** (`findingCheck.ts`, by code, before they are numbered). No model marks its own homework:
 
 | Check | What it does | Example it caught |
 |---|---|---|
+| Schema asked for filled rows | An issue that a schema's own templates or definitions are "not shown populated" is set aside for a schema-design scorecard; sample content such as personas or permission rows is never touched | "Test links defined but not shown populated" |
 | Cells named | An issue that says named cells are empty is tested cell by cell; filled cells are taken out of the claim | "rows 47-52 have no tag" when they do |
 | Everything missing | A claim about every field is tested against nearly-full columns on the cited sheet | "no field has a data type" when a type column is 96% filled |
 | Missing, but in the file | "X is missing" is set aside if every word of X appears together in three or more places of the file; a claim about a named sheet is tested on that sheet only | "no exit gate" when a sheet `Exit_Gate_Checks` holds 17 checks |

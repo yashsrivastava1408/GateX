@@ -32,6 +32,7 @@
     "replay": "npm run replay -w server --",
     "review:dump": "npm run review:dump -w server --",
     "release:check": "node scripts/releaseCheck.mjs",
-    "presence:eval": "npm run presence:eval -w server --"
+    "presence:eval": "npm run presence:eval -w server --",
+    "dump": "npm run dump -w server --"
   }
 }

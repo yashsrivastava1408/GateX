@@ -45,7 +45,7 @@ describe('Level 1 evaluation of the Talentra workbook', () => {
     expect(sha256(await readFile(TALENTRA_XLSX))).toBe(before);
     expect(run.core.header.raters.map((r) => r.model)).toEqual(['mock-mid', 'mock-lenient', 'mock-strict']);
     expect(run.core.header.scorecardApproval).toMatch(/Sample scorecard/);
-    expect(run.runLog.promptVersion).toBe('l1-prompts/1.5');
+    expect(run.runLog.promptVersion).toBe('l1-prompts/1.8');
     expect(run.runLog.participants).toHaveLength(4);
   });
 

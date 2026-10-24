@@ -9,7 +9,7 @@ import { MockProvider } from '../src/llm/mock.js';
 import type { LlmProvider, LlmRequest } from '../src/llm/types.js';
 import { TALENTRA_XLSX, loadTalentraScorecard, mockModels } from './helpers.js';
 
-const isRater = (r: LlmRequest) => !r.system.includes('You are the consolidator') && !r.system.includes('SCORECARD_IMPORT');
+const isRater = (r: LlmRequest) => !r.system.includes('You are the consolidator') && !r.system.includes('SCORECARD_IMPORT') && !r.system.includes('You check claims');
 const askedIds = (r: LlmRequest): string[] => {
   const card = /<scorecard>\n([\s\S]*?)\n<\/scorecard>/.exec(r.user)?.[1];
   return card ? (JSON.parse(card) as { dimensions: Array<{ id: string }> }).dimensions.map((d) => d.id) : [];

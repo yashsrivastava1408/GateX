@@ -99,3 +99,23 @@ describe('the "already in the file" check', () => {
     expect(result.notes).toEqual([]);
   });
 });
+
+describe('a placeholder cell is never proof', () => {
+  it('rejects a quote from a cell that says the thing is proposed, unspecified or still to add', async () => {
+    const wb = await WorkbookModel.load(await makeWorkbook({ Params: [['Id', 'Basis'], ['P-1', 'Frequency PROPOSED (not in any source) - team to confirm'], ['P-2', 'Owner TBD']] }));
+    const claim = finding('Persona evidence basis missing');
+    expect(proofOfPresence(wb, claim, { cell: 'Params!B2', quote: 'Frequency PROPOSED (not in any source)' }).ok).toBe(false);
+    expect(proofOfPresence(wb, claim, { cell: 'Params!B3', quote: 'Owner TBD' }).ok).toBe(false);
+  });
+});
+
+describe('ids a claim names', () => {
+  it('expands a range, and looks up the rows that define the ids first', async () => {
+    const { namedIds } = await import('../src/agent/presence.js');
+    expect(namedIds('D3-S04-P27..P29 are not defined')).toEqual(['D3-S04-P27', 'D3-S04-P28', 'D3-S04-P29']);
+    expect(namedIds('add a rule in D3-S01-P12 or VR-22')).toEqual(expect.arrayContaining(['D3-S01-P12', 'VR-22']));
+    const wb = await WorkbookModel.load(await makeWorkbook({ L2: [['Id', 'Name'], ['D3-S04-P27', 'Masked data categories'], ['D3-S04-P28', 'Hidden data categories'], ['D3-S01-P01', 'Matrix ID']] }));
+    const rows = candidateRows(indexRows(wb), 'Field-level visibility D3-S04-P27..P28 not defined');
+    expect(rows.map((r) => r.row)).toEqual(expect.arrayContaining([2, 3]));
+  });
+});

@@ -53,6 +53,8 @@ export interface SheetSpec {
   headerRow: number;
   /** Raters see only these columns (by header title). Code checks still read the whole sheet. */
   columns?: string[];
+  /** Raters see only these rows (plus the header row): the rows of the file most related to a question, chosen by code. */
+  rows?: number[];
 }
 
 /**

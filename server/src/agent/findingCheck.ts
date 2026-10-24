@@ -281,6 +281,21 @@ const ABOUT_THE_PROMPT = /\bnot\s+(?:visible|shown)\s+in\s+the\s+(?:provided|giv
 
 export const complainsAboutThePrompt = (f: Pick<DraftFinding, 'title' | 'detail'>) => ABOUT_THE_PROMPT.test(`${f.title}. ${f.detail}`);
 
+/* ------------------- asking a schema for filled data ------------------- */
+
+/**
+ * "Test links defined but not shown populated": a schema defines fields; it does not hold the rows a user will fill in later. Said about the schema's own
+ * templates or definitions, that is not a defect. Applies only to a scorecard that judges schema design, and not when the complaint is about sample content
+ * the workbook does hold (personas, actors, permission rows).
+ */
+const NOT_POPULATED = /\bnot\s+(?:yet\s+)?(?:shown\s+)?(?:populated|filled(?:\s+in)?)\b|\bno\s+(?:actual|filled|populated|instance)\s+(?:data|rows|instances|records|values)\b/i;
+const ABOUT_THE_SCHEMA = /\b(?:schema|template|definition|defined|D\d-S\d+)\b/i;
+const ABOUT_HELD_CONTENT = /\b(?:persona|actor|permission row|register entr|content sheet)\w*\b/i;
+export const asksSchemaForFilledData = (f: Pick<DraftFinding, 'title' | 'detail'>) => {
+  const text = `${f.title}. ${f.detail}`;
+  return NOT_POPULATED.test(text) && ABOUT_THE_SCHEMA.test(text) && !ABOUT_HELD_CONTENT.test(text);
+};
+
 /* ------------------- a named column that is a cell of the file ------------------- */
 
 const QUOTE = `['"“‘]([^'"”’]{3,60})['"”’]`;
@@ -351,8 +366,11 @@ const columnLettersOf = (index: number): string => {
 const MIN_PLACES = 3;
 
 /** Fact-checks one examiner finding against the file. */
-export function checkFinding(f: DraftFinding, wb: WorkbookModel, profile = profileWorkbook(wb)): Verdict {
+export function checkFinding(f: DraftFinding, wb: WorkbookModel, profile = profileWorkbook(wb), schemaDesign = false): Verdict {
   if (f.source !== 'raters') return { keep: true, finding: f, narrowed: false };
+  if (schemaDesign && asksSchemaForFilledData(f)) {
+    return { keep: false, reason: 'It asks a schema for filled example rows. A schema defines the fields; the rows are filled in when it is used.' };
+  }
   if (complainsAboutThePrompt(f)) {
     return { keep: false, reason: 'It says something was not provided or not visible to the examiner. That describes what the examiner was shown, not a defect in the file.' };
   }
@@ -511,13 +529,13 @@ export function mergeDuplicates(findings: DraftFinding[], profile: WorkbookProfi
 }
 
 /** Fact-checks, then merges, the examiners' findings. Code findings pass through untouched. */
-export function checkFindings(findings: DraftFinding[], wb: WorkbookModel, options: { loneReason?: (f: DraftFinding) => string | null } = {}): FindingCheckResult {
+export function checkFindings(findings: DraftFinding[], wb: WorkbookModel, options: { loneReason?: (f: DraftFinding) => string | null; schemaDesign?: boolean } = {}): FindingCheckResult {
   const profile = profileWorkbook(wb);
   const kept: DraftFinding[] = [];
   const dropped: DroppedFinding[] = [];
   let narrowed = 0;
   for (const f of findings) {
-    const verdict = checkFinding(f, wb, profile);
+    const verdict = checkFinding(f, wb, profile, options.schemaDesign);
     if (verdict.keep) {
       kept.push(verdict.finding);
       if (verdict.narrowed) narrowed++;

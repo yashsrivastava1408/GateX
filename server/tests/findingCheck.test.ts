@@ -277,3 +277,17 @@ describe.skipIf(!existsSync(REAL))('on the real findings of the live GS-1 run', 
     expect(res.dropped.map((d) => d.title)).toContain(byId.get('F-011')!.title);
   });
 });
+
+describe('asking a schema for filled data', () => {
+  it('sets aside "defined but not shown populated" about a schema, only for a schema-design scorecard', async () => {
+    const { asksSchemaForFilledData } = await import('../src/agent/findingCheck.js');
+    expect(asksSchemaForFilledData({ title: 'Test links defined but not shown populated', detail: 'The schema defines test-link fields but no instance shows them populated.' })).toBe(true);
+    expect(asksSchemaForFilledData({ title: 'No filled instance rows', detail: 'The template has no actual data rows.' })).toBe(true);
+  });
+
+  it('keeps a complaint about sample content the workbook does hold, and wording that is not about filling', async () => {
+    const { asksSchemaForFilledData } = await import('../src/agent/findingCheck.js');
+    expect(asksSchemaForFilledData({ title: 'Persona frequency not populated', detail: 'The persona cards in the schema workbook have frequency not populated for 12 actors.' })).toBe(false);
+    expect(asksSchemaForFilledData({ title: 'Definitions are vague', detail: 'The schema definitions are vague at row 5.' })).toBe(false);
+  });
+});

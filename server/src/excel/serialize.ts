@@ -11,7 +11,8 @@ const MAX_CELL_CHARS = 400;
  * With `columns`, only those columns (and only the rows from the header down) are sent.
  */
 export function serializeSheet(wb: WorkbookModel, spec: SheetSpec | string): string {
-  const { name, headerRow, columns } = typeof spec === 'string' ? { name: spec, headerRow: 1, columns: undefined } : spec;
+  const { name, headerRow, columns, rows } = typeof spec === 'string' ? { name: spec, headerRow: 1, columns: undefined, rows: undefined } : spec;
+  const rowSet = rows ? new Set(rows) : null;
   const real = wb.resolveSheet(name);
   if (!real) return `## Sheet: ${name}\n(sheet not found)\n`;
   const size = wb.dimensions(real)!;
@@ -41,7 +42,7 @@ export function serializeSheet(wb: WorkbookModel, spec: SheetSpec | string): str
   }
 
   const shown = keep ? `${keep.size} columns` : `columns A-${columnLetters(Math.max(size.cols, 1))}`;
-  const lines = [`## Sheet: ${real} (${size.rows} rows, ${shown})`];
+  const lines = [`## Sheet: ${real} (${size.rows} rows, ${rowSet ? `${rowSet.size} supporting rows` : shown})`];
 
   let currentRow = -1;
   let parts: string[] = [];
@@ -51,6 +52,7 @@ export function serializeSheet(wb: WorkbookModel, spec: SheetSpec | string): str
   };
 
   for (const [row, col, text] of wb.cells(real)) {
+    if (rowSet && row !== headerRow && !rowSet.has(row)) continue;
     if (keep && (row < firstRow || !keep.has(col))) continue;
     if (row !== currentRow) {
       flush();

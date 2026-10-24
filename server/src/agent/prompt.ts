@@ -3,6 +3,7 @@ import { serializeSheets } from '../excel/serialize.js';
 import type { WorkbookModel } from '../excel/workbook.js';
 import { buildRaterUser } from './prompts/rater.js';
 import { planSections, type EvalSection } from './sectionPlanner.js';
+import { withSupportingRows } from './supporting.js';
 import { expandCriteria } from './aggregate.js';
 import { withAutoReads } from './autoReads.js';
 
@@ -74,10 +75,12 @@ export function buildAllRaterPrompts(input: {
   wb: WorkbookModel;
   sources: string;
   instructions?: string;
+  /** The smallest prompt limit among the examiners: supporting rows are cut to fit beside the sections. */
+  limit?: number;
 }): Array<{ label: string; prompt: RaterPrompt }> {
   // Measured on the scorecard as it is run: every criterion a question of its own.
   const scorecard = withAutoReads(expandCriteria(input.scorecard), input.wb).scorecard;
-  const sections = planSections(scorecard);
+  const sections = withSupportingRows(planSections(scorecard), input.wb, { limit: input.limit });
   if (sections.length === 0) return [{ label: 'full workbook', prompt: buildRaterPrompt({ ...input, scorecard }) }];
   return sections.map((section) => ({ label: section.label, prompt: buildRaterPromptForSection({ ...input, scorecard, section }) }));
 }

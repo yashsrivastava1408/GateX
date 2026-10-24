@@ -43,7 +43,7 @@ The exact response types are in [`shared/src/types.ts`](../shared/src/types.ts) 
 {
   "mock": false,
   "ready": true,
-  "promptVersion": "l1-prompts/1.5",
+  "promptVersion": "l1-prompts/1.8",
   "thresholds": { "accept": 75, "refine": 60 },
   "raters": [
     { "id": "A", "provider": "service-1", "model": "model-a", "family": "family-1", "keyPresent": true, "approved": true }

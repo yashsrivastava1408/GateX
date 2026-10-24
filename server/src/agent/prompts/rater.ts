@@ -4,7 +4,7 @@ import type { DimensionSpec, Scorecard } from '@ddd/shared';
  * Prompts are versioned and hashed like any other artifact (PDF page 17).
  * Change a word here and PROMPT_VERSION must change, so old runs stay explainable.
  */
-export const PROMPT_VERSION = 'l1-prompts/1.5';
+export const PROMPT_VERSION = 'l1-prompts/1.8';
 
 export const RATER_SYSTEM = `You are an independent rater in a Level 1 evaluator for Data-Driven Development deliverables.
 
@@ -26,9 +26,11 @@ Rules you must follow:
 8. A dimension with "part_of" is one criterion of a larger one: score it only against its own measure and anchors.
 9. A schema defines; it is not filled data. When "judges" in <scorecard> says schema design, a thing is present if the schema defines a field, section, value set or rule for it. Empty example rows are not a defect unless the question asks about filled content.
 10. Every finding must point at a specific id, row, column or short exact quote. Leave out findings like "some X may be Y" or "not all X are covered".
-11. <workbook_map> lists every sheet; <artifact> holds only some. If another sheet could hold it, say "not in the sheets given", not "missing from the file".
+11. <workbook_map> lists every sheet; <artifact> holds only some. If another sheet could hold it, say "not in the sheets given", not "missing from the file". <context> may hold "supporting rows": rows from other sheets that code picked as the most related to your questions. They are real cells of the file; use and cite them like any other.
 12. A figure the file states about itself (for example "definitions 71/71 100%") is a claim, not proof. Check it against the rows when you can. If you cannot, score no higher than 4 and say it is self-reported.
-13. Reply with one JSON object and nothing else.`;
+13. Score against the anchors exactly as they are written. A 0 is for a file that has nothing about the question or contradicts it. When the file shows what a middle anchor describes (for example "structured tables but no machine format"), give that anchor's score, not 0, and say which anchor text you matched.
+14. A column that records the state of the work against a source (for example "In this master?" holding "To add", "Partial" or "Covered") is a status, not a missing field. A schema defines fields: do not report that example rows or instance data are not filled in.
+15. Reply with one JSON object and nothing else.`;
 
 const RATER_SHAPE = `{
   "dimensions": [
