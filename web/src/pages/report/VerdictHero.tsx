@@ -1,18 +1,16 @@
-import { useState } from 'react';
 import type { RunDetail } from '@ddd/shared';
 import { Chip, DecisionChip } from '../../components/Chip';
 import { ScoreRing, ThresholdBar } from '../../components/Charts';
 import { Hint } from '../../components/Hint';
 import { Icon } from '../../components/Icons';
 import { TERMS, VERDICT, friendlyReason } from '../../copy';
-import { OverrideDialog } from './OverrideDialog';
 
-export function VerdictHero({ run, onChange }: { run: RunDetail; onChange: (run: RunDetail) => void }) {
-  const [overriding, setOverriding] = useState(false);
-  const { verdict, header } = run.report!;
+/** The result, decided by the fixed rule. Nothing here waits for, or asks for, a person. */
+export function VerdictHero({ run }: { run: RunDetail }) {
+  const { verdict } = run.report!;
+  // Only runs made by older versions can carry an override; it is still shown so the record is honest.
   const { override } = verdict;
   const copy = VERDICT[verdict.decision];
-  const unapproved = /pending|draft/i.test(header.scorecardApproval ?? '');
 
   return (
     <section id="verdict" className={`hero hero-${verdict.decision}`} aria-labelledby="hero-title">
@@ -44,62 +42,42 @@ export function VerdictHero({ run, onChange }: { run: RunDetail; onChange: (run:
         </div>
       </div>
 
-      <aside className="hero-side" aria-label="Must-pass checks">
+      <aside className="hero-side" aria-label="Key checks">
         <h3>
           <span>{TERMS.mustPass.label} <Hint text={TERMS.mustPass.help} align="left" /></span>
           <span className="faint">need 4 of 5</span>
         </h3>
         {verdict.criticalGates.length === 0 ? (
-          <p className="muted">This scorecard has no must-pass checks.</p>
+          <p className="muted">This scorecard has no key checks.</p>
         ) : (
           <ul className="gates">
-            {verdict.criticalGates.map((g) => (
-              <li key={g.dimensionId} className={`gate gate-${g.status}`}>
+            {verdict.criticalGates.map((g) => {
+              // The computer-counted half of a check is shown as a small line under its check.
+              const sub = /\s*\(numbers to check\)$/.test(g.name);
+              return (
+              <li key={g.dimensionId} className={`gate gate-${g.status}${sub ? ' gate-sub' : ''}`}>
                 <span className="gate-icon">
                   <Icon name={g.status === 'passed' ? 'check' : g.status === 'failed' ? 'x' : 'clock'} size={13} strokeWidth={2.6} />
                 </span>
-                <span className="gate-name">{g.name}</span>
-                <span className="gate-score">{g.score === null ? 'waiting' : `${g.score} / 5`}</span>
+                <span className="gate-name">{sub ? 'Numbers to check' : g.name}</span>
+                <span className="gate-score">{g.score === null ? 'not in the file' : `${g.score} / 5`}</span>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
-        <button type="button" className="btn btn-secondary btn-block" onClick={() => setOverriding(true)}>
-          <Icon name="flag" /> {override ? 'Change the override' : 'Change the result'}
-        </button>
-        <p className="hero-side-note">A person can change the result up or down, with a written reason. The agent’s own answer stays on record.</p>
+        <p className="hero-side-note">Decided by a fixed rule from the scores. Nothing to approve.</p>
       </aside>
 
-      {(override || unapproved) && (
+      {override && (
         <div className="hero-notes">
-          {override && (
-            <div className="banner banner-amber">
-              <Icon name="flag" />
-              <span>
-                The agent’s own result was <strong>{verdict.agentDecision.toUpperCase()}</strong>. {override.by} changed it to <strong>{override.decision.toUpperCase()}</strong>: {override.reason}
-              </span>
-            </div>
-          )}
-          {unapproved && (
-            <div className="banner banner-amber">
-              <Icon name="lock" />
-              <span>
-                Scorecard approval: <strong>{header.scorecardApproval}</strong>. Treat this result as provisional until the scorecard is approved.
-              </span>
-            </div>
-          )}
+          <div className="banner banner-amber">
+            <Icon name="flag" />
+            <span>
+              The first result was <strong>{verdict.agentDecision.toUpperCase()}</strong>. {override.by} changed it to <strong>{override.decision.toUpperCase()}</strong>: {override.reason}
+            </span>
+          </div>
         </div>
-      )}
-
-      {overriding && (
-        <OverrideDialog
-          run={run}
-          onClose={() => setOverriding(false)}
-          onSaved={(next) => {
-            onChange(next);
-            setOverriding(false);
-          }}
-        />
       )}
     </section>
   );

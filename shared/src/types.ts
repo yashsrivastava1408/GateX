@@ -55,6 +55,35 @@ export interface SheetSpec {
   columns?: string[];
 }
 
+/**
+ * One criterion of a dimension. A dimension with criteria is scored criterion by criterion (judged ones by the examiners,
+ * counted ones exactly by code) and code combines them with the scorecard's `aggregate` rule.
+ */
+export interface CriterionSpec {
+  id: string;
+  name: string;
+  kind: 'judged' | 'counted';
+  measure?: string;
+  /** Judged criteria: what each score 0-5 means. Falls back to the dimension's anchors, then the standard scale. */
+  anchors?: Record<number, string>;
+  /** Counted criteria: the exact count and how its ratio maps to 0-5. */
+  check?: CheckSpec;
+  /** Share of the dimension under the `weighted` rule (default 1). */
+  weight?: number;
+  /** The scorecard says this needs evidence from outside the file (an interview, a second run). Only such a criterion triggers the "nothing in the file" cap. */
+  outside?: boolean;
+}
+
+/** How a dimension's criteria combine into its 0-5 score. Mirrors the rules a scorecard such as GS-1 states. */
+export interface AggregateRule {
+  /** mean_floor: the mean rounded down (GS-1). mean: the plain mean. weighted: the mean weighted by criterion weight. */
+  rule: 'mean_floor' | 'mean' | 'weighted';
+  /** Any criterion scored 0 caps the dimension at this score (GS-1: 2). */
+  zeroCapsAt?: number;
+  /** Any criterion the file holds nothing for caps the dimension at this score, and it is left out of the mean (GS-1: 3). */
+  unmeasuredCapsAt?: number;
+}
+
 export interface DimensionSpec {
   id: string;
   name: string;
@@ -67,7 +96,7 @@ export interface DimensionSpec {
   anchors?: Record<number, string>;
   /** Code dimensions: the deterministic check and how its ratio maps to 0-5. */
   check?: CheckSpec;
-  /** Human dimensions: what a person has to supply. */
+  /** Legacy: what a person had to supply. Such questions are now scored by the examiners from what the file shows. */
   needs?: string;
   returnTo?: ReturnTo;
   /**
@@ -77,6 +106,10 @@ export interface DimensionSpec {
    * When absent, the dimension sees the full workbook (backward-compatible default).
    */
   reads?: string[];
+  /** Scored criterion by criterion when present; the dimension's score is then combined by code. */
+  criteria?: CriterionSpec[];
+  /** Set by the agent on the working copy of a criterion: the dimension it belongs to. Never in a scorecard file. */
+  criterionOf?: { id: string; name: string };
 }
 
 export interface Scorecard {
@@ -85,13 +118,19 @@ export interface Scorecard {
   version: string;
   gate: Gate;
   step?: string;
+  /** Always true once the app has read it: the scorecard is frozen by its hash when the work is submitted. */
   frozen: boolean;
+  /** Where the scorecard came from (for example "Converted automatically from GS1.xlsx"). Shown in the report header. */
   approval?: string;
   thresholds: { accept: number; refine: number };
   /** Optional: a critical dimension scoring at or below this forces RED, whatever the total. */
   redAtOrBelow?: number;
+  /** What to do with a question the examiners find nothing in the file to measure: leave it out of the score (default), or count it as 0. */
+  unmeasured?: 'skip' | 'zero';
   artifact: { sheets: SheetSpec[]; context: SheetSpec[] };
   dimensions: DimensionSpec[];
+  /** How criteria combine into a dimension score. Default: the plain mean, no caps. */
+  aggregate?: AggregateRule;
 }
 
 /* ------------------------------ models ------------------------------- */
@@ -137,6 +176,25 @@ export interface ReportHeader {
   finishedAt: string;
 }
 
+/** The result of one criterion of a dimension. */
+export interface CriterionResult {
+  id: string;
+  name: string;
+  kind: 'judged' | 'counted';
+  status: DimensionStatus;
+  raterScores: Record<string, number | null>;
+  consolidated: number | null;
+  spread: number | null;
+  resolution: Resolution;
+  flagged: boolean;
+  confidence?: Confidence;
+  rationale: string;
+  evidence: Evidence[];
+  codeDetail?: { passed: number; total: number; summary: string };
+  /** Carried from the criterion's spec. */
+  outside?: boolean;
+}
+
 export interface DimensionResult {
   id: string;
   name: string;
@@ -157,6 +215,8 @@ export interface DimensionResult {
   /** Code dimensions only. */
   codeDetail?: { passed: number; total: number; summary: string };
   error?: string;
+  /** Per-criterion results when the dimension is scored criterion by criterion; `consolidated` is then their combination. */
+  criteria?: CriterionResult[];
 }
 
 export interface Finding {
@@ -170,6 +230,16 @@ export interface Finding {
   returnTo: ReturnTo;
   source: 'code' | 'raters';
   reportedBy: string[];
+}
+
+/** An examiner finding the fact check removed because the file plainly contradicts it. Kept, with the reason, for the record. */
+export interface DroppedFinding {
+  dimensionId: string;
+  severity: Severity;
+  title: string;
+  location: CellRef | null;
+  reportedBy: string[];
+  reason: string;
 }
 
 export interface Strength {
@@ -188,16 +258,6 @@ export interface AgreementRow {
   note: string;
 }
 
-export interface HumanEvidence {
-  id: string;
-  runId: string;
-  dimensionId: string;
-  score: number | null;
-  note: string;
-  by: string;
-  createdAt: string;
-}
-
 export interface Override {
   id: string;
   runId: string;
@@ -211,7 +271,7 @@ export interface CriticalGate {
   dimensionId: string;
   name: string;
   score: number | null;
-  status: 'passed' | 'failed' | 'pending';
+  status: 'passed' | 'failed' | 'skipped';
 }
 
 export interface VerdictSection {
@@ -222,6 +282,8 @@ export interface VerdictSection {
   criticalGates: CriticalGate[];
   /** Ids of HIGH-risk findings. Until they are fixed the verdict cannot be green (PDF p.11). */
   blockingFindings: string[];
+  /** Ids of questions left out of the score because the examiners found nothing in the file to measure them. */
+  skipped: string[];
   reasons: string[];
   override: Override | null;
 }
@@ -231,9 +293,10 @@ export interface NotMeasurableItem {
   name: string;
   critical: boolean;
   weight: number;
+  /** Why it has no score. */
   reason: string;
-  whatIsNeeded: string;
-  evidence: HumanEvidence | null;
+  /** How it was treated: left out of the score, or counted as 0. */
+  treatment: 'skipped' | 'zero';
 }
 
 export interface PathStep {
@@ -251,7 +314,6 @@ export interface PathToGreen {
   steps: PathStep[];
   /** HIGH-risk findings that must be fixed before resubmission. */
   blockingFindingIds: string[];
-  needsPerson: string[];
   resultingScore: number;
   resultingDecision: Decision;
   note: string;
@@ -266,9 +328,11 @@ export interface EvaluationCore {
   strengths: Strength[];
   consolidatorFailed: boolean;
   notes: string[];
+  /** Examiner findings the fact check dropped (absent in runs made before it existed). */
+  droppedFindings?: DroppedFinding[];
 }
 
-/** The eight-section report (PDF page 11), assembled from the core + people's input. */
+/** The eight-section report (PDF page 11), assembled from the core (and an optional override). */
 export interface Report {
   header: ReportHeader;
   verdict: VerdictSection;
@@ -279,6 +343,8 @@ export interface Report {
   notMeasurable: NotMeasurableItem[];
   pathToGreen: PathToGreen;
   notes: string[];
+  /** Examiner findings the fact check dropped, with the reason. */
+  droppedFindings?: DroppedFinding[];
 }
 
 /* -------------------------------- API -------------------------------- */
@@ -320,7 +386,6 @@ export interface RunDetail extends RunSummary {
   progress: RunProgress | null;
   error: string | null;
   report: Report | null;
-  evidence: HumanEvidence[];
   runLog: RunLog | null;
 }
 
@@ -334,6 +399,8 @@ export interface RunLog {
   artifactHash: string;
   scorecardHash: string;
   timings: { totalMs: number; checksMs: number; ratingMs: number; consolidationMs: number };
+  /** How repeats were spent: adaptive runs repeat only disputed questions. Absent when nothing went to the raters. */
+  repeats?: { mode: 'all' | 'adaptive'; repeats: number; planned: number; made: number; saved: number; repeated: string[] };
   participants: Array<{
     id: string;
     role: 'rater' | 'consolidator';
@@ -408,4 +475,131 @@ export interface ConfigResponse {
   ready: boolean;
   promptVersion: string;
   thresholds: { accept: number; refine: number };
+}
+
+/* ----------------------------- test library ----------------------------- */
+
+/** What a reviewer found when checking one finding against the real file. */
+export type ReviewVerdict = 'real' | 'partly' | 'wrong' | 'vague' | 'duplicate' | 'unchecked' | 'unreviewed';
+
+export interface LibraryRunSummary {
+  label: string;
+  runDir: string;
+  promptVersion: string;
+  finishedAt: string;
+  weightedScore: number | null;
+  decision: string;
+  findings: number;
+  /** Findings per verdict; "unreviewed" are findings nobody has checked against the file yet. */
+  counts: Record<ReviewVerdict, number>;
+  /** Share of the reviewed findings that are real or partly right, null when none are reviewed. */
+  usableShare: number | null;
+  unscored: string[];
+  models: string[];
+}
+
+export interface LibraryFinding {
+  id: string;
+  severity: Severity;
+  dimensionId: string;
+  title: string;
+  location: CellRef | null;
+  reportedBy: string[];
+  verdict: ReviewVerdict;
+  note: string;
+  /** True when the verdict was carried over from an earlier run's finding at the same cell and question. */
+  inherited: boolean;
+}
+
+export interface LibraryCaseSummary {
+  id: string;
+  title: string;
+  step: string;
+  workbook: string;
+  scorecard: string;
+  notes: string;
+  runs: LibraryRunSummary[];
+}
+
+export interface LibraryCaseDetail extends LibraryCaseSummary {
+  /** The findings of the newest run, each with its verdict. */
+  findingsOfLatest: LibraryFinding[];
+}
+
+/* ------------------------- how reliable each examiner is ------------------------- */
+
+export interface ReliabilityTally {
+  /** Findings that were checked against the real file. */
+  n: number;
+  /** Of those, how many were real or partly right. */
+  useful: number;
+}
+
+export interface FamilyReliability {
+  /** Findings this model family reported alone. */
+  solo: ReliabilityTally;
+  /** Findings it reported at all, alone or with others. */
+  any: ReliabilityTally;
+}
+
+/**
+ * Measured from the test library: for every model family, how often its findings were right once checked against the real file.
+ * A finding only one examiner raised is set aside when that family's lone findings are rarely right (see agent/reliability.ts).
+ */
+export interface ReliabilityTable {
+  computedAt: string;
+  thresholds: { minSamples: number; dropBelow: number };
+  /** Keyed by model family (for example "meta"), not by model name, so a fallback model counts as the same examiner. */
+  families: Record<string, FamilyReliability>;
+}
+
+/* ------------------------------- planted-defect tests ------------------------------- */
+
+export interface PlantedDefectResult {
+  id: string;
+  kind: string;
+  cell: string;
+  description: string;
+  /** Caught by a finding in the report. */
+  caught: boolean;
+  /** Caught by any finding, including one the app set aside. */
+  caughtRaw: boolean;
+  examiners: string[];
+}
+
+/** One run of the planted-defect test: a good file broken in known ways, run through the app, and scored against what was planted. */
+export interface PlantedResult {
+  label: string;
+  runAt: string;
+  workbook: string;
+  scorecard: string;
+  seed: number;
+  models: Array<{ id: string; family: string; model: string }>;
+  planted: number;
+  caught: number;
+  caughtRaw: number;
+  /** Found by an AI examiner (in the report or set aside later): what the models alone find. */
+  caughtByExaminers: number;
+  /** Found by an exact check in code (the row-by-row sweep). */
+  caughtByCode: number;
+  /** Findings in the report that point at no planted defect: real old problems, or false alarms. */
+  otherInReport: number;
+  perExaminer: Record<string, { family: string; model: string; caught: number; otherFindings: number }>;
+  weightedScore: number | null;
+  decision: string;
+  defects: PlantedDefectResult[];
+  skipped: string[];
+}
+
+
+/* ------------------------------- score colours ------------------------------- */
+
+/**
+ * The one rule for colour, used everywhere (report, dashboard, history, docs): below 60 is red, 60 to 74 is amber, 75 and above is light green.
+ * No scorecard can change it.
+ */
+export const SCORE_BANDS = { accept: 75, refine: 60 } as const;
+
+export function bandOf(score: number): Decision {
+  return score < SCORE_BANDS.refine ? 'red' : score < SCORE_BANDS.accept ? 'amber' : 'green';
 }

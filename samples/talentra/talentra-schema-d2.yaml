@@ -1,8 +1,8 @@
 # D2 · Schema scorecard for the Talentra Feature Discovery workbook (steps 01, 03 and 04).
 #
-# DRAFT FOR APPROVAL. The checks come from Part A of the workbook's own Scorecard sheet and
-# the six rater questions from its Part B. The weights, critical flags and anchors are a
-# proposal in the PDF's scorecard format. A mentor must approve them before they are relied on.
+# Sample scorecard. The checks come from Part A of the workbook's own Scorecard sheet and
+# the six rater questions from its Part B, in the PDF's scorecard format. It is used as it is:
+# the app freezes it by its hash when work is submitted, and nobody has to sign it off.
 
 x-bands: &strict            # how a pass ratio becomes a 0-5 score for code-measured dimensions
   - { min: 1.00, score: 5 }
@@ -22,7 +22,7 @@ scorecard:
   judges: D1 schema design · Steps 01, 03, 04
   step: "01 · 03 · 04"
   frozen: true
-  approval: "Draft by the assistant, pending mentor approval"
+  approval: "Sample scorecard for the Talentra workbook, used as it is"
   thresholds: { accept: 90, refine: 75 }
 
   artifact:
@@ -228,7 +228,7 @@ scorecard:
         1: Two people would rarely agree.
         0: There are no rules to follow.
 
-    # ---------------------------------------------------------------- only a person can
+    # ------------------------------------- written for a person; the examiners score what the file records about it
     - id: H01
       name: Author understanding
       weight: 10

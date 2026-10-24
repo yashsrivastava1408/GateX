@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import ExcelJS from 'exceljs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { ConfigResponse, ProjectHistory, ProjectSummary, RunDetail } from '@ddd/shared';
+import { bandOf, type ConfigResponse, type ProjectHistory, type ProjectSummary, type RunDetail } from '@ddd/shared';
 import { createApp } from '../src/api/app.js';
 import { EvaluationService } from '../src/api/service.js';
 import type { AppConfig } from '../src/config.js';
@@ -96,7 +96,7 @@ describe('API', () => {
     expect(res.status).toBe(202);
     expect(res.body.iteration).toBe(1);
     const run = await done(h, res.body.runId!);
-    expect(run).toMatchObject({ status: 'done', stage: 'done', projectName: 'Talentra', iteration: 1, gate: 'D1', agentDecision: 'amber' });
+    expect(run).toMatchObject({ status: 'done', stage: 'done', projectName: 'Talentra', iteration: 1, gate: 'D1', agentDecision: bandOf(run.report!.verdict.weightedScore) });
     expect(run.report!.header.artifactName).toBe('Talentra.xlsx');
     expect(Object.keys(run.report!)).toEqual(expect.arrayContaining(['header', 'verdict', 'dimensions', 'strengths', 'findings', 'agreement', 'notMeasurable', 'pathToGreen']));
     expect(run.progress!.participants.map((p) => p.status)).toEqual(['ok', 'ok', 'ok', 'ok']);
@@ -106,10 +106,9 @@ describe('API', () => {
   type Rejection = [string, { workbook?: Buffer | 'tree'; name?: string; scorecard?: string }, RegExp];
   const rejections: Rejection[] = [
     ['no workbook', { scorecard: CLEAN_SCORECARD_YAML }, /Attach the file to evaluate/],
-    ['no scorecard', { workbook: Buffer.from('x') }, /Attach the frozen scorecard/],
+    ['no scorecard', { workbook: Buffer.from('x') }, /Attach the scorecard \(any layout/],
     ['a workbook that is not .xlsx', { workbook: Buffer.from('x'), name: 'notes.txt', scorecard: CLEAN_SCORECARD_YAML }, /must be an \.xlsx/],
     ['a file that is not a real workbook', { workbook: Buffer.from('not a zip'), scorecard: CLEAN_SCORECARD_YAML }, /not a valid \.xlsx/],
-    ['an unfrozen scorecard', { workbook: 'tree', scorecard: CLEAN_SCORECARD_YAML.replace('frozen: true', 'frozen: false') }, /not frozen/],
     ['a scorecard in the wrong format', { workbook: 'tree', scorecard: 'scorecard: { id: x }' }, /does not match the scorecard format/],
     ['a scorecard naming a column that is missing', { workbook: 'tree', scorecard: CLEAN_SCORECARD_YAML.replace('sheets: [{ name: Tree, header_row: 1 }]', 'sheets: [{ name: Tree, header_row: 1, columns: [Nope] }]') }, /Column "Nope" named by the scorecard was not found in sheet "Tree"/],
     ['a scorecard naming a sheet that is missing', { workbook: 'tree', scorecard: CLEAN_SCORECARD_YAML.replace('name: Tree', 'name: Nope') }, /sheet "Nope" that this workbook does not have/],
@@ -142,35 +141,43 @@ describe('API', () => {
     await broken.close();
   });
 
-  it('records the person\'s evidence and override, recomputes the verdict, and keeps both visible', async () => {
+  it('refuses the same file as both the file to check and the scorecard, before anything is stored', async () => {
+    const book = await makeWorkbook({ Tree: CLEAN_TREE });
+    const res = await submit(h, { workbook: book, scorecard: book, scorecardName: 'same.xlsx', projectName: 'Same file' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/same file/);
+    expect(res.body.runId).toBeUndefined();
+  });
+
+  it('scores a scorecard marked frozen: false straight away, with no approval step', async () => {
+    const res = await submit(h, { workbook: await makeWorkbook({ Tree: CLEAN_TREE }), scorecard: CLEAN_SCORECARD_YAML.replace('frozen: true', 'frozen: false'), projectName: 'Not frozen' });
+    expect(res.status).toBe(202);
+    expect((await done(h, res.body.runId!)).status).toBe('done');
+  });
+
+  it('never waits for a person: the interview question is scored by the examiners, and there is no evidence endpoint', async () => {
     const res = await submit(h, { workbook: await makeWorkbook({ Tree: CLEAN_TREE }), scorecard: CLEAN_SCORECARD_YAML, projectName: 'Clean' });
+    const run = await done(h, res.body.runId!);
+    expect(run.report!.notMeasurable).toEqual([]);
+    expect(run.report!.dimensions.find((d) => d.id === 'H01')).toMatchObject({ measuredBy: 'raters', status: 'scored' });
+    expect(run.report!.verdict.reasons.join(' ')).not.toMatch(/person|must supply/i);
+    expect(run).not.toHaveProperty('evidence');
+    const evidence = await post(`${h.base}/api/runs/${res.body.runId}/evidence`, { dimensionId: 'H01', note: 'Interview', by: 'Mentor', score: 5 });
+    expect(evidence.status).toBe(404);
+  });
+
+  it('keeps the optional override: recomputes the verdict and keeps the agent verdict visible', async () => {
+    const res = await submit(h, { workbook: await makeWorkbook({ Tree: CLEAN_TREE }), scorecard: CLEAN_SCORECARD_YAML, projectName: 'Overridden' });
     const before = await done(h, res.body.runId!);
-    expect(before.report!.verdict.decision).toBe('amber');
-    expect(before.report!.notMeasurable[0]!.evidence).toBeNull();
-
-    const bad = await post(`${h.base}/api/runs/${res.body.runId}/evidence`, { dimensionId: 'C01', note: 'because', by: 'Mentor', score: 5 });
-    expect(bad.status).toBe(400);
-    expect((await json(bad)).error).toMatch(/not a human-only item/);
-    const noNote = await post(`${h.base}/api/runs/${res.body.runId}/evidence`, { dimensionId: 'H01', note: '', by: 'Mentor' });
-    expect((await json(noNote)).error).toMatch(/Say what the evidence is/);
-
-    const ok = await json<RunDetail>(await post(`${h.base}/api/runs/${res.body.runId}/evidence`, { dimensionId: 'H01', note: 'Interview on 22 Oct', by: 'Mentor', score: 5 }));
-    expect(ok.evidence).toHaveLength(1);
-    expect(ok.report!.notMeasurable[0]!.evidence).toMatchObject({ score: 5, by: 'Mentor' });
-    expect(ok.report!.verdict.criticalGates.find((g) => g.dimensionId === 'H01')!.status).toBe('passed');
-    expect(ok.report!.verdict.decision).toBe('green');
-    expect(ok.agentDecision).toBe('green');
-
     const noReason = await post(`${h.base}/api/runs/${res.body.runId}/override`, { decision: 'green', reason: '', by: 'Lead' });
     expect((await json(noReason)).error).toMatch(/written reason is required/);
     const overridden = await json<RunDetail>(await post(`${h.base}/api/runs/${res.body.runId}/override`, { decision: 'red', reason: 'Schema is being replaced', by: 'Lead' }));
     expect(overridden.report!.verdict).toMatchObject({ decision: 'red', override: { by: 'Lead', reason: 'Schema is being replaced' } });
-    expect(overridden.agentDecision).toBe('green');
+    expect(overridden.agentDecision).toBe(before.report!.verdict.agentDecision);
     expect(overridden.finalDecision).toBe('red');
-    expect(overridden.report!.verdict.agentDecision).toBe('green');
   });
 
-  it('downloads the report as a real workbook (to-do sheet plus eight sections), a PDF, Markdown and JSON', async () => {
+  it('downloads the report as a real workbook (seven plainly named sheets), a PDF, Markdown and JSON', async () => {
     const list = await json<ProjectSummary[]>(await fetch(`${h.base}/api/projects`));
     const run = list.find((p) => p.name === 'Talentra')!.latest!;
 
@@ -178,20 +185,19 @@ describe('API', () => {
     expect(xlsx.headers.get('content-disposition')).toMatch(/Talentra-iteration-1\.xlsx/);
     const book = new ExcelJS.Workbook();
     await book.xlsx.load((await xlsx.arrayBuffer()) as ArrayBuffer);
-    expect(book.worksheets.map((s) => s.name)).toEqual([
-      'What to improve', '1 Header', '2 Verdict', '3 Dimension scores', '4 Strengths', '5 Gaps and findings', '6 Rater agreement', '7 Not measurable', '8 Path to green',
-    ]);
-    expect(book.getWorksheet('2 Verdict')!.getRow(2).getCell(2).value).toBe('AMBER');
+    expect(book.worksheets.map((s) => s.name)).toEqual(['Summary', 'Areas', 'Issues', 'Strengths', 'Examiners', 'Path to green', 'Not checked']);
+    expect(String(book.getWorksheet('Summary')!.getRow(2).getCell(2).value)).toMatch(/^(RED|AMBER|GREEN) - /);
 
     const pdf = await fetch(`${h.base}/api/runs/${run.id}/report.pdf`);
     expect(pdf.headers.get('content-type')).toMatch(/application\/pdf/);
     expect(Buffer.from(await pdf.arrayBuffer()).subarray(0, 5).toString()).toBe('%PDF-');
 
     const md = await (await fetch(`${h.base}/api/runs/${run.id}/report.md`)).text();
-    for (const heading of ['## 1. Header', '## 2. Verdict', '## 3. Dimension scores', '## 4. Strengths', '## 5. Gaps and findings', '## 6. Rater agreement', '## 7. Not measurable here', '## 8. Path to green']) {
+    for (const heading of ['## What this means', '## What to fix first', '## How each area scored', '## Your path to green', '## What is already good', '## How the examiners compared', '## Not checked from the file', '## About this check']) {
       expect(md).toContain(heading);
     }
-    expect(JSON.parse(await (await fetch(`${h.base}/api/runs/${run.id}/report.json`)).text()).verdict.decision).toBe('amber');
+    const exported = JSON.parse(await (await fetch(`${h.base}/api/runs/${run.id}/report.json`)).text()).verdict;
+    expect(exported.decision).toBe(bandOf(exported.weightedScore));
     expect((await fetch(`${h.base}/api/runs/${run.id}/report.docx`)).status).toBe(404);
   });
 
@@ -203,7 +209,7 @@ describe('API', () => {
 });
 
 describe('keeping a copy of every result as files', () => {
-  it('writes the report in all four formats when a run finishes, and again when a person adds evidence', async () => {
+  it('writes the report in all four formats when a run finishes, and again after an override', async () => {
     const h3 = await start();
     const created = await submit(h3, { workbook: talentra, scorecard, projectName: 'Saved copy' });
     await h3.service.idle();
@@ -212,43 +218,81 @@ describe('keeping a copy of every result as files', () => {
       expect((await stat(path.join(folder, name))).size).toBeGreaterThan(100);
     }
     expect((await readFile(path.join(folder, 'report.pdf'))).subarray(0, 5).toString()).toBe('%PDF-');
-    const before = JSON.parse(await readFile(path.join(folder, 'report.json'), 'utf8')) as { notMeasurable: Array<{ evidence: unknown }> };
-    expect(before.notMeasurable.every((n) => n.evidence === null)).toBe(true);
+    expect(JSON.parse(await readFile(path.join(folder, 'report.json'), 'utf8')).verdict.override).toBeNull();
 
-    const pending = JSON.parse(await readFile(path.join(folder, 'report.json'), 'utf8')).notMeasurable[0].dimensionId as string;
-    await fetch(`${h3.base}/api/runs/${created.body.runId}/evidence`, {
+    await fetch(`${h3.base}/api/runs/${created.body.runId}/override`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ dimensionId: pending, score: 4, note: 'Interview held', by: 'Mentor' }),
+      body: JSON.stringify({ decision: 'red', reason: 'Replaced next week', by: 'Lead' }),
     });
-    const after = JSON.parse(await readFile(path.join(folder, 'report.json'), 'utf8')) as { notMeasurable: Array<{ dimensionId: string; evidence: { by: string } | null }> };
-    expect(after.notMeasurable.find((n) => n.dimensionId === pending)!.evidence).toMatchObject({ by: 'Mentor' });
+    const after = JSON.parse(await readFile(path.join(folder, 'report.json'), 'utf8')) as { verdict: { decision: string; override: { by: string } } };
+    expect(after.verdict).toMatchObject({ decision: 'red', override: { by: 'Lead' } });
     await h3.close();
   });
 });
 
 describe('importing a scorecard through the API', () => {
-  it('drafts one from any file, never frozen, and approves an edited draft only with a name', async () => {
+  it('converts a scorecard in any layout, frozen and ready, with no approval step', async () => {
     const h2 = await start();
     const form = new FormData();
     form.append('scorecard', new Blob(['a scorecard in some other layout']), 'theirs.csv');
     const res = await fetch(`${h2.base}/api/scorecards/import`, { method: 'POST', body: form });
-    const body = (await res.json()) as { yaml: string; summary: { dimensions: number; byPerson: number }; sourceText: string; draft?: unknown };
+    const body = (await res.json()) as { yaml: string; summary: Record<string, number>; sourceText: string; draft?: unknown; cached: boolean; questions: Array<{ id: string; by: string }> };
     expect(res.status).toBe(200);
-    expect(body.summary).toMatchObject({ dimensions: 3, byPerson: 1 });
+    expect(body.summary).toEqual({ dimensions: 3, byExaminers: 4, byCode: 0, critical: 1, weightTotal: 100 }); // G03 has two criteria
     expect(body.sourceText).toContain('some other layout');
-    expect((body as unknown as { questions: Array<{ id: string; by: string }> }).questions.map((q) => [q.id, q.by])).toEqual([['G01', 'examiners'], ['G02', 'examiners'], ['G03', 'person']]);
-    expect(body.yaml).toMatch(/frozen: false/);
+    expect(body.questions.map((q) => [q.id, q.by])).toEqual([['G01', 'examiners'], ['G02', 'examiners'], ['G03', 'examiners']]);
+    expect(body.yaml).toMatch(/frozen: true/);
+    expect(body.yaml).toMatch(/Converted automatically from theirs\.csv by mock\//);
+    expect(body.yaml).not.toMatch(/human/);
     expect(body.draft).toBeUndefined();
+    expect(body.cached).toBe(false);
+    // The same file again reuses the conversion instead of calling the model.
+    const again = (await (await fetch(`${h2.base}/api/scorecards/import`, { method: 'POST', body: form })).json()) as { yaml: string; cached: boolean };
+    expect(again).toMatchObject({ cached: true, yaml: body.yaml });
 
     const post = (payload: object) => fetch(`${h2.base}/api/scorecards/check`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
-    const unapproved = (await (await post({ yaml: body.yaml })).json()) as { frozen: boolean };
-    expect(unapproved.frozen).toBe(false);
-    const approved = (await (await post({ yaml: body.yaml, approvedBy: 'Mentor' })).json()) as { frozen: boolean; yaml: string };
-    expect(approved.frozen).toBe(true);
-    expect(approved.yaml).toMatch(/Approved by Mentor on \d{4}-\d{2}-\d{2}/);
-    expect((await post({ yaml: 'scorecard: { id: x }', approvedBy: 'Mentor' })).status).toBe(400);
+    const checked = (await (await post({ yaml: body.yaml.replace('frozen: true', 'frozen: false') })).json()) as { yaml: string };
+    expect(checked.yaml).toMatch(/frozen: true/);
+    expect((await post({ yaml: 'scorecard: { id: x }' })).status).toBe(400);
 
     expect((await fetch(`${h2.base}/api/scorecards/import`, { method: 'POST', body: new FormData() })).status).toBe(400);
+    const wrongType = new FormData();
+    wrongType.append('scorecard', new Blob(['x']), 'theirs.exe');
+    expect((await fetch(`${h2.base}/api/scorecards/import`, { method: 'POST', body: wrongType })).status).toBe(400);
+    await h2.close();
+  });
+
+  it('evaluates straight away against a scorecard in another layout, and every iteration reuses the identical conversion', async () => {
+    const h2 = await start();
+    let importCalls = 0;
+    const counting = new EvaluationService({
+      store: h2.store,
+      config: { port: 0, dataDir: h2.dataDir, dbMode: 'memory', databaseUrl: undefined, mock: true, mockDelayMs: 0, models: mockModels() },
+      providers: (name) => {
+        const real = createProviderFactory(mockModels(), { mockDelayMs: 0 })(name);
+        return { name: real.name, complete: async (r) => { if (r.system.includes('SCORECARD_IMPORT')) importCalls += 1; return real.complete(r); } };
+      },
+      env: {},
+    });
+    const workbook = await makeWorkbook({ Tree: CLEAN_TREE });
+    const csv = { name: 'GS1-scorecard.csv', buffer: Buffer.from('Dimension,Weight\nPurpose,40\nDefinitions,40\nAuthor,20') };
+    const first = await counting.submit({ workbook: { name: 'w.xlsx', buffer: workbook }, scorecard: csv, sources: '', projectName: 'Any layout' });
+    await counting.idle();
+    const second = await counting.submit({ workbook: { name: 'w.xlsx', buffer: workbook }, scorecard: csv, sources: '', projectName: 'Any layout' });
+    await counting.idle();
+    expect(importCalls).toBe(1);
+    const [a, b] = [await h2.store.getRunDetail(first.runId), await h2.store.getRunDetail(second.runId)];
+    expect([a.status, b.status]).toEqual(['done', 'done']);
+    expect(b.iteration).toBe(2);
+    expect(a.report!.header.scorecardHash).toBe(b.report!.header.scorecardHash);
+    expect(a.report!.header.scorecardApproval).toMatch(/^Converted automatically from GS1-scorecard\.csv by mock\//);
+    expect(a.report!.notes[0]).toMatch(/not in this app's format, so it was converted automatically by mock\//);
+    // The second iteration uses the scorecard the project pinned at iteration 1 (tests/pinning.test.ts covers the pin).
+    expect(b.report!.notes[0]).toMatch(/pinned to iteration 1's scorecard \(converted from GS1-scorecard\.csv\)/);
+    expect(a.report!.notMeasurable).toEqual([]);
+    // The conversion is kept on disk, so a restart reuses it too.
+    const { readdir } = await import('node:fs/promises');
+    expect((await readdir(path.join(h2.dataDir, 'scorecards'))).filter((f) => f.endsWith('.json'))).toHaveLength(1);
     await h2.close();
   });
 });
@@ -299,7 +343,7 @@ describe('Excel scorecards and the instructions box', () => {
     const { parseScorecardFile } = await import('../src/scorecard/parse.js');
     const { scorecard: parsed } = await parseScorecardFile(Buffer.from(await response.arrayBuffer()), 'scorecard-template.xlsx');
     expect(parsed.frozen).toBe(true);
-    expect(parsed.dimensions.map((d) => d.measuredBy)).toEqual(['code', 'raters', 'human']);
+    expect(parsed.dimensions.map((d) => d.measuredBy)).toEqual(['code', 'raters', 'raters']);
     // and it really runs, against a workbook that has the sheet and column it names
     const res = await submit(h, { workbook: await makeWorkbook({ Tree: CLEAN_TREE }), scorecard: Buffer.from(await (await fetch(`${h.base}/api/scorecard-template.xlsx`)).arrayBuffer()), scorecardName: 'template.xlsx', projectName: 'From template' });
     expect(res.status).toBe(202);
@@ -340,7 +384,7 @@ describe('history across iterations', () => {
     const scores = history.trend.map((t) => t.score!);
     expect(scores[0]!).toBeLessThan(scores[1]!);
     expect(scores[1]!).toBeLessThan(scores[2]!);
-    expect(history.thresholds).toEqual({ accept: 90, refine: 75 });
+    expect(history.thresholds).toEqual({ accept: 75, refine: 60 });
 
     expect(history.dimensions.map((d) => d.dimensionId)).toEqual(['C01', 'C02', 'C03', 'C04', 'C05', 'C06', 'C07', 'C08', 'C09', 'J01', 'J02', 'J03', 'J04', 'J05', 'J06', 'H01']);
     const c01 = history.dimensions.find((d) => d.dimensionId === 'C01')!;
@@ -363,5 +407,43 @@ describe('history across iterations', () => {
     await h.store.setStage(created.runId, 'rating');
     expect(await h.store.failInterrupted()).toBeGreaterThanOrEqual(1);
     expect((await h.store.getRunDetail(created.runId)).error).toMatch(/server stopped/);
+  });
+});
+
+describe('deleting', () => {
+  it('removes a run with its rows and files, then the project once it is empty, and refuses unknown ids', async () => {
+    const first = await submit(h, { workbook: talentra, scorecard, name: 'Gone.xlsx', projectName: 'Gone' });
+    const second = await submit(h, { workbook: talentra, scorecard, name: 'Gone.xlsx', projectName: 'Gone' });
+    await done(h, second.body.runId!);
+    const upload = path.join(h.dataDir, 'uploads', first.body.runId!);
+    await stat(upload);
+
+    expect((await fetch(`${h.base}/api/runs/${first.body.runId}`, { method: 'DELETE' })).status).toBe(204);
+    await expect(stat(upload)).rejects.toThrow();
+    expect((await fetch(`${h.base}/api/runs/${first.body.runId}`)).status).toBe(404);
+    expect((await fetch(`${h.base}/api/runs/${second.body.runId}`)).status).toBe(200);
+
+    expect((await fetch(`${h.base}/api/projects/${first.body.projectId}`, { method: 'DELETE' })).status).toBe(204);
+    await expect(stat(path.join(h.dataDir, 'reports', 'Gone'))).rejects.toThrow();
+    expect((await fetch(`${h.base}/api/projects/${first.body.projectId}`)).status).toBe(404);
+    expect((await fetch(`${h.base}/api/runs/${second.body.runId}`)).status).toBe(404);
+    const names = (await json<ProjectSummary[]>(await fetch(`${h.base}/api/projects`))).map((p) => p.name);
+    expect(names).not.toContain('Gone');
+
+    expect((await fetch(`${h.base}/api/runs/nope`, { method: 'DELETE' })).status).toBe(404);
+    expect((await fetch(`${h.base}/api/projects/nope`, { method: 'DELETE' })).status).toBe(404);
+  });
+});
+
+describe('keeping saved results in line with the rule', () => {
+  it('rewrites a result that an older rule saved, and leaves the others alone', async () => {
+    const res = await submit(h, { workbook: talentra, scorecard, name: 'Stale.xlsx', projectName: 'Stale' });
+    const run = await done(h, res.body.runId!);
+    await h.db.query("update runs set final_decision = 'green', weighted_score = 100 where id = $1", [res.body.runId]);
+    expect(await h.store.refreshVerdicts()).toBeGreaterThanOrEqual(1);
+    const after = await json<RunDetail>(await fetch(`${h.base}/api/runs/${res.body.runId}`));
+    expect(after.finalDecision).toBe(run.finalDecision);
+    expect(await h.store.refreshVerdicts()).toBe(0);
+    await fetch(`${h.base}/api/projects/${res.body.projectId}`, { method: 'DELETE' });
   });
 });

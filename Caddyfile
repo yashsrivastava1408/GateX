@@ -1,0 +1,14 @@
+# HTTPS in front of the app. Set DOMAIN in .env to your domain and Caddy gets and renews the certificate by itself.
+# With DOMAIN unset it serves plain http on port 80, which is fine for a first try by IP address.
+{$DOMAIN::80} {
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+		-Server
+	}
+
+	reverse_proxy app:4000
+}

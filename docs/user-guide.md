@@ -1,0 +1,72 @@
+# How to get your file checked
+
+A short guide for anyone who wants an Excel, CSV or PDF file checked against a scorecard. It takes about ten minutes to learn. The result
+comes back in a few minutes, or up to half an hour for a very big file.
+
+**What a scorecard is.** A scorecard is a list of questions the file should get right, such as "Does every item have a clear definition?".
+Each question has a weight, which says how much it matters. GateX marks every question from 0 to 5 and turns the marks into one score out of 100.
+
+## 1. Add your file and your scorecard
+
+1. Open GateX and click **New check**.
+2. Add **your file** (the work you want checked) and **your scorecard**. They must be two different files. The scorecard can be in almost any
+   layout: Excel, CSV, PDF or text. GateX reads it for you.
+3. Give the work a **project name**, and use the same name every time you check the same work. GateX keeps every round under that name, so you
+   can watch your score climb.
+4. Click **Start the check**. For a repeat run, tick **Quick check**: every question is marked once, which is about a third faster.
+
+Want to guide the Examiners? Type a few words in the **extra instructions** box, for example "Treat the Notes column as out of scope". The same
+words go to all three Examiners and are saved with the report.
+
+## 2. What happens during a check
+
+- **Counting.** GateX counts everything that can be counted, such as blank cells and repeated ids. Code does this, so the numbers are exact.
+- **Marking.** Three AI Examiners, called Examiner 1, Examiner 2 and Examiner 3, mark the rest on their own. They cannot see each other's
+  marks, and each mark points at a real cell in your file.
+- **Comparing.** A Final reviewer compares the three sets of marks. If the Examiners agree, the mark stands. If they differ, the Final reviewer
+  checks the file, and the lower mark stands unless the file supports a higher one.
+- **Deciding.** A fixed rule turns the score into a colour. No AI picks the colour.
+
+You can watch each step as it runs.
+
+## 3. Read the report
+
+- **The colour comes from the score alone.** Below 60 is **red**, 60 to 74 is **amber**, and 75 or more is **green**. The same rule is used
+  everywhere in GateX and in every report.
+- **The score** is out of 100 and uses the weights in your scorecard.
+- **Needs attention** lines sit at the top. They point out things worth a look first, such as a must-pass question that scored low or a mark
+  that only one Examiner backed. They do not change the colour.
+- **What to improve** is your to-do list. Start at the top. Each issue is marked **Must fix**, **Should fix** or **Nice to fix**, and says
+  where it is (a sheet and cell), what is wrong and how to fix it.
+- **The path to green** shows the smallest set of fixes that lifts the score to the next colour, and how many points each one adds.
+- **Charts** in the PDF show the score, how each question did and how the Examiners compared.
+
+**Issues marked "code" are the most dependable.** They come from an exact check of every row: a blank cell in a column that is otherwise full,
+a repeated id, a reference to something that does not exist, a child count that does not match the rows, a definition made of filler. Each one
+points at exactly the cells that need the fix.
+
+**Issues from the Examiners are good leads.** When two or three Examiners raised the same thing, it is usually worth fixing. When only one did,
+take a quick look at the cell it points to. The report also lists the issues GateX set aside, with the reason for each.
+
+## 4. Fix and check again
+
+Fix the issues, then add the file again under the **same project name**. The project page shows every round and how the score moved, which
+issues were fixed, which are still open and which are new. Keep going until the colour is green.
+
+## Good to know
+
+- The score is a quick, consistent review that guides your work. You decide which issues to fix.
+- GateX is sharpest on **register-style sheets**, where each row is one item with an id and a definition: every row gets an exact check. For a
+  free-form document, you get the Examiners' issues.
+- A **PDF** is read as text, with its tables rebuilt row by row.
+- A question that needs evidence from outside the file, such as an interview, is marked from what the file says about it. If the file says
+  nothing, the question is left out of the score and listed under "Not in the file".
+- A scorecard is converted once and then reused, so every round of a project is marked against the same scorecard.
+
+## Helpful messages
+
+- *"The file to check and the scorecard are the same file"*: the same file went into both boxes. Add two different files.
+- *"The scorecard names a sheet that this workbook does not have"*: compare the sheet names in your file with the scorecard.
+- If one Examiner is shown as unavailable, the check finishes with the others, and the report says so next to the colour.
+
+For how the checks work inside, see [the engine page](agent.md). For working on the code, see [development](development.md).

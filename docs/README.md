@@ -1,32 +1,36 @@
-# Documentation
+# GateX documentation
+
+GateX checks your work against a scorecard. Three AI Examiners mark your file on their own, a Final reviewer compares their marks, and a fixed
+rule decides green, amber or red.
 
 | I want to... | Read |
 |---|---|
-| **Understand what the agent does and find its code** | [agent.md](agent.md) |
+| **Get my file checked and read the report** | [user-guide.md](user-guide.md) |
+| **See what GateX does at each step, and where its code is** | [agent.md](agent.md) |
 | See how the whole system fits together | [architecture.md](architecture.md) |
 | Write or review a scorecard | [scorecard-reference.md](scorecard-reference.md) |
-| Install, configure, run, back up, fix problems | [operations.md](operations.md) |
-| Call the API from a script | [api.md](api.md) |
-| Check what protects the data, and what does not yet | [security.md](security.md) |
-| See how this maps to the Agentic Roadmap PDF, page by page | [pdf-traceability.md](pdf-traceability.md) |
+| Install, set up, run and back up GateX | [operations.md](operations.md) |
+| Call GateX from a script | [api.md](api.md) |
+| See how files and keys are protected | [security.md](security.md) |
+| See how GateX follows the Agentic Roadmap PDF, page by page | [pdf-traceability.md](pdf-traceability.md) |
 | Understand why it was built this way | [decisions.md](decisions.md) |
 | Change the code | [development.md](development.md) |
 
 ## Reading order
 
-- **Mentor or lead:** [agent.md](agent.md) → [pdf-traceability.md](pdf-traceability.md) → [security.md](security.md)
-- **Author submitting work:** [scorecard-reference.md](scorecard-reference.md) → the report (see *Using it* in the main [README](../README.md))
-- **Engineer taking it over:** [architecture.md](architecture.md) → [agent.md](agent.md) → [development.md](development.md) → [decisions.md](decisions.md)
-- **Whoever runs it:** [operations.md](operations.md) → [security.md](security.md)
+- **Author adding a file:** [user-guide.md](user-guide.md), then [scorecard-reference.md](scorecard-reference.md), then your report.
+- **Mentor or lead:** [agent.md](agent.md), then [pdf-traceability.md](pdf-traceability.md), then [security.md](security.md).
+- **Engineer taking it over:** [architecture.md](architecture.md), then [agent.md](agent.md), [development.md](development.md) and [decisions.md](decisions.md).
+- **Whoever runs it:** [operations.md](operations.md), then [security.md](security.md).
 
 ## Diagrams
 
-Sources are in [`diagrams/`](diagrams/) (Mermaid) and the rendered SVGs in [`images/`](images/).
+The sources are in [`diagrams/`](diagrams/) (Mermaid) and the pictures are in [`images/`](images/).
 
 | Diagram | Used in |
 |---|---|
-| `00-architecture` (live Mermaid, drawn by GitHub) | README, architecture.md |
-| `images/architecture.svg` (the same view as a hand-drawn static image) | linked from both as a fallback |
+| `00-architecture` (live Mermaid, drawn by GitHub) | the main README, architecture.md |
+| `images/architecture.svg` (the same view as a drawn picture) | linked from both for viewers that do not draw Mermaid |
 | `01-system-context` | architecture.md |
 | `02-agent-pipeline` | agent.md |
 | `03-evaluation-sequence` | architecture.md |
@@ -36,4 +40,4 @@ Sources are in [`diagrams/`](diagrams/) (Mermaid) and the rendered SVGs in [`ima
 | `07-trust-boundaries` | security.md |
 | `08-deployment` | architecture.md |
 
-Re-render after editing a source: `bash docs/diagrams/render.sh`.
+After editing a source, redraw the pictures with `bash docs/diagrams/render.sh`.

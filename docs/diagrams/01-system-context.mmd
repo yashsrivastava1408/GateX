@@ -1,25 +1,25 @@
 flowchart LR
-  subgraph PEOPLE["People (Level 1: people own every judgement)"]
+  subgraph PEOPLE["People (they add the work and fix the issues; the marking is automatic)"]
     direction TB
-    AU["Author<br/><i>defines schema and scorecard,<br/>fixes findings, resubmits</i>"]
-    PR["Peer reviewer<br/><i>checks fixes before re-evaluation</i>"]
-    ME["Mentor / Lead<br/><i>supplies human-only evidence,<br/>approves gates, overrides</i>"]
+    AU["Author<br/><i>adds a file and a scorecard,<br/>fixes the issues, checks again</i>"]
+    PR["Peer reviewer<br/><i>checks the fixes before the next check</i>"]
+    ME["Mentor / Lead<br/><i>reads the reports<br/>and the score trend</i>"]
   end
 
-  subgraph SYS["DDD Evaluator"]
+  subgraph SYS["GateX"]
     direction TB
-    UI["Dashboard<br/>React"]
-    API["API<br/>Express"]
-    AG(["<b>Evaluator agent</b><br/>3 raters + 1 consolidator"])
-    DB[("Postgres<br/>runs · scores · findings · logs")]
-    FS[["Upload store<br/>read-only copies of workbooks"]]
+    UI["Dashboard<br/>in the browser"]
+    API["API<br/>server"]
+    AG(["<b>GateX engine</b><br/>Examiners 1, 2, 3<br/>+ a Final reviewer"])
+    DB[("Postgres<br/>checks · scores · issues · logs")]
+    FS[["Upload store<br/>read-only copies of your files"]]
   end
 
-  subgraph MODELS["Model providers (approved models only)"]
+  subgraph MODELS["Model services (approved models only)"]
     direction TB
-    GQ["Groq"]
-    GM["Gemini"]
-    OT["Any OpenAI-compatible API"]
+    GQ["Model service 1"]
+    GM["Model service 2"]
+    OT["Any OpenAI-style API"]
   end
 
   AU --> UI
@@ -30,7 +30,7 @@ flowchart LR
   API <--> DB
   API --> FS
   AG -.->|reads, never writes| FS
-  AG -->|HTTPS, keys from server env| GQ
+  AG -->|HTTPS, keys kept on the server| GQ
   AG --> GM
   AG --> OT
 

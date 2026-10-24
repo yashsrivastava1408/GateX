@@ -1,0 +1,49 @@
+{
+  "approved": [
+    "bedrock:zai.glm-5",
+    "bedrock:us.meta.llama3-3-70b-instruct-v1:0",
+    "bedrock:qwen.qwen3-next-80b-a3b",
+    "bedrock:us.amazon.nova-pro-v1:0"
+  ],
+  "providers": {
+    "bedrock": {
+      "type": "bedrock",
+      "region": "us-east-1",
+      "keyEnv": "AWS_BEARER_TOKEN_BEDROCK"
+    }
+  },
+  "raters": [
+    {
+      "id": "A",
+      "provider": "bedrock",
+      "model": "zai.glm-5",
+      "family": "zhipu"
+    },
+    {
+      "id": "B",
+      "provider": "bedrock",
+      "model": "us.meta.llama3-3-70b-instruct-v1:0",
+      "family": "meta"
+    },
+    {
+      "id": "C",
+      "provider": "bedrock",
+      "model": "qwen.qwen3-next-80b-a3b",
+      "family": "qwen"
+    }
+  ],
+  "consolidator": {
+    "id": "K",
+    "provider": "bedrock",
+    "model": "us.amazon.nova-pro-v1:0",
+    "family": "amazon"
+  },
+  "settings": {
+    "temperature": 0,
+    "maxOutputTokens": 8192,
+    "timeoutMs": 120000,
+    "retries": 5,
+    "sectionConcurrency": 3,
+    "repeats": 1
+  }
+}

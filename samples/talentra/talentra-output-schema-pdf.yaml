@@ -1,7 +1,7 @@
 # Step 2 · Output Schema Definition v3.2, evaluated from its PDF.
 #
-# DRAFT FOR APPROVAL. Written by the assistant to show how a PDF is scored; the questions, weights and anchors are
-# a proposal, and a mentor must approve them before they are relied on.
+# Sample scorecard, written to show how a PDF is scored. It is used as it is: the app freezes it by its hash
+# when work is submitted, and nobody has to sign it off.
 #
 # A PDF has one "sheet" per page, named "Page 1", "Page 2" and so on, so a dimension's `reads` names a page range
 # ("Page 7-9"). Each range is its own section, which keeps every prompt small enough for a free-tier model.
@@ -15,7 +15,7 @@ scorecard:
   judges: D1 schema design · Step 2 output schema
   step: "02"
   frozen: true
-  approval: "Draft by the assistant, pending mentor approval"
+  approval: "Sample scorecard for the Talentra workbook, used as it is"
   thresholds: { accept: 90, refine: 75 }
 
   artifact:

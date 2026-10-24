@@ -11,17 +11,20 @@ import { assembleReport } from './report/assemble.js';
 import { renderMarkdown } from './report/markdown.js';
 import { renderPdf } from './report/pdf.js';
 import { renderXlsx } from './report/xlsx.js';
-import { parseScorecardFile } from './scorecard/parse.js';
+import { loadReliability } from './library/library.js';
+import { importCandidates } from './scorecard/importer.js';
+import { ScorecardResolver, conversionNote } from './scorecard/resolve.js';
 import { UserError } from './util/errors.js';
 
 /** npm runs workspace scripts from server/, so paths are resolved from where the command was typed. */
 export const resolveFromUser = (file: string, env: NodeJS.ProcessEnv = process.env): string =>
   path.resolve(env.INIT_CWD ?? process.cwd(), file);
 
-const USAGE = `Usage: npm run evaluate -- --workbook <file.xlsx|file.pdf> --scorecard <file.yaml> [options]
+const USAGE = `Usage: npm run evaluate -- --workbook <file.xlsx|file.csv|file.pdf> --scorecard <scorecard file> [options]
 
   --workbook   the schema or output workbook to evaluate
-  --scorecard  the frozen scorecard (.xlsx, .yaml or .json)
+  --scorecard  the scorecard, in any layout (.xlsx, .csv, .pdf, .yaml, .json, .txt, .md); one in another
+               layout is converted automatically (once, then reused from data/scorecards)
   --sources    optional text file with the problem statement or docket
   --instructions  optional extra instructions for the examiners (text, or @file to read a file)
   --out        folder for report.xlsx, report.md and report.json (default ./data/cli/<run id>)
@@ -51,7 +54,13 @@ async function main(): Promise<void> {
   const models = values.models ? loadModelsConfig(resolveFromUser(values.models)) : config.models;
   const workbookPath = resolveFromUser(values.workbook);
   const scorecardPath = resolveFromUser(values.scorecard);
-  const parsed = await parseScorecardFile(await readFile(scorecardPath), path.basename(scorecardPath));
+  const providers = createProviderFactory(models, { env, mockDelayMs: 0 });
+  const resolver = new ScorecardResolver({ cacheDir: path.join(config.dataDir, 'scorecards'), candidates: () => importCandidates(models, providers) });
+  const parsed = await resolver.resolve(
+    { name: path.basename(scorecardPath), bytes: await readFile(scorecardPath) },
+    { name: path.basename(workbookPath), bytes: await readFile(workbookPath) },
+  );
+  if (parsed.conversion) console.log(conversionNote(parsed.conversion));
   const sources = values.sources ? await readFile(resolveFromUser(values.sources), 'utf8') : '';
   const instructions = values.instructions?.startsWith('@')
     ? await readFile(resolveFromUser(values.instructions.slice(1)), 'utf8')
@@ -72,7 +81,9 @@ async function main(): Promise<void> {
     sources,
     instructions,
     models,
-    providers: createProviderFactory(models, { env, mockDelayMs: 0 }),
+    scorecardNotes: parsed.conversion ? [conversionNote(parsed.conversion)] : [],
+    reliability: await loadReliability(config.dataDir),
+    providers,
     env,
     onProgress: (event) => {
       if (event.type === 'stage') console.log(`  · ${event.stage}`);
@@ -80,7 +91,7 @@ async function main(): Promise<void> {
     },
   });
 
-  const report = assembleReport(result.core, [], null);
+  const report = assembleReport(result.core, null);
   await mkdir(out, { recursive: true });
   await writeFile(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
   await writeFile(path.join(out, 'run-log.json'), JSON.stringify(result.runLog, null, 2));

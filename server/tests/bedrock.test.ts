@@ -90,7 +90,7 @@ describe('the Bedrock roster file', () => {
 
   it('is a valid 3 + 1 roster of four different families that is ready with one key', () => {
     const models = loadModelsConfig(file);
-    expect(models.raters.map((r) => r.family)).toEqual(['zhipu', 'meta', 'mistral']);
+    expect(models.raters.map((r) => r.family)).toEqual(['zhipu', 'meta', 'qwen']);
     expect(models.consolidator.family).toBe('amazon');
     const status = inspectRoster(models, { AWS_BEARER_TOKEN_BEDROCK: 'k' });
     expect(status.problems).toEqual([]);

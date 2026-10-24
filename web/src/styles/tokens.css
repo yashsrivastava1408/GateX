@@ -1,9 +1,15 @@
 /*
- * Design tokens. Visual foundation for the DDD Evaluator: futuristic AI agent console,
+ * Design tokens. Visual foundation for GateX: futuristic AI agent console,
  * rich dark aesthetics, glassmorphism, luminous glows, crisp typography, and buttery-smooth motion.
  */
 :root {
   color-scheme: dark;
+
+  /* Channels used by the other stylesheets as rgb(var(--ink) / 0.1): a tint that always contrasts with the page. */
+  --ink: 255 255 255;
+  --panel: 14 18 30;
+  --shade: 0 0 0;
+  --strong: #ffffff;
 
   /* ------------------------------ colour canvas ------------------------------ */
   --bg: #07090e;
@@ -22,7 +28,7 @@
   --border-subtle: rgba(255, 255, 255, 0.05);
   --border-strong: rgba(255, 255, 255, 0.15);
   --border-hover: rgba(255, 255, 255, 0.25);
-  --border-glow: rgba(45, 212, 191, 0.45);
+  --border-glow: rgb(var(--accent-rgb) / 0.45);
 
   /* text hierarchy: high legibility on dark obsidian canvas */
   --text: #f8fafc;
@@ -31,20 +37,22 @@
   --faint: #64748b;
 
   /* futuristic AI agent palette (cyber-teal, electric cyan & neural violet) */
-  --accent: #2dd4bf;
-  --accent-strong: #5eead4;
+  --accent-rgb: 129 140 248;
+  --violet-rgb: 232 121 249;
+  --accent: #818cf8;
+  --accent-strong: #a5b4fc;
   --accent-cyan: #38bdf8;
-  --accent-violet: #818cf8;
-  --accent-dim: rgba(45, 212, 191, 0.12);
-  --accent-dim-strong: rgba(45, 212, 191, 0.22);
-  --accent-line: rgba(45, 212, 191, 0.4);
-  --accent-ink: #021a17;
+  --accent-violet: #e879f9;
+  --accent-dim: rgb(var(--accent-rgb) / 0.12);
+  --accent-dim-strong: rgb(var(--accent-rgb) / 0.22);
+  --accent-line: rgb(var(--accent-rgb) / 0.4);
+  --accent-ink: #0b1020;
 
   /* verdict colours: high-saturation cyber tones with luminous aura */
-  --green: #10b981;
-  --green-bright: #34d399;
-  --green-dim: rgba(16, 185, 129, 0.14);
-  --green-glow: 0 0 22px -2px rgba(16, 185, 129, 0.45);
+  --green: #4ade80;
+  --green-bright: #86efac;
+  --green-dim: rgba(74, 222, 128, 0.14);
+  --green-glow: 0 0 22px -2px rgba(74, 222, 128, 0.45);
 
   --amber: #f59e0b;
   --amber-bright: #fbbf24;
@@ -105,10 +113,10 @@
   --shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.65), 0 1px 0 rgba(255, 255, 255, 0.08) inset;
   --shadow-sm: 0 6px 18px -3px rgba(0, 0, 0, 0.45);
   --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  --shadow-card-hover: 0 12px 32px -6px rgba(0, 0, 0, 0.65), 0 0 24px -6px rgba(45, 212, 191, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  --shadow-card-hover: 0 12px 32px -6px rgba(0, 0, 0, 0.65), 0 0 24px -6px rgb(var(--accent-rgb) / 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.14);
 
-  --glow: 0 0 24px -2px rgba(45, 212, 191, 0.45);
-  --glow-sm: 0 0 12px -1px rgba(45, 212, 191, 0.3);
+  --glow: 0 0 24px -2px rgb(var(--accent-rgb) / 0.45);
+  --glow-sm: 0 0 12px -1px rgb(var(--accent-rgb) / 0.3);
 
   /* ------------------------------- layout ------------------------------- */
   --sidebar: 248px;
@@ -121,4 +129,71 @@
   --fast: 0.16s;
   --base: 0.26s;
   --slow: 0.55s;
+}
+
+/* ------------------------------- light theme ------------------------------- */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --ink: 15 23 42;
+  --panel: 255 255 255;
+  --shade: 71 85 105;
+  --strong: #0b1220;
+
+  --bg: #f4f6fb;
+  --bg-subtle: #eceff6;
+  --surface: rgba(255, 255, 255, 0.92);
+  --surface-solid: #ffffff;
+  --surface-2: rgba(241, 244, 250, 0.9);
+  --surface-2-solid: #f1f4fa;
+  --surface-3: rgba(232, 237, 247, 0.9);
+  --surface-3-solid: #e8edf7;
+  --surface-4: rgba(220, 227, 242, 0.9);
+  --surface-4-solid: #dce3f2;
+
+  --border: rgba(15, 23, 42, 0.12);
+  --border-subtle: rgba(15, 23, 42, 0.07);
+  --border-strong: rgba(15, 23, 42, 0.22);
+  --border-hover: rgba(15, 23, 42, 0.35);
+
+  --text: #0f172a;
+  --text-2: #334155;
+  --muted: #526075;
+  --faint: #64748b;
+
+  --accent-rgb: 79 70 229;
+  --violet-rgb: 192 38 211;
+  --accent: #4f46e5;
+  --accent-strong: #4338ca;
+  --accent-cyan: #0284c7;
+  --accent-violet: #c026d3;
+  --accent-dim: rgb(var(--accent-rgb) / 0.1);
+  --accent-dim-strong: rgb(var(--accent-rgb) / 0.18);
+  --accent-line: rgb(var(--accent-rgb) / 0.4);
+  --accent-ink: #ffffff;
+
+  --green: #22c55e;
+  --green-bright: #16a34a;
+  --amber: #d97706;
+  --amber-bright: #b45309;
+  --red: #e11d48;
+  --red-bright: #be123c;
+  --blue: #2563eb;
+  --blue-bright: #1d4ed8;
+
+  --green-glow: none;
+  --amber-glow: none;
+  --red-glow: none;
+  --blue-glow: none;
+  --glow: none;
+  --glow-sm: none;
+
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --shadow: 0 10px 30px -10px rgba(71, 85, 105, 0.3);
+  --shadow-sm: 0 4px 12px -3px rgba(71, 85, 105, 0.2);
+  --shadow-card: 0 1px 3px rgba(71, 85, 105, 0.12), 0 4px 16px -4px rgba(71, 85, 105, 0.12);
+  --shadow-card-hover: 0 8px 24px -6px rgba(71, 85, 105, 0.25);
+}
+:root[data-theme='light'] body {
+  background-image: radial-gradient(circle at 50% -10%, rgb(var(--accent-rgb) / 0.08), transparent 50%), radial-gradient(circle at 90% 20%, rgba(2, 132, 199, 0.05), transparent 45%);
+  background-size: 100% 100%;
 }

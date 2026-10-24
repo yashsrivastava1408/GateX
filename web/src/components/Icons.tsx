@@ -28,6 +28,9 @@ const paths: Record<string, ReactNode> = {
   copy: <path d="M9 9h10v11H9zM5 15V4h10" />,
   sheet: <path d="M4 5h16v14H4zM4 10h16M10 5v14" />,
   scale: <path d="M12 4v16M6 8l-3 6a3 3 0 006 0zM18 8l-3 6a3 3 0 006 0zM5 20h14" />,
+  trash: <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />,
+  sun: <path d="M12 16a4 4 0 100-8 4 4 0 000 8zM12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6L7 7M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4" />,
+  moon: <path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z" />,
 };
 
 export type IconName = keyof typeof paths;

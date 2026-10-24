@@ -1,5 +1,9 @@
 import type {
   ConfigResponse,
+  LibraryCaseDetail,
+  LibraryCaseSummary,
+  PlantedResult,
+  ReliabilityTable,
   Decision,
   ProjectHistory,
   ProjectSummary,
@@ -49,16 +53,20 @@ export interface SubmitForm {
   projectName: string;
   sources: string;
   instructions: string;
+  /** Score every question once: faster, slightly less steady. */
+  quick?: boolean;
 }
 
-export interface ImportedQuestion {
+interface ImportedQuestion {
   id: string;
   name: string;
   weight: number;
   critical: boolean;
-  by: 'examiners' | 'person' | 'code';
+  by: 'examiners' | 'code';
   reads: string[];
   how?: string;
+  /** Present when the dimension is broken into sub-criteria, each scored on its own. */
+  criteria?: Array<{ id: string; name: string; by: 'examiners' | 'code'; how?: string }>;
 }
 
 export interface ImportedScorecard {
@@ -66,20 +74,25 @@ export interface ImportedScorecard {
   yaml: string;
   uncertain: string[];
   adjustments: string[];
-  summary: { dimensions: number; byExaminers: number; byCode: number; byPerson: number; critical: number; weightTotal: number };
+  summary: { dimensions: number; byExaminers: number; byCode: number; critical: number; weightTotal: number };
   sourceText: string;
   documentOutline: string | null;
   model: { id: string; provider: string; model: string };
+  /** True when an earlier conversion of the same file was reused, with no model call. */
+  cached: boolean;
 }
 
 export interface CheckedScorecard {
   yaml: string;
-  frozen: boolean;
   summary: ImportedScorecard['summary'];
 }
 
 export const api = {
   config: () => request<ConfigResponse>('/api/config'),
+  library: () => request<LibraryCaseSummary[]>('/api/library'),
+  reliability: () => request<ReliabilityTable>('/api/library/reliability'),
+  planted: () => request<PlantedResult[]>('/api/library/planted'),
+  libraryCase: (id: string) => request<LibraryCaseDetail>(`/api/library/${id}`),
   projects: () => request<ProjectSummary[]>('/api/projects'),
   project: (id: string) => request<ProjectHistory>(`/api/projects/${id}`),
   run: (id: string) => request<RunDetail>(`/api/runs/${id}`),
@@ -91,14 +104,9 @@ export const api = {
     body.append('projectName', form.projectName);
     body.append('sources', form.sources);
     body.append('instructions', form.instructions);
+    if (form.quick) body.append('quick', '1');
     return request<{ runId: string; projectId: string; iteration: number }>('/api/runs', { method: 'POST', body });
   },
-
-  addEvidence: (runId: string, input: { dimensionId: string; score: number | null; note: string; by: string }) =>
-    request<RunDetail>(`/api/runs/${runId}/evidence`, json(input)),
-
-  override: (runId: string, input: { decision: Decision; reason: string; by: string }) =>
-    request<RunDetail>(`/api/runs/${runId}/override`, json(input)),
 
   importScorecard(scorecard: File, document: File | null) {
     const body = new FormData();
@@ -107,7 +115,10 @@ export const api = {
     return request<ImportedScorecard>('/api/scorecards/import', { method: 'POST', body });
   },
 
-  checkScorecard: (yaml: string, approvedBy?: string) => request<CheckedScorecard>('/api/scorecards/check', json({ yaml, approvedBy })),
+  checkScorecard: (yaml: string) => request<CheckedScorecard>('/api/scorecards/check', json({ yaml })),
+
+  deleteRun: (id: string) => request<null>(`/api/runs/${id}`, { method: 'DELETE' }),
+  deleteProject: (id: string) => request<null>(`/api/projects/${id}`, { method: 'DELETE' }),
 
   scorecardTemplateUrl: '/api/scorecard-template.xlsx',
 

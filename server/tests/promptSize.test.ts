@@ -1,55 +1,79 @@
-import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { serializeSheet } from '../src/excel/serialize.js';
+import { promptSizeReport } from '../scripts/promptSize.js';
+import { loadAppConfig, loadModelsConfig, modelsFileFor } from '../src/config.js';
 import { WorkbookModel } from '../src/excel/workbook.js';
-import { estimateTokens } from '../src/agent/rater.js';
-import { parseScorecard } from '../src/scorecard/parse.js';
-import { TALENTRA_XLSX, makeWorkbook, mockModels, runEvaluation } from './helpers.js';
+import { ScorecardResolver } from '../src/scorecard/resolve.js';
+import { CLEAN_SCORECARD_YAML, CLEAN_TREE, TALENTRA_XLSX, loadTalentraScorecard, makeWorkbook, mockModels, tempDir } from './helpers.js';
 
-describe('what the raters are sent', () => {
-  it('sends only the listed columns, from the header row down', async () => {
-    const wb = await WorkbookModel.load(
-      await makeWorkbook({ T: [['A title row'], ['id', 'def', 'internal'], ['1', 'first', 'secret-1'], ['2', 'second', 'secret-2']] }),
-    );
-    const text = serializeSheet(wb, { name: 'T', headerRow: 2, columns: ['id', 'def'] });
-    expect(text).toContain('## Sheet: T (4 rows, 2 columns)');
-    expect(text).toContain('A2="id" B2="def"');
-    expect(text).toContain('B4="second"');
-    expect(text).not.toMatch(/secret|title row|C\d/);
+const bedrockFile = new URL('../config/models.bedrock.json', import.meta.url).pathname;
+
+describe('prompt:size', () => {
+  it('reads the roster the app would use: MODELS_CONFIG when set, the default otherwise, the mock roster in mock mode', () => {
+    expect(modelsFileFor({ MODELS_CONFIG: 'server/config/models.bedrock.json' })).toBe(path.resolve(bedrockFile));
+    expect(modelsFileFor({})).toMatch(/server\/config\/models\.json$/);
+    expect(modelsFileFor({ MOCK_LLM: '1', MODELS_CONFIG: 'server/config/models.bedrock.json' })).toMatch(/models\.mock\.json$/);
+    expect(loadAppConfig({ MODELS_CONFIG: 'server/config/models.bedrock.json' }).models.raters[2]!.model).toMatch(/^qwen\./);
   });
 
-  it('names the missing column and the columns that do exist', async () => {
-    const wb = await WorkbookModel.load(await makeWorkbook({ T: [['id', 'def']] }));
-    expect(() => serializeSheet(wb, { name: 'T', headerRow: 1, columns: ['nope'] })).toThrow(/Column "nope".*Columns: id, def/);
+  it('names the config file, checks every rater and each backup against its own limit', async () => {
+    const wb = await WorkbookModel.load(TALENTRA_XLSX);
+    const { scorecard } = await loadTalentraScorecard();
+    const roster = loadModelsConfig(bedrockFile);
+    const lines = promptSizeReport({ wb, scorecard, roster, configFile: 'server/config/models.bedrock.json' }).join('\n');
+    expect(lines).toContain('Can each model take it? (limits from server/config/models.bedrock.json)');
+    expect(lines).toMatch(/C qwen\.qwen3-next-80b-a3b \(limit 120,000\)/);
+    expect(lines).toMatch(/backup qwen\.qwen3-32b-v1:0 \(limit 32,000\)/);
+    expect(lines).toMatch(/all sections together \(per rater\)/);
   });
 
-  it('keeps a scorecard\'s columns through parsing', () => {
-    const { scorecard } = parseScorecard(
-      'scorecard:\n  id: S\n  version: 1\n  judges: D1\n  frozen: true\n  artifact:\n    sheets:\n      - { name: T, header_row: 2, columns: [a, b] }\n      - U\n  dimensions:\n    - { id: H, name: h, weight: 1, measured_by: human }\n',
-    );
-    expect(scorecard.artifact.sheets).toEqual([{ name: 'T', headerRow: 2, columns: ['a', 'b'] }, { name: 'U', headerRow: 1 }]);
+  it('says "too big" for a limit a section is over', async () => {
+    const wb = await WorkbookModel.load(TALENTRA_XLSX);
+    const { scorecard } = await loadTalentraScorecard();
+    const roster = mockModels();
+    roster.raters[0]!.maxInputTokens = 100;
+    const lines = promptSizeReport({ wb, scorecard, roster, configFile: 'x.json' });
+    expect(lines.find((l) => l.includes(' A mock-mid'))).toMatch(/limit 100\):  whole workbook too big  \|  section 1 too big/);
+    expect(lines.find((l) => l.includes(' B mock-lenient'))).toMatch(/section 1 fits/);
+  });
+});
+
+describe('looking a scorecard up without a model call', () => {
+  it('reads the app format, returns a cached conversion, and returns null (never converting) otherwise', async () => {
+    let calls = 0;
+    const counting = {
+      provider: { name: 'fake', complete: async () => { calls += 1; throw new Error('must not be called'); } },
+      model: { id: 'A', provider: 'fake', model: 'm' },
+      settings: { temperature: 0, maxOutputTokens: 10 },
+    };
+    const resolver = new ScorecardResolver({ cacheDir: await tempDir(), candidates: () => [counting] });
+    const doc = { name: 'w.xlsx', bytes: await makeWorkbook({ Tree: CLEAN_TREE }) };
+    expect((await resolver.lookup({ name: 's.yaml', bytes: Buffer.from(CLEAN_SCORECARD_YAML) }, doc))!.conversion).toBeNull();
+    expect(await resolver.lookup({ name: 'GS1.csv', bytes: Buffer.from('a,b') }, doc)).toBeNull();
+    expect(calls).toBe(0);
   });
 
-  it('keeps the Talentra prompts to the sizes measured on a real provider (regression guard)', async () => {
-    const schema = parseScorecard(await readFile(new URL('../../samples/talentra/talentra-schema-d2.yaml', import.meta.url), 'utf8'));
-    const output = parseScorecard(await readFile(new URL('../../samples/talentra/talentra-step04-d4.yaml', import.meta.url), 'utf8'));
-    const [d2, d4] = await Promise.all([runEvaluation({ workbook: TALENTRA_XLSX, scorecard: schema }), runEvaluation({ workbook: TALENTRA_XLSX, scorecard: output })]);
-    const tokens = (run: typeof d2) => estimateTokens(run.calls[0]!.prompt);
-    // Groq counted this exact schema prompt at 18,336 tokens (gpt-oss) and 21,482 (qwen), so the estimate must not fall below the
-    // first, nor drift far above the second.
-    expect(tokens(d2)).toBeGreaterThanOrEqual(18_336);
-    expect(tokens(d2)).toBeLessThan(22_500);
-    expect(tokens(d4)).toBeLessThan(7_500);
+  it('finds a conversion another resolver saved to the same folder', async () => {
+    const dir = await tempDir();
+    const { MockProvider } = await import('../src/llm/mock.js');
+    const deps = [{ provider: new MockProvider(0), model: { id: 'A', provider: 'mock', model: 'mock-mid' }, settings: { temperature: 0, maxOutputTokens: 100 } }];
+    const doc = { name: 'w.xlsx', bytes: await makeWorkbook({ Tree: CLEAN_TREE }) };
+    const source = { name: 'GS1.csv', bytes: Buffer.from('Dimension,Weight\nPurpose,100') };
+    const converted = await new ScorecardResolver({ cacheDir: dir, candidates: () => deps }).resolve(source, doc);
+    const found = await new ScorecardResolver({ cacheDir: dir, candidates: () => [] }).lookup(source, doc);
+    expect(found!.hash).toBe(converted.hash);
+    expect(found!.conversion!.cached).toBe(true);
   });
+});
 
-  it('fails a rater early, with advice, when its prompt cannot fit the limit set for it', async () => {
-    const models = mockModels();
-    models.raters[0]!.maxInputTokens = 1_000;
-    const run = await runEvaluation({ workbook: TALENTRA_XLSX, models });
-    const a = run.calls.find((c) => c.model.id === 'A')!;
-    expect(a).toMatchObject({ status: 'failed', attempts: 0 });
-    expect(a.error).toMatch(/over the 1000 limit set for mock-mid.*"columns"/);
-    expect(run.core.notes.join(' ')).toMatch(/Rater A .* failed and was left out/);
-    expect(run.core.dimensions.find((d) => d.id === 'J01')!.raterScores).toMatchObject({ A: null, B: 5, C: 3 });
+describe('the Bedrock roster', () => {
+  it('gives rater C a same-family backup with room for the big sections, and it is approved', () => {
+    const roster = loadModelsConfig(bedrockFile);
+    const c = roster.raters.find((r) => r.id === 'C')!;
+    expect(c.family).toBe('qwen');
+    expect(c.fallbacks).toEqual([{ provider: 'bedrock', model: 'qwen.qwen3-32b-v1:0', maxInputTokens: 32000 }]);
+    expect(roster.approved).toContain('bedrock:qwen.qwen3-32b-v1:0');
+    expect(roster.raters.find((r) => r.id === 'A')!.fallbacks).toEqual([{ provider: 'bedrock', model: 'zai.glm-4.7' }]);
+    expect(roster.raters.find((r) => r.id === 'B')!.maxInputTokens).toBe(118000);
   });
 });

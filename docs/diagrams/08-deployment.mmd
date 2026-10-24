@@ -5,7 +5,7 @@ flowchart LR
 
   subgraph HOST["One machine (laptop or VM)"]
     direction TB
-    PX["Reverse proxy with SSO / auth<br/><i>recommended in front for shared use,<br/>the app has no login of its own</i>"]
+    PX["Reverse proxy with SSO / auth<br/><i>recommended in front for shared use<br/>(adds sign-in and HTTPS)</i>"]
     subgraph DOCKER["docker compose up --build"]
       NODE["Node 22 app container<br/>serves API and the built dashboard<br/><i>or: npm run start on the host</i>"]
       PGC[("Postgres 16<br/>volume: ddd_pgdata")]
@@ -14,12 +14,12 @@ flowchart LR
     UPL["data/uploads · data/reports<br/>copies and saved report files"]
   end
 
-  subgraph NET["Internet (HTTPS)"]
+  subgraph NET["Model services (HTTPS)"]
     direction TB
-    P1["Groq API"]
-    P2["Gemini API"]
-    P4["Amazon Bedrock"]
-    P3["Other OpenAI-compatible API"]
+    P1["Model service 1"]
+    P2["Model service 2"]
+    P4["Model service 3"]
+    P3["Any OpenAI-style API"]
   end
 
   B --> PX --> NODE

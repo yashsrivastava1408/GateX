@@ -7,7 +7,7 @@ import { UserError } from '../util/errors.js';
  * A scorecard written in Excel instead of YAML. It has three sheets, and is turned into exactly
  * the object the YAML format produces, so the same validation, hashing and agent apply.
  *
- *   Scorecard    Setting | Value          id, name, version, judges, step, frozen, approval, accept, refine
+ *   Scorecard    Setting | Value          id, name, version, judges, step, approval, accept, refine (frozen is optional)
  *   Sheets       Sheet | Header row | Columns | Role        which sheets of the evaluated workbook to read
  *   Dimensions   one row per dimension: ID, Name, Weight, Critical, Measured by, Measure, Description,
  *                Anchor 5 ... Anchor 0, Check, Params, Bands, Fix, Needs, Return to
@@ -56,7 +56,7 @@ function requireColumns(table: Table, columns: string[]): void {
   const missing = columns.filter((c) => !have.has(norm(c)));
   if (missing.length > 0) {
     throw new UserError(
-      `Sheet "${table.sheet}" needs a column titled "${missing[0]}" in row 1. Columns found: ${table.headers.map((h) => h.title).join(', ') || '(none)'}. If this scorecard is in another layout, use "Import a scorecard" in the sidebar to convert it into a draft you can approve.`,
+      `Sheet "${table.sheet}" needs a column titled "${missing[0]}" in row 1. Columns found: ${table.headers.map((h) => h.title).join(', ') || '(none)'}. If this scorecard is in another layout, rename its sheets so it is not taken for this layout, and it will be converted automatically.`,
     );
   }
 }
@@ -199,10 +199,11 @@ export async function readExcelScorecard(buffer: Buffer, filename: string): Prom
       frozen: yesNo(setting('frozen')),
       ...(setting('approval') ? { approval: setting('approval') } : {}),
       thresholds: {
-        accept: setting('accept') === '' ? 90 : Number(setting('accept')),
-        refine: setting('refine') === '' ? 75 : Number(setting('refine')),
+        accept: setting('accept') === '' ? 75 : Number(setting('accept')),
+        refine: setting('refine') === '' ? 60 : Number(setting('refine')),
       },
       ...(setting('red_at_or_below') !== '' ? { red_at_or_below: Number(setting('red_at_or_below')) } : {}),
+      ...(setting('unmeasured') !== '' ? { unmeasured: setting('unmeasured').toLowerCase() } : {}),
       artifact: { sheets, context_sheets: context },
       dimensions,
     },
@@ -234,8 +235,9 @@ const HOW_TO_FILL = [
   '',
   'SCORECARD sheet (Setting | Value)',
   '  id, version, judges are required. "judges" must start with D1 (a schema design) or D3 (an output document).',
-  '  frozen must be yes. A scorecard that is not frozen is refused, so the target cannot move mid-evaluation.',
-  '  accept and refine are the green and amber thresholds (default 90 and 75). approval says who approved it; if it says "pending" or "draft", every report is marked provisional.',
+  '  frozen is optional: the app freezes every scorecard by its hash when work is submitted, so the target cannot move mid-evaluation.',
+  '  accept and refine are the green and amber thresholds (default 75 and 60). approval (optional) is shown in the report header as where the scorecard came from.',
+  '  unmeasured (optional) = skip (default: a question the file holds nothing for is left out of the score) or zero (it counts as 0).',
   '  Format the version cell as Text, or Excel turns 1.0 into 1.',
   '',
   'SHEETS sheet (which sheets of the evaluated workbook to read)',
@@ -244,14 +246,14 @@ const HOW_TO_FILL = [
   '  Role = judged (examiners score it) or context (reference material they may read, such as a playbook).',
   '',
   'DIMENSIONS sheet (one row per thing to measure)',
-  '  Weight = importance (any positive number; they need not add to 100). Critical = yes means it must score 4 or more or the verdict cannot be green.',
-  '  Measured by = code (counted exactly), raters (the AI examiners score 0-5 against your anchors) or human (only a person can supply it).',
+  '  Weight = importance (any positive number; they need not add to 100). Critical = yes marks a key question: below 4 it is listed as needing attention, but the colour comes from the score alone.',
+  '  Measured by = code (counted exactly) or raters (the AI examiners score 0-5 against your anchors). Nothing waits for a person:',
+  '        human is still accepted, and such a row is scored by the examiners from what the file shows (standard anchors if none are given).',
   '  raters: fill all six Anchor columns, saying what a 0, 1, 2, 3, 4 and 5 mean.',
   '  code: fill Check, Params and Bands. Check is one of: max_value, column_filled, unique, any_filled, list_refs_resolve, lists_referenced, values_in_list, value_not_in, row_count_at_least.',
   '        Params is a JSON object, for example {"sheet": "Tree", "column": "Definition"}.',
   '        Bands turns the pass ratio into 0-5: strict, exact, or pairs like 1:5, 0.97:4, 0.9:3, 0.01:1 (ratio at least the first number gives the score).',
   '        strict = 1:5, 0.97:4, 0.9:3, 0.75:2, 0.01:1     exact = 1:5, 0.01:1 (one mistake fails it)',
-  '  human: fill Needs, saying what the person must provide (for example a scored author interview).',
   '  Fix = what to do when a code check fails. Return to = which stage the author goes back to (Discover, Define, Generate, Analyse, Validate, Refine).',
   '',
   'Full reference: docs/scorecard-reference.md',
@@ -273,8 +275,12 @@ function listValidation(ws: ExcelJS.Worksheet, column: number, values: string[],
 
 /** Writes a scorecard as an Excel workbook in the layout `readExcelScorecard` reads. */
 export async function scorecardToWorkbook(scorecard: Scorecard): Promise<Buffer> {
+  // The Excel layout has no place for criteria or a combination rule yet; writing it would silently drop them.
+  if (scorecard.dimensions.some((d) => d.criteria?.length) || scorecard.aggregate) {
+    throw new UserError('This scorecard scores dimensions criterion by criterion, which the Excel layout cannot hold yet. Keep it as YAML.');
+  }
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = 'DDD Evaluator';
+  workbook.creator = 'GateX';
 
   const how = workbook.addWorksheet('How to fill');
   how.getColumn(1).width = 150;
@@ -296,6 +302,7 @@ export async function scorecardToWorkbook(scorecard: Scorecard): Promise<Buffer>
     ['accept', scorecard.thresholds.accept],
     ['refine', scorecard.thresholds.refine],
     ...(scorecard.redAtOrBelow !== undefined ? ([['red_at_or_below', scorecard.redAtOrBelow]] as Array<[string, string | number]>) : []),
+    ...(scorecard.unmeasured === 'zero' ? ([['unmeasured', 'zero']] as Array<[string, string | number]>) : []),
   ];
   rows.forEach(([key, value]) => {
     const row = settings.addRow([key, value]);

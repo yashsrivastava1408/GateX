@@ -27,10 +27,11 @@ const parse = async (parts?: Parameters<typeof excelScorecard>[0]) => parseScore
 describe('Excel scorecards', () => {
   it('reads settings, sheets and dimensions, and infers who measures each dimension', async () => {
     const { scorecard } = await parse();
-    expect(scorecard).toMatchObject({ id: 'SC-X', version: '1.0', gate: 'D1', frozen: true, thresholds: { accept: 90, refine: 75 } });
+    expect(scorecard).toMatchObject({ id: 'SC-X', version: '1.0', gate: 'D1', frozen: true, thresholds: { accept: 75, refine: 60 } });
     expect(scorecard.artifact.sheets).toEqual([{ name: 'Tree', headerRow: 1, columns: ['Path id', 'Definition'] }]);
     expect(scorecard.artifact.context).toEqual([{ name: 'Playbook', headerRow: 4 }]);
-    expect(scorecard.dimensions.map((d) => [d.id, d.measuredBy, d.critical])).toEqual([['C01', 'code', true], ['J01', 'raters', false], ['H01', 'human', true]]);
+    // "human" is still accepted in the sheet; the examiners score such a row from what the file shows.
+    expect(scorecard.dimensions.map((d) => [d.id, d.measuredBy, d.critical])).toEqual([['C01', 'code', true], ['J01', 'raters', false], ['H01', 'raters', true]]);
     expect(scorecard.dimensions[0]!.check).toMatchObject({ id: 'column_filled', params: { sheet: 'Tree', column: 'Definition' } });
     expect(scorecard.dimensions[1]!.anchors).toEqual({ 5: 'great', 4: 'good', 3: 'ok', 2: 'weak', 1: 'poor', 0: 'none' });
   });
@@ -54,9 +55,18 @@ describe('Excel scorecards', () => {
     expect(scorecard.dimensions.map((d) => [d.id, d.critical])).toEqual([['H1', true], ['H2', false]]);
   });
 
-  it('reads a blank "frozen" as not frozen, so the submission is refused later rather than guessed', async () => {
+  it('accepts a blank "frozen": the scorecard is frozen by its hash when work is submitted', async () => {
     const { scorecard } = await parse({ Scorecard: [['Setting', 'Value'], ['id', 'X'], ['version', '1'], ['judges', 'D1']] });
-    expect(scorecard.frozen).toBe(false);
+    expect(scorecard.frozen).toBe(true);
+    expect(scorecard.unmeasured).toBe('skip');
+  });
+
+  it('reads the unmeasured setting, and writes it back so the round trip keeps the hash', async () => {
+    const parsed = await parse({ Scorecard: [['Setting', 'Value'], ['id', 'X'], ['version', '1'], ['judges', 'D1'], ['unmeasured', 'Zero']] });
+    expect(parsed.scorecard.unmeasured).toBe('zero');
+    const again = await parseScorecardFile(await scorecardToWorkbook(parsed.scorecard), 'again.xlsx');
+    expect(again.scorecard.unmeasured).toBe('zero');
+    expect(again.hash).toBe(parsed.hash);
   });
 
   describe('mistakes are reported with the sheet and row to fix', () => {

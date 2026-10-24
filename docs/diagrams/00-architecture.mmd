@@ -1,31 +1,31 @@
 flowchart TB
-  subgraph PEOPLE["PEOPLE · Level 1: people own every judgement"]
+  subgraph PEOPLE["PEOPLE · add the work and fix the issues; the marking is automatic"]
     direction LR
-    AU["Author<br/>defines schema + scorecard<br/>fixes findings"] ~~~ PR["Peer reviewer<br/>checks fixes before<br/>re-evaluation"] ~~~ ME["Mentor / Lead<br/>human evidence<br/>gates and overrides"]
+    AU["Author<br/>adds a file and a scorecard<br/>fixes the issues"] ~~~ PR["Peer reviewer<br/>checks the fixes before<br/>the next check"] ~~~ ME["Mentor / Lead<br/>reads the reports<br/>and the score trend"]
   end
 
   subgraph WEB["PRESENTATION · web/ · React 19 + Vite"]
     direction LR
-    P1["Projects"] ~~~ P2["New evaluation"] ~~~ P6["Import a<br/>scorecard"] ~~~ P3["Run report"] ~~~ P4["History"] ~~~ P5["Models"]
+    P1["Projects"] ~~~ P2["New<br/>check"] ~~~ P6["Convert a<br/>scorecard"] ~~~ P3["Report"] ~~~ P4["History"] ~~~ P5["Examiners"]
   end
 
   subgraph API["API + SERVICE · server/src/api/ · Express 5"]
     direction LR
-    RT["Routes<br/>app.ts"] ~~~ SV["EvaluationService<br/>service.ts<br/>runs in background"] ~~~ SI["Scorecard import<br/>draft, check,<br/>person approves"] ~~~ DL["Report downloads<br/>xlsx, pdf, md, json"]
+    RT["Routes<br/>app.ts"] ~~~ SV["Check service<br/>service.ts<br/>runs in the background"] ~~~ SI["Scorecard conversion<br/>any layout, kept and<br/>reused every time"] ~~~ DL["Report downloads<br/>PDF, Excel, Markdown"]
   end
 
-  subgraph AGENT["EVALUATOR AGENT · server/src/agent/ · 3 raters + 1 consolidator · verdict decided by code"]
+  subgraph AGENT["GATEX ENGINE · server/src/agent/ · 3 AI Examiners + a Final reviewer · colour decided by a fixed rule"]
     direction TB
-    ORCH["orchestrator.ts<br/>evaluate()<br/>runs the six stages,<br/>re-hashes at the end"]
+    ORCH["orchestrator.ts<br/>evaluate()<br/>runs the six steps,<br/>checks the file is unchanged at the end"]
 
-    subgraph STAGES["The six stages"]
+    subgraph STAGES["The six steps"]
       direction LR
-      S1["1 Freeze<br/>hash workbook<br/>+ scorecard"] --> S2["2 Count<br/>exact checks<br/>in code"] --> S3["3 Rate x3<br/>blind, 3 families,<br/>median of repeats"] --> S4["4 Consolidate<br/>a 4th model<br/>reconciles"] --> S5["5 Decide<br/>verdict<br/>by rule"] --> S6["6 Explain<br/>findings, path<br/>to green"]
+      S1["1 Freeze<br/>lock the file<br/>and the scorecard"] --> S2["2 Count<br/>exact counts<br/>done in code"] --> S3["3 Examiners 1-3<br/>mark on their own,<br/>blind to each other"] --> S4["4 Final reviewer<br/>compares<br/>their marks"] --> S5["5 Decide<br/>green, amber or red<br/>by a fixed rule"] --> S6["6 Explain<br/>issues, path<br/>to green"]
     end
 
     subgraph GUARD["GUARDRAILS · enforced in code, not in prompts"]
       direction LR
-      G1["evidence.ts<br/>claims must cite<br/>a real cell"] ~~~ G2["callModel.ts<br/>strict JSON, one<br/>repair attempt"] ~~~ G3["raterSchema.ts<br/>replies checked<br/>for shape"] ~~~ G4["prompts/<br/>versioned and<br/>hashed per run"]
+      G1["evidence.ts<br/>every claim must point<br/>at a real cell"] ~~~ G2["callModel.ts<br/>strict reply format,<br/>one repair attempt"] ~~~ G3["raterSchema.ts<br/>every reply checked<br/>for shape"] ~~~ G4["prompts/<br/>versioned and<br/>recorded per run"]
     end
 
     ORCH --> STAGES --> GUARD
@@ -33,17 +33,17 @@ flowchart TB
 
   subgraph ADAPT["ADAPTERS · swap one without touching the agent"]
     direction LR
-    A1["Workbook + PDF<br/>reader<br/>excel/"] ~~~ A2["Report<br/>renderer<br/>report/"] ~~~ A3["Store<br/>db/<br/>Postgres, SQL"] ~~~ A4["Provider<br/>adapters<br/>llm/"]
+    A1["File reader<br/>Excel, CSV, PDF<br/>excel/"] ~~~ A2["Report<br/>writer<br/>report/"] ~~~ A3["Store<br/>db/<br/>Postgres"] ~~~ A4["Model service<br/>adapters<br/>llm/"]
   end
 
   subgraph DATA["YOUR DATA · stays on your machine"]
     direction LR
-    UP[["Upload folder<br/>data/uploads<br/>copies, never edited"]] ~~~ RP[["Saved reports<br/>data/reports<br/>json, md, xlsx, pdf"]] ~~~ PG[("Postgres 16<br/>docker compose<br/>up --build")]
+    UP[["Upload folder<br/>data/uploads<br/>copies, never edited"]] ~~~ RP[["Saved reports<br/>data/reports<br/>PDF, Excel, Markdown"]] ~~~ PG[("Postgres 16<br/>docker compose<br/>up --build")]
   end
 
-  subgraph MODELS["MODEL PROVIDERS · approved models only"]
+  subgraph MODELS["MODEL SERVICES · approved models only"]
     direction LR
-    GQ["Groq"] ~~~ GM["Gemini"] ~~~ BR["Amazon<br/>Bedrock"] ~~~ OA["Any OpenAI-<br/>style API"]
+    GQ["Model<br/>service 1"] ~~~ GM["Model<br/>service 2"] ~~~ BR["Model<br/>service 3"] ~~~ OA["Any OpenAI-<br/>style API"]
   end
 
   PEOPLE -->|browser| WEB

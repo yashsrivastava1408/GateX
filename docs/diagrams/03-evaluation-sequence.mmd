@@ -3,34 +3,34 @@ sequenceDiagram
   actor Au as Author
   participant UI as Dashboard
   participant API as API routes
-  participant SV as EvaluationService
-  participant AG as Evaluator agent
-  participant RT as Raters A, B, C
-  participant CO as Consolidator K
+  participant SV as Check service
+  participant AG as GateX engine
+  participant RT as Examiners 1, 2, 3
+  participant CO as Final reviewer
   participant DB as Postgres
 
-  Au->>UI: drop workbook + frozen scorecard
+  Au->>UI: add a file + a scorecard
   UI->>API: POST /api/runs (multipart)
   API->>SV: submit()
-  Note over SV: parse scorecard · check it is frozen · check the roster<br/>open the workbook · check the sheets it names exist
-  SV->>DB: create run (queued), next iteration number
+  Note over SV: read the scorecard · check the models are set up<br/>open the file · check the sheets it names exist
+  SV->>DB: create the check (queued), next round number
   SV-->>API: run id
   API-->>UI: 202 Accepted
   UI->>API: GET /api/runs/:id every 1.5 s
 
   Note over SV,AG: runs in the background after the 202
   SV->>AG: evaluate()
-  Note over AG: freeze: read once, SHA-256 of workbook and scorecard<br/>count: exact checks scored in code
-  par three blind raters in parallel
-    AG->>RT: same prompt (scorecard + artifact + sources)
-    RT-->>AG: JSON: 0-5 per dimension, cited cells, findings
+  Note over AG: freeze: read once, fingerprint the file and the scorecard<br/>count: exact counts scored in code
+  par three Examiners at the same time
+    AG->>RT: same instructions (scorecard + file + sources)
+    RT-->>AG: marks 0-5 per question, cited cells, issues
   end
   Note over AG: keep only claims whose cited cell really exists
-  AG->>CO: three validated results + artifact
-  CO-->>AG: reconciled scores, merged findings
-  Note over AG: enforce the rules: range check, lower score stands, verdict by code<br/>re-hash the workbook, abort if it changed
-  AG-->>SV: evaluation (scores, findings, run log)
-  SV->>DB: store run, dimension scores, findings, every model call
+  AG->>CO: three sets of checked marks + the file
+  CO-->>AG: agreed marks, merged issues
+  Note over AG: apply the rules: range check, lower mark stands, colour by a fixed rule<br/>check the file again, stop if it changed
+  AG-->>SV: result (scores, issues, record)
+  SV->>DB: store the check, scores, issues, every model call
   UI->>API: GET /api/runs/:id
-  API->>DB: load run + human evidence + override
-  API-->>UI: report (verdict, scores, findings, path to green)
+  API->>DB: load the check
+  API-->>UI: report (verdict, issues, path to green, charts)

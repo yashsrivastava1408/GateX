@@ -48,7 +48,7 @@ describe('the sectioned Talentra D2 scorecard', () => {
     expect(Math.max(...size(sectioned))).toBeLessThan(size(whole)[0]! * 0.5);
     // every question is still asked exactly once
     const asked = buildAllRaterPrompts({ scorecard: sectioned, wb, sources: '' }).flatMap((p) => p.prompt.rated.map((d) => d.id));
-    expect(asked.sort()).toEqual(['J01', 'J02', 'J03', 'J04', 'J05', 'J06']);
+    expect(asked.sort()).toEqual(['H01', 'J01', 'J02', 'J03', 'J04', 'J05', 'J06']);
   });
 
   it('only sends the columns a question reads', async () => {
@@ -115,7 +115,7 @@ describe('a full mock run of the sectioned D2 scorecard', () => {
     const parsed = await loadSectioned();
     const run = await runEvaluation({ workbook: TALENTRA_XLSX, scorecard: parsed, models: mockModels(['mock-mid', 'mock-lenient', 'mock-strict']) });
     const rated = run.core.dimensions.filter((d) => d.measuredBy === 'raters');
-    expect(rated.map((d) => d.id)).toEqual(['J01', 'J02', 'J03', 'J04', 'J05', 'J06']);
+    expect(rated.map((d) => d.id)).toEqual(['J01', 'J02', 'J03', 'J04', 'J05', 'J06', 'H01']);
     expect(rated.every((d) => d.consolidated !== null)).toBe(true);
     expect(run.runLog.participants.filter((p) => p.role === 'rater').every((p) => p.status === 'ok')).toBe(true);
   });

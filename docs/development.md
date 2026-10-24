@@ -1,6 +1,6 @@
 # Development guide
 
-For people changing the code. To *run* the system, see [operations.md](operations.md). To understand the agent, see
+For people changing the GateX code. To *run* GateX, see [operations.md](operations.md). To understand the engine, see
 [agent.md](agent.md).
 
 ## Repository layout
@@ -9,7 +9,7 @@ For people changing the code. To *run* the system, see [operations.md](operation
 ddd/
 ├── README.md  ·  CHANGELOG.md  ·  docker-compose.yml  ·  .env.example  ·  .nvmrc  ·  .editorconfig
 ├── docs/                         documentation, diagram sources (diagrams/) and rendered images (images/)
-├── samples/talentra/             the Talentra workbook and two draft scorecards
+├── samples/talentra/             the Talentra workbook and sample scorecards
 ├── scripts/                      checkDocs.mjs: verifies links, anchors, paths and folder trees in the docs
 │
 ├── shared/src/                   types and the scorecard schema, used by server and dashboard
@@ -20,7 +20,7 @@ ddd/
 │   ├── config/                   models.json (live roster) · models.mock.json (demo roster)
 │   ├── scripts/                  modelsCheck.ts · seedDemo.ts · patchCells.ts · scorecardToExcel.ts
 │   ├── src/
-│   │   ├── agent/                ★ the evaluator agent (see agent.md)
+│   │   ├── agent/                ★ the GateX engine (see agent.md)
 │   │   │   ├── checks/             built-in code checks
 │   │   │   └── prompts/            versioned rater and consolidator prompts
 │   │   ├── api/                  Express routes (app.ts) and EvaluationService (service.ts)
@@ -44,7 +44,7 @@ ddd/
 ### Dependency rules
 
 `web` → `/api` · `api` → `agent`, `db`, `report` · `agent` → `llm`, `excel`, `util` · `db` and `report` → `agent` (via
-`agent/index.ts` only). **The agent must never import `api/`, `db/` or `report/`.** See
+`agent/index.ts` only). **Keep `agent/` free of imports from `api/`, `db/` and `report/`.** See
 [architecture.md](architecture.md#dependency-rules). Check it any time with:
 
 ```bash
@@ -67,9 +67,9 @@ npm run typecheck && npm test
 | `npm run typecheck` | TypeScript on shared, server and web |
 | `npm run build` | Production build of the dashboard |
 | `npm run docs:check` | Verifies every link, anchor, repository path and folder tree written in the docs |
-| `npm run evaluate -- --workbook ... --scorecard ... --mock` | One evaluation from the command line |
+| `npm run evaluate -- --workbook ... --scorecard ... --mock` | One check from the command line |
 | `npm run models:check -- --ping` | Check the real model roster |
-| `npm run seed:demo -w server` | Fill a running server with three demo iterations |
+| `npm run seed:demo -w server` | Fill a running server with three demo rounds |
 | `npm run scorecard:xlsx -- in.yaml [out.xlsx]` | Convert a YAML scorecard into the Excel layout |
 
 Use `MOCK_LLM=1` for everything that does not need a real model.
@@ -85,29 +85,31 @@ Use `MOCK_LLM=1` for everything that does not need a real model.
   inputs, which is why they are easy to test.
 - **Comments explain why**, not what. Cite the PDF page when code exists because of a PDF rule.
 - **The dashboard** uses plain CSS built from design tokens (`styles/tokens.css`), no UI framework. See [Look and feel](#look-and-feel).
+- **Plain words for people.** Say "file", "scorecard", "Examiner 1, 2, 3", "Final reviewer", "issue" and "path to green" in anything a user reads. Codes such as `F-01` belong in the technical pages.
 
 ## Testing
 
-The suite is built around the PDF's rules. 225 server tests and 3 dashboard tests, all deterministic.
+The suite is built around the PDF's rules. The server and dashboard tests are all repeatable: no test needs a real model.
 
 | File | What it proves |
 |---|---|
-| `verdict.test.ts` | The decision table: 90 / 75 edges, critical gates, human-only evidence, overrides, HIGH findings block green |
-| `pathToGreen.test.ts` | Critical gates first, smallest set, blocking findings, human evidence |
+| `verdict.test.ts` | The colour bands (60 and 75 edges, one fixed rule), the "Needs attention" notes for must-pass questions and HIGH issues, questions with nothing to mark (skip or zero), overrides, no reason ever waits for a person |
+| `pathToGreen.test.ts` | Critical gates first, smallest set, blocking findings, never waiting for a person |
+| `resolve.test.ts` | Scorecards in any layout: format detection, conversion cache (memory, disk, restarts, damaged files), concurrent submissions |
 | `checks.test.ts` | Each built-in check, `where` filters, a check that cannot run, band edges |
 | `evidence.test.ts` | Real cell accepted; invented sheet, cell, quote or address rejected |
 | `scorecard.test.ts` | The PDF format, error messages, the shipped samples, **and the example in the docs** |
 | `scorecardExcel.test.ts` | The Excel layout: every field, band presets, forgiving spellings, row-numbered errors, and **YAML → Excel → back gives the identical scorecard and hash** |
 | `reader.test.ts` | The real Talentra file opens; read-only; dates, rich text, formulas |
-| `orchestrator.test.ts` | The whole pipeline; every guardrail; every kind of misbehaving model; planted defects must never be green |
+| `orchestrator.test.ts` | The whole pipeline; every safeguard; every kind of model answer (good, badly shaped, no evidence, unavailable); planted defects must never be green |
 | `promptSize.test.ts` | What raters are sent; token budgets for the samples (regression guard) |
-| `providers.test.ts` | Groq/Gemini adapters against recorded response shapes: retries, back-off, key never in an error |
+| `providers.test.ts` | The model service adapters against recorded response shapes: retries, back-off, key never in an error |
 | `api.test.ts` | Every endpoint, validation errors, evidence and override, downloads, iteration history |
 | `report.test.ts` | Eight sections, in order, in both formats; the core never changes |
 | `fallback.test.ts` | Fallback models: same family, named in the report, ordered, protect the consolidator, show live, approved-only, skipped without a key |
 | `preflight.test.ts` | The size check before submit, including fallbacks |
 | `sectionPlanner.test.ts`, `sectionTokens.test.ts` | Sectioned scoring: grouping by `reads`, column narrowing, per-section size check, what the consolidator is sent, a full mock run |
-| `catalog.test.ts`, `cli.test.ts`, `dbErrors.test.ts` | Model listing, command-line paths, and the plain-language database start-up errors |
+| `catalog.test.ts`, `cli.test.ts`, `dbErrors.test.ts` | Model listing, command-line paths, and the plain-language database start-up messages |
 
 **Scripted models.** `llm/mock.ts` answers from the real prompt by persona, chosen by model name:
 
@@ -115,11 +117,11 @@ The suite is built around the PDF's rules. 225 server tests and 3 dashboard test
 |---|---|
 | `mock-strict` / `mock-mid` / `mock-lenient` / `mock-low` | Scores 3 / 4 / 5 / 1 with valid citations |
 | `mock-alarmist` | Scores 5 but raises a HIGH finding |
-| `mock-garbage` | Replies with text that is not JSON |
+| `mock-garbage` | Replies in the wrong shape (to test the repair step) |
 | `mock-nocite` | Scores with no evidence |
 | `mock-abstain` | Declines every dimension (not measurable) |
-| `mock-down` | The provider fails |
-| `mock-consolidator` / `-unresolved` / `-greedy` / `-down` | Reconciles / refuses to resolve / answers out of range / fails |
+| `mock-down` | The service is unavailable |
+| `mock-consolidator` / `-unresolved` / `-greedy` / `-down` | Final reviewer: compares / leaves a gap unresolved / answers out of range / unavailable |
 
 **Planted defects.** `server/scripts/patchCells.ts` edits the cell XML of the real Talentra workbook, so tests can plant a
 4-level node, a duplicate id or missing definitions and assert the result is never green, even with perfect raters.
@@ -130,8 +132,7 @@ The suite is built around the PDF's rules. 225 server tests and 3 dashboard test
 TEST_DATABASE_URL=postgres://ddd:ddd@localhost:5432/ddd npm test -w server
 ```
 
-Each test harness creates its own schema, so they do not disturb each other. Passing tests prove the rules and the
-plumbing. They do **not** prove how good a live model is; that is what calibration is for (not built).
+Each test harness creates its own schema, so they do not disturb each other. The tests prove the rules and the plumbing; the test library below measures real runs.
 
 ## Look and feel
 
@@ -145,7 +146,7 @@ The dashboard follows a few rules so it stays consistent as it grows.
   radii, shadows and motion timings are tokens too. Reach for a token before writing a number.
 - **Colour has jobs.** Green, amber and red mean verdicts and nothing else. Teal is the agent colour (accents, primary buttons).
   Blue marks "counted by code".
-- **Plain words, in one place.** Every label, help text and result headline lives in `web/src/copy.ts` ("Must-pass checks", "AI examiners",
+- **Plain words, in one place.** Every label, help text and result headline lives in `web/src/copy.ts` ("Must-pass checks", "Examiner 1", "Final reviewer",
   "What to fix"). Change a word there, not in the pages. Prefer a short everyday word over the PDF's term, and put the PDF term in the hint.
 - **Motion is gentle and optional.** Each page's blocks rise in once, one after another (the `.page` wrapper in `Layout`
   is keyed by the address). The score ring draws itself and counts up, the threshold marker slides to the score, hover and
@@ -175,14 +176,44 @@ The dashboard follows a few rules so it stays consistent as it grows.
 3. Test it in `checks.test.ts`: the pass case, the failing cells, and `where`.
 4. Document it in [scorecard-reference.md](scorecard-reference.md#built-in-checks).
 
-### Add a model provider
+### Add a model service
 
 - OpenAI-compatible: add it under `providers` in `server/config/models.json` (`type`, `baseUrl`, `keyEnv`) and its models to
   `approved`. No code.
 - Another API shape: implement `LlmProvider` in `llm/` (see `gemini.ts`), add a `type` to `config.ts` and a case in
   `llm/registry.ts`, and cover retries and error messages in `providers.test.ts`. Keys go in headers, never URLs.
 
-### Change what the models are told
+### Measure a change to the evaluator
+
+The test library (`/library` in the dashboard) is how you tell better from worse.
+1. `npm run survey -- --folder <dir>` (no model): can the app read every file, and what does it see?
+2. `npm run evaluate -- --workbook <file> --scorecard <scorecard> --out data/live-<name>` (live models): a real run.
+3. Check each issue against the real file and write a verdict per issue to `data/reviews/<case>.json`
+   (`{ "labels": [{ "id": "F-01", "verdict": "real|partly|wrong|vague|duplicate|unchecked", "note": "why" }] }`).
+4. Add the pair to `data/library/<case>.json` (title, file names, and each run with its folder and review file).
+5. Change the filter or a prompt, then `npm run replay -- --run data/live-<name> --workbook <file> --labels data/reviews/<case>.json --show`
+   re-runs the finding filter on that run for free and says whether it dropped anything real. Only a prompt change needs a new live run.
+
+6. `npm run reliability` re-measures how often each model family's issues were right and saves `data/library/reliability.json`, which
+   every later run reads (an issue only a rarely-right Examiner raised is set aside). Re-run it after adding verdicts.
+
+### Before handing a build over: the release check
+
+`npm run release:check` runs, with no model call: the type-check, every server and web test (including the planted-defect test, where the code sweep must find all
+eight planted defects and nothing in a clean register), the docs check, and the finding filter replayed on every labelled run in `data/library` (it fails if the
+filter sets aside an issue labelled real or partly right). `npm run release:check -- --live` also runs `npm run presence:eval`, which asks the live final reviewer
+whether the issues in `data/presence/step2-labels.json` are already answered by the file; it fails if a labelled real gap is dropped. It costs a few cents.
+Add a labelled issue to that file whenever GateX wrongly keeps or drops one.
+
+### Test with planted defects
+
+`npm run planted -- --workbook <good register> --scorecard <scorecard> --label <name> [--models <models.json>] [--seed 1]` plants eight known mistakes in
+a copy of the register (a different seed plants them in different rows), runs the app on it with live models and scores the report against what was
+planted: how many the report points at, how many the Examiners found alone, how many the row-by-row code sweep found, and what each Examiner found.
+`server/config/candidates/` holds rosters for trying other models: one run tests three models at once, one per Examiner slot. The result is saved in
+`data/planted/<label>/result.json` and shown on the Test library page. Use it before and after a change to the sweep or the prompts.
+
+### Change what the Examiners are told
 
 Edit `agent/prompts/rater.ts` or `consolidator.ts` and **bump `PROMPT_VERSION`**. Update any test that checks prompt
 content, and treat earlier iterations as not comparable.
@@ -194,7 +225,7 @@ Check it on `pg-mem` (run the tests) and on a real Postgres.
 
 ### Change the verdict rule
 
-The PDF fixes the rule, so change it only on the mentor's decision. Edit `agent/verdict.ts`, update the table in
+The colour rule is fixed on purpose, so change it only on the owner's decision. Edit `agent/verdict.ts`, update the table in
 `verdict.test.ts`, the diagram `docs/diagrams/05-verdict-rule.mmd`, [agent.md](agent.md) and
 [pdf-traceability.md](pdf-traceability.md).
 
@@ -207,7 +238,7 @@ hand-laid-out SVG. After editing a `.mmd` file:
 bash docs/diagrams/render.sh      # needs Node; the first run downloads a headless Chromium
 ```
 
-Commit both the source and the rendered SVG.
+Keep the source and the rendered SVG together.
 
 The main architecture diagram, `docs/diagrams/00-architecture.mmd`, is different: it is pasted **as live Mermaid** into
 the README and `docs/architecture.md` (GitHub draws it, so fonts and themes always fit). The first line of each pasted
@@ -223,8 +254,8 @@ colours from the tokens.
 ## Definition of done
 
 - [ ] `npm run typecheck` and `npm test` pass (and `TEST_DATABASE_URL` tests if storage changed)
-- [ ] New behaviour has a test, including the failing case
+- [ ] New behaviour has a test, including the edge cases
 - [ ] If a PDF rule is involved, [pdf-traceability.md](pdf-traceability.md) is updated
 - [ ] If behaviour users see changed, the docs and `CHANGELOG.md` are updated, and `npm run docs:check` passes
-- [ ] The agent still imports nothing from `api/`, `db/` or `report/`
+- [ ] `agent/` still imports nothing from `api/`, `db/` or `report/`
 - [ ] No secret, key or client document is committed (`.env` is git-ignored)

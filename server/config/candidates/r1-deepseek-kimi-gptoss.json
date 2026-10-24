@@ -1,0 +1,49 @@
+{
+  "approved": [
+    "bedrock:deepseek.v3.2",
+    "bedrock:moonshotai.kimi-k2.5",
+    "bedrock:openai.gpt-oss-120b-1:0",
+    "bedrock:us.amazon.nova-pro-v1:0"
+  ],
+  "providers": {
+    "bedrock": {
+      "type": "bedrock",
+      "region": "us-east-1",
+      "keyEnv": "AWS_BEARER_TOKEN_BEDROCK"
+    }
+  },
+  "raters": [
+    {
+      "id": "A",
+      "provider": "bedrock",
+      "model": "deepseek.v3.2",
+      "family": "deepseek"
+    },
+    {
+      "id": "B",
+      "provider": "bedrock",
+      "model": "moonshotai.kimi-k2.5",
+      "family": "moonshot"
+    },
+    {
+      "id": "C",
+      "provider": "bedrock",
+      "model": "openai.gpt-oss-120b-1:0",
+      "family": "openai"
+    }
+  ],
+  "consolidator": {
+    "id": "K",
+    "provider": "bedrock",
+    "model": "us.amazon.nova-pro-v1:0",
+    "family": "amazon"
+  },
+  "settings": {
+    "temperature": 0,
+    "maxOutputTokens": 8192,
+    "timeoutMs": 120000,
+    "retries": 5,
+    "sectionConcurrency": 3,
+    "repeats": 1
+  }
+}

@@ -32,7 +32,10 @@ scorecard:
     expect(scorecard.version).toBe('1');
     expect(scorecard.dimensions[0]).toMatchObject({ measuredBy: 'raters', critical: true });
     expect(scorecard.dimensions[0]!.anchors![5]).toBe('>=98%');
-    expect(scorecard.dimensions[1]!.measuredBy).toBe('human');
+    // A question written for a person is scored by the examiners, on the standard scale.
+    expect(scorecard.dimensions[1]).toMatchObject({ measuredBy: 'raters', critical: true });
+    expect(Object.keys(scorecard.dimensions[1]!.anchors!)).toHaveLength(6);
+    expect(scorecard.dimensions[1]!.measure).toMatch(/Score only what the file itself shows/);
     expect(scorecard.artifact.sheets[0]).toEqual({ name: 'Tree', headerRow: 1 });
   });
 
@@ -78,7 +81,8 @@ describe('the shipped sample scorecards', () => {
     const { scorecard } = parseScorecard(await readFile(new URL(`../../samples/talentra/${file}`, import.meta.url), 'utf8'), file);
     expect(scorecard.frozen).toBe(true);
     expect(scorecard.dimensions.reduce((sum, d) => sum + d.weight, 0)).toBe(100);
-    expect(scorecard.dimensions.some((d) => d.measuredBy === 'human' && d.critical)).toBe(true);
+    expect(scorecard.dimensions.some((d) => d.measuredBy === 'human')).toBe(false);
+    expect(scorecard.unmeasured).toBe('skip');
     for (const d of scorecard.dimensions.filter((x) => x.measuredBy === 'raters')) expect(Object.keys(d.anchors!)).toHaveLength(6);
   });
 });
@@ -93,10 +97,41 @@ describe('the documentation examples', () => {
     expect(scorecard.dimensions.map((d) => [d.id, d.measuredBy, d.critical])).toEqual([
       ['C01', 'code', true],
       ['J01', 'raters', false],
-      ['H01', 'human', true],
+      ['H01', 'raters', true],
     ]);
     expect(scorecard.thresholds).toEqual({ accept: 90, refine: 75 });
     expect(scorecard.gate).toBe('D1');
     expect(scorecard.dimensions[0]!.check!.bands.map((b) => b.score)).toEqual([5, 4, 3, 1]);
+  });
+});
+
+describe('scoring without a person', () => {
+  it('freezes every scorecard by its hash, so frozen: false (or no frozen line) is accepted and hashes the same', () => {
+    const frozen = parseScorecard(CLEAN_SCORECARD_YAML);
+    const open = parseScorecard(CLEAN_SCORECARD_YAML.replace('frozen: true', 'frozen: false'));
+    const absent = parseScorecard(CLEAN_SCORECARD_YAML.replace('  frozen: true\n', ''));
+    expect(open.scorecard.frozen).toBe(true);
+    expect(absent.scorecard.frozen).toBe(true);
+    expect(open.hash).toBe(frozen.hash);
+    expect(absent.hash).toBe(frozen.hash);
+  });
+
+  it('reads unmeasured as skip by default, accepts zero, and reads the old "person" setting as skip', () => {
+    const withSetting = (v: string) => parseScorecard(CLEAN_SCORECARD_YAML.replace('frozen: true', `frozen: true\n  unmeasured: ${v}`)).scorecard.unmeasured;
+    expect(parseScorecard(CLEAN_SCORECARD_YAML).scorecard.unmeasured).toBe('skip');
+    expect(withSetting('zero')).toBe('zero');
+    expect(withSetting('person')).toBe('skip');
+    expect(() => withSetting('later')).toThrow(/unmeasured/);
+  });
+
+  it('keeps the anchors a person-question already has, and folds its measure and needs into what the examiners are asked', () => {
+    const yaml = CLEAN_SCORECARD_YAML.replace(
+      '      measurable_by_agent: false',
+      '      measured_by: human\n      measure: Can the author defend it?\n      needs: An interview.\n      anchors: { 5: a, 4: b, 3: c, 2: d, 1: e, 0: f }',
+    );
+    const h = parseScorecard(yaml).scorecard.dimensions.find((d) => d.id === 'H01')!;
+    expect(h.measuredBy).toBe('raters');
+    expect(h.anchors![5]).toBe('a');
+    expect(h.measure).toMatch(/^Can the author defend it\? An interview\. Score only what the file itself shows/);
   });
 });

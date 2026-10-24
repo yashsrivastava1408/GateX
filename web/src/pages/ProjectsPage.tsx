@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { ProjectSummary } from '@ddd/shared';
 import { api } from '../api';
 import { Chip, DecisionChip } from '../components/Chip';
-import { Sparkline } from '../components/Charts';
+import { ConfirmDelete } from '../components/ConfirmDelete';
 import { Icon } from '../components/Icons';
+import { useToast } from '../components/Toast';
 import { Card, EmptyState, ErrorBanner, Loading, PageHeader } from '../components/Layout';
 import { formatScore, timeAgo } from '../format';
 import { useDocumentTitle, useResource } from '../hooks';
@@ -28,9 +30,9 @@ function LatestChip({ project }: { project: ProjectSummary }) {
 
 function HowItWorks() {
   const steps = [
-    { n: '1', title: 'Bring the work and its scorecard', body: 'A schema workbook and the frozen scorecard that says how it is scored. People define both; the agent never edits them.' },
-    { n: '2', title: 'Three raters, one consolidator', body: 'Counted checks run in code. Three blind models from different families score the judgement dimensions, and a fourth reconciles them.' },
-    { n: '3', title: 'Fix, resubmit, watch it turn green', body: 'Every iteration is scored and kept. The report lists the path to green; a person fixes the file and runs it again.' },
+    { n: '1', title: 'Add your file and its scorecard', body: 'Your Excel or PDF file, and the scorecard that says how it is marked. GateX never changes them.' },
+    { n: '2', title: 'Three examiners and a final reviewer', body: 'The computer counts what it can. Three examiners mark the rest on their own, and the final reviewer compares their marks.' },
+    { n: '3', title: 'Get your report', body: 'Fixed rules decide the result. The report lists what to fix, in order, and you can download it as PDF or Excel.' },
   ];
   return (
     <div className="how">
@@ -48,6 +50,8 @@ function HowItWorks() {
 export function ProjectsPage() {
   useDocumentTitle('Projects');
   const navigate = useNavigate();
+  const toast = useToast();
+  const [removing, setRemoving] = useState<ProjectSummary | null>(null);
   const projects = useResource(api.projects, [], (list) => (list.some((p) => p.latest && p.latest.status !== 'done' && p.latest.status !== 'failed') ? 2000 : null));
   const list = projects.data ?? [];
 
@@ -62,12 +66,27 @@ export function ProjectsPage() {
         title="Projects"
         actions={
           <Link to="/new" className="btn btn-primary">
-            <Icon name="plus" /> New evaluation
+            <Icon name="plus" /> New check
           </Link>
         }
       >
-        Each schema you evaluate is a project, and every submission is an iteration of it.
+        Each file you check lives in a project. Open one to see its reports.
       </PageHeader>
+
+      {removing && (
+        <ConfirmDelete
+          title={`Delete “${removing.name}”?`}
+          onClose={() => setRemoving(null)}
+          onConfirm={async () => {
+            await api.deleteProject(removing.id);
+            setRemoving(null);
+            projects.reload();
+            toast('Project deleted');
+          }}
+        >
+          The project and its {removing.runCount} saved {removing.runCount === 1 ? 'report' : 'reports'}, with their scores, issues and files, are removed for good. This cannot be undone.
+        </ConfirmDelete>
+      )}
 
       {projects.error && <ErrorBanner message={projects.error} onRetry={projects.reload} />}
       {projects.loading && <Loading label="Loading projects" />}
@@ -79,11 +98,11 @@ export function ProjectsPage() {
             title="Nothing checked yet"
             action={
               <Link to="/new" className="btn btn-primary">
-                <Icon name="plus" /> Evaluate your first schema
+                <Icon name="plus" /> Check your first file
               </Link>
             }
           >
-            Submit a schema workbook with its frozen scorecard to get a verdict and a path to green.
+            Add your file and its scorecard to get a result (green, amber or red) and the steps to improve it.
           </EmptyState>
           <HowItWorks />
         </Card>
@@ -92,8 +111,8 @@ export function ProjectsPage() {
       {list.length > 0 && (
         <>
           <div className="stats">
-            <Stat label="Projects" value={list.length} hint="schemas being tracked" />
-            <Stat label="Checks" value={evaluations} hint="rounds marked so far" />
+            <Stat label="Projects" value={list.length} hint="files you are tracking" />
+            <Stat label="Checks" value={evaluations} hint="rounds checked so far" />
             <Stat label="Green" value={green} hint="latest round passed" />
             <Stat label="Needs attention" value={attention} hint="still need a fix" />
           </div>
@@ -106,10 +125,10 @@ export function ProjectsPage() {
                   <th>Project</th>
                   <th>Latest result</th>
                   <th className="num">Score</th>
-                  <th>Trend</th>
-                  <th className="num">Rounds</th>
+                  <th className="num">Checks</th>
                   <th>Scorecard</th>
                   <th>Updated</th>
+                  <th><span className="sr-only">Delete</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -125,12 +144,14 @@ export function ProjectsPage() {
                       <LatestChip project={p} />
                     </td>
                     <td className="num mono">{formatScore(p.latest?.weightedScore)}</td>
-                    <td>
-                      <Sparkline values={p.scores} />
-                    </td>
                     <td className="num">{p.runCount}</td>
                     <td className="mono faint">{p.latest?.scorecardId ?? '—'}</td>
                     <td className="faint nowrap">{timeAgo(p.latest?.createdAt)}</td>
+                    <td className="num">
+                      <button type="button" className="btn btn-ghost btn-sm row-delete" aria-label={`Delete ${p.name}`} onClick={(e) => { e.stopPropagation(); setRemoving(p); }}>
+                        <Icon name="trash" size={14} />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

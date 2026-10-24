@@ -1,120 +1,97 @@
 import ExcelJS from 'exceljs';
-import type { Decision, Report } from '@ddd/shared';
-import { improvementPlan } from './improvements.js';
+import { BRAND, bandOf, type Decision, type Report, type Severity } from '@ddd/shared';
+import { BAND_WORD, buildView, formatNumber } from './view.js';
 
-const SEV_FILL: Record<string, string> = { HIGH: 'FFF8D7D5', MEDIUM: 'FFFBEBCB', LOW: 'FFD9E8F7', SCORE: 'FFEDEDEF', PERSON: 'FFE6DFF5' };
-const FILL: Record<Decision, string> = { green: 'FF1F8A4C', amber: 'FFB7791F', red: 'FFB4322F' };
+const NAVY = 'FF0F1A30';
+const solid = (argb: string): ExcelJS.Fill => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } });
+// Strong fills for the verdict, soft fills for scores and priorities. Green, amber and red follow the one score rule.
+const STRONG: Record<Decision, string> = { green: 'FF2E9E5B', amber: 'FFDD9A1C', red: 'FFCC4540' };
+const SOFT: Record<Decision, string> = { green: 'FFDDF1E5', amber: 'FFFCEFD0', red: 'FFF8D9D7' };
+const SEV_SOFT: Record<Severity, string> = { HIGH: 'FFF8D9D7', MEDIUM: 'FFFCEFD0', LOW: 'FFDCE8F8' };
 
 function sheet(workbook: ExcelJS.Workbook, name: string, columns: Array<{ header: string; width: number }>) {
   const ws = workbook.addWorksheet(name, { views: [{ state: 'frozen', ySplit: 1 }] });
   ws.columns = columns.map((c) => ({ header: c.header, width: c.width }));
   const header = ws.getRow(1);
   header.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-  header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1B1B1F' } };
-  ws.eachRow(() => undefined);
+  header.fill = solid(NAVY);
+  header.height = 22;
   return ws;
 }
 
-const where = (loc: { sheet: string; cell: string } | null) => (loc ? `${loc.sheet}!${loc.cell}` : '');
-
-/** The eight-section report as a workbook, one sheet per section (PDF page 11). */
-export async function renderXlsx(report: Report): Promise<Buffer> {
+/** The report as a workbook with plainly named sheets: Summary, Areas, Issues, Strengths, Examiners, Path to green, Not checked. */
+export async function renderXlsx(input: Report): Promise<Buffer> {
+  const v = buildView(input);
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = 'DDD Evaluator';
-  const { header, verdict } = report;
-  const raterIds = header.raters.map((r) => r.id);
+  workbook.creator = BRAND.name;
+  workbook.title = `${BRAND.name} report - ${v.fileName}`;
 
-  const plan = sheet(workbook, 'What to improve', [
-    { header: 'Priority', width: 9 }, { header: 'Type', width: 12 }, { header: 'Dimension', width: 38 }, { header: 'Where', width: 22 },
-    { header: 'Problem', width: 55 }, { header: 'What to do', width: 65 }, { header: 'Go back to', width: 12 }, { header: 'Score gain', width: 11 }, { header: 'Done', width: 8 },
+  const s = sheet(workbook, 'Summary', [{ header: BRAND.name, width: 26 }, { header: BRAND.tagline, width: 28 }, { header: '', width: 90 }]);
+  const verdictRow = s.addRow(['Result', `${BAND_WORD[v.decision]} - ${v.headline}`, v.subline]);
+  verdictRow.getCell(2).fill = solid(STRONG[v.decision]);
+  verdictRow.getCell(2).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+  s.addRow(['Score', `${formatNumber(v.score)} out of 100`, `Green needs ${v.thresholds.accept} or more. Amber is ${v.thresholds.refine} to ${v.thresholds.accept - 1}. Red is below ${v.thresholds.refine}.`]);
+  s.addRow(['File', v.fileName, '']);
+  s.addRow(['Scorecard', v.scorecard, '']);
+  s.addRow(['Checked on', v.finishedLong, '']);
+  s.addRow(['Check number', v.checkNumber, '']);
+  s.addRow(['Marked by', `${v.examinerCount} examiners and a Final reviewer`, v.examiners.join(', ')]);
+  if (v.report.header.instructions) s.addRow(['Extra instructions', v.report.header.instructions, '']);
+  s.addRow([]);
+  s.addRow(['What this means']).font = { bold: true };
+  for (const m of v.meaning) s.addRow(['', '', m]);
+  s.addRow([]);
+  s.addRow(['Key numbers']).font = { bold: true };
+  s.addRow(['Must fix', v.bySeverity.HIGH.length, 'Issues to fix first']).getCell(2).fill = solid(SEV_SOFT.HIGH);
+  s.addRow(['Should fix', v.bySeverity.MEDIUM.length, '']).getCell(2).fill = solid(SEV_SOFT.MEDIUM);
+  s.addRow(['Nice to fix', v.bySeverity.LOW.length, '']).getCell(2).fill = solid(SEV_SOFT.LOW);
+  s.addRow(['Key checks passed', `${v.keyChecks.passed} of ${v.keyChecks.total}`, 'A key check must score 4 or more']);
+  s.addRow(['Areas scoring 4 or more', `${v.areasAtFour.count} of ${v.areasAtFour.of}`, 'The pass mark is 4 out of 5']);
+
+  const a = sheet(workbook, 'Areas', [
+    { header: 'Area', width: 46 }, { header: 'Score out of 5', width: 15 }, { header: 'Result', width: 26 }, { header: 'Key check', width: 11 }
   ]);
-  for (const row of improvementPlan(report)) {
-    const added = plan.addRow([row.priority, row.severity === 'SCORE' ? 'LOW SCORE' : row.severity === 'PERSON' ? 'NEEDS A PERSON' : row.severity, row.dimension, row.where, row.problem, row.action, row.returnTo, row.gain ?? '', '']);
-    added.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: SEV_FILL[row.severity] ?? 'FFFFFFFF' } };
-    added.getCell(2).font = { bold: true };
-  }
-  plan.autoFilter = { from: 'A1', to: 'I1' };
-
-  const h = sheet(workbook, '1 Header', [{ header: 'Item', width: 26 }, { header: 'Value', width: 90 }]);
-  h.addRows([
-    ['Project', header.projectName],
-    ['Iteration', header.iteration],
-    ['Artifact', header.artifactName],
-    ['Artifact hash', header.artifactHash],
-    ['Scorecard', `${header.scorecardName} v${header.scorecardVersion}`],
-    ['Scorecard hash', header.scorecardHash],
-    ['Scorecard approval', header.scorecardApproval ?? 'not stated'],
-    ['Gate', header.gate === 'D1' ? 'D1 schema design' : 'D3 output document'],
-    ['Step', header.step ?? ''],
-    ...header.raters.map((r) => [`Rater ${r.id}`, `${r.provider} / ${r.model} (${r.family})`]),
-    ['Consolidator', `${header.consolidator.provider} / ${header.consolidator.model} (${header.consolidator.family})`],
-    ['Prompt version', header.promptVersion],
-    ...(header.instructions ? [['Extra instructions', header.instructions], ['Instructions hash', header.instructionsHash ?? '']] : []),
-    ['Run id', header.runId],
-    ['Started', header.startedAt],
-    ['Finished', header.finishedAt],
-  ]);
-
-  const v = sheet(workbook, '2 Verdict', [{ header: 'Item', width: 28 }, { header: 'Value', width: 28 }, { header: 'Detail', width: 80 }]);
-  const decisionRow = v.addRow(['Decision', verdict.decision.toUpperCase(), verdict.reasons.join(' ')]);
-  decisionRow.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: FILL[verdict.decision] } };
-  decisionRow.getCell(2).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-  v.addRow(['Weighted score', verdict.weightedScore, `Accept ≥ ${verdict.thresholds.accept}, refine ≥ ${verdict.thresholds.refine}`]);
-  v.addRow(['Agent verdict', verdict.agentDecision.toUpperCase(), verdict.override ? `Overridden by ${verdict.override.by}: ${verdict.override.reason}` : '']);
-  v.addRow([]);
-  v.addRow(['Critical gate', 'Score', 'Result']).font = { bold: true };
-  for (const g of verdict.criticalGates) v.addRow([`${g.dimensionId} ${g.name}`, g.score ?? '', g.status]);
-
-  const d = sheet(workbook, '3 Dimension scores', [
-    { header: 'ID', width: 8 }, { header: 'Dimension', width: 42 }, { header: 'Weight', width: 9 }, { header: 'Critical', width: 9 },
-    { header: 'Measured by', width: 13 }, ...raterIds.map((id) => ({ header: `Rater ${id}`, width: 10 })),
-    { header: 'Score', width: 8 }, { header: 'Spread', width: 8 }, { header: 'Status', width: 15 }, { header: 'Rationale', width: 80 },
-  ]);
-  for (const dim of report.dimensions) {
-    const added = d.addRow([dim.id, dim.name, dim.weight, dim.critical ? 'yes' : '', dim.measuredBy, ...raterIds.map((id) => dim.raterScores[id] ?? ''), dim.consolidated ?? '', dim.spread ?? '', dim.status, dim.rationale]);
-    if (dim.consolidated !== null) {
-      const cellRef = added.getCell(6 + raterIds.length);
-      cellRef.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: dim.consolidated >= 4 ? 'FFD6EFDF' : dim.consolidated >= 3 ? 'FFFBEBCB' : 'FFF8D7D5' } };
-      cellRef.font = { bold: true };
+  for (const area of v.areas) {
+    const row = a.addRow([area.name, area.score ?? '', area.score === null ? 'Not scored' : area.passed ? 'Pass' : 'Below the pass mark of 4', area.critical ? 'Yes' : '']);
+    if (area.band) {
+      row.getCell(2).fill = solid(SOFT[area.band]);
+      row.getCell(2).font = { bold: true };
     }
   }
 
-  const s = sheet(workbook, '4 Strengths', [{ header: 'Dimension', width: 12 }, { header: 'Strength', width: 90 }, { header: 'Where', width: 28 }]);
-  for (const item of report.strengths) s.addRow([item.dimensionId, item.text, where(item.location)]);
-
-  const f = sheet(workbook, '5 Gaps and findings', [
-    { header: 'ID', width: 8 }, { header: 'Severity', width: 11 }, { header: 'Dimension', width: 11 }, { header: 'Where', width: 28 },
-    { header: 'Finding', width: 60 }, { header: 'Detail', width: 60 }, { header: 'Recommended fix', width: 60 }, { header: 'Return to', width: 12 }, { header: 'Reported by', width: 14 },
+  const i = sheet(workbook, 'Issues', [
+    { header: 'Issue', width: 10 }, { header: 'Priority', width: 13 }, { header: 'Area', width: 38 }, { header: 'Where in the file', width: 30 },
+    { header: 'What is wrong', width: 55 }, { header: 'More detail', width: 60 }, { header: 'What to do', width: 60 }, { header: 'Done', width: 8 },
   ]);
-  for (const item of report.findings) {
-    f.addRow([item.id, item.severity, item.dimensionId, where(item.location), item.title, item.detail, item.fix, item.returnTo, item.reportedBy.join(', ')]);
+  for (const issue of v.issues) {
+    const row = i.addRow([issue.label, issue.severityWord, issue.area, issue.where, issue.title, issue.detail, issue.fix, '']);
+    row.getCell(2).fill = solid(SEV_SOFT[issue.severity]);
+    row.getCell(2).font = { bold: true };
+  }
+  i.autoFilter = { from: 'A1', to: 'H1' };
+
+  const st = sheet(workbook, 'Strengths', [{ header: 'Area', width: 40 }, { header: 'What is good', width: 90 }, { header: 'Where in the file', width: 30 }]);
+  for (const item of v.strengths) st.addRow([item.area, item.text, item.where]);
+
+  const e = sheet(workbook, 'Examiners', [
+    { header: 'Area', width: 46 }, ...v.examiners.map((name) => ({ header: name, width: 12 })), { header: 'Note', width: 80 },
+  ]);
+  for (const r of v.examinerRows) {
+    const row = e.addRow([r.area, ...r.scores.map((x) => x.score ?? ''), r.note]);
+    r.scores.forEach((x, idx) => {
+      if (x.score !== null) row.getCell(2 + idx).fill = solid(SOFT[bandOf(x.score * 20)]);
+    });
+    if (r.disagreed) row.getCell(2 + v.examiners.length).font = { color: { argb: 'FFA6671A' } };
   }
 
-  const a = sheet(workbook, '6 Rater agreement', [
-    { header: 'Dimension', width: 40 }, ...raterIds.map((id) => ({ header: `Rater ${id}`, width: 10 })),
-    { header: 'Spread', width: 9 }, { header: 'Resolution', width: 16 }, { header: 'Flagged for a person', width: 20 }, { header: 'Note', width: 80 },
-  ]);
-  for (const row of report.agreement) {
-    a.addRow([`${row.dimensionId} ${row.name}`, ...raterIds.map((id) => row.scores[id] ?? ''), row.spread ?? '', row.resolution, row.flagged ? 'yes' : '', row.note]);
-  }
-
-  const n = sheet(workbook, '7 Not measurable', [
-    { header: 'Dimension', width: 40 }, { header: 'Critical', width: 9 }, { header: 'Why', width: 50 }, { header: 'What is needed', width: 70 }, { header: 'Status', width: 60 },
-  ]);
-  for (const item of report.notMeasurable) {
-    n.addRow([`${item.dimensionId} ${item.name}`, item.critical ? 'yes' : '', item.reason, item.whatIsNeeded, item.evidence ? `Supplied by ${item.evidence.by}: ${item.evidence.note}` : 'Outstanding']);
-  }
-
-  const p = sheet(workbook, '8 Path to green', [
-    { header: 'Order', width: 8 }, { header: 'Dimension', width: 42 }, { header: 'From', width: 8 }, { header: 'To', width: 8 },
-    { header: 'Score gain', width: 11 }, { header: 'Why first', width: 15 }, { header: 'Findings to fix', width: 30 },
-  ]);
-  for (const step of report.pathToGreen.steps) {
-    p.addRow([step.order, `${step.dimensionId} ${step.name}`, step.from, step.to, step.scoreGain, step.reason, step.findingIds.join(', ')]);
-  }
+  const p = sheet(workbook, 'Path to green', [{ header: 'Step', width: 8 }, { header: 'Area', width: 46 }, { header: 'From', width: 8 }, { header: 'To', width: 8 }, { header: 'Points gained', width: 14 }, { header: 'Fixes', width: 30 }]);
+  for (const step of v.path.steps) p.addRow([step.order, step.area, step.from, step.to, step.gain, step.fixes.join(', ')]);
   p.addRow([]);
-  p.addRow([report.pathToGreen.note]);
-  for (const need of report.pathToGreen.needsPerson) p.addRow([`A person must supply: ${need}`]);
+  p.addRow(['', v.path.note]);
+  p.addRow(['', `After these fixes the score would be ${formatNumber(v.path.resultingScore)} (${BAND_WORD[v.path.resultingDecision]}).`]);
+
+  const n = sheet(workbook, 'Not checked', [{ header: 'Area', width: 46 }, { header: 'Key check', width: 11 }, { header: 'Why', width: 80 }, { header: 'In the score', width: 28 }]);
+  for (const item of v.leftOut) n.addRow([item.name, item.critical ? 'Yes' : '', item.reason, item.treatment]);
 
   for (const ws of workbook.worksheets) {
     ws.eachRow((row) => row.eachCell((c) => { c.alignment = { vertical: 'top', wrapText: true }; }));

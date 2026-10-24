@@ -1,53 +1,20 @@
-import type {
-  AgreementRow,
-  DimensionResult,
-  EvaluationCore,
-  HumanEvidence,
-  NotMeasurableItem,
-  Override,
-  Report,
-  Resolution,
-} from '@ddd/shared';
+import type { AgreementRow, EvaluationCore, NotMeasurableItem, Override, Report, Resolution } from '@ddd/shared';
 import { buildPathToGreen, buildVerdictSection } from '../agent/index.js';
 
 const RESOLUTION_NOTE: Record<Resolution, string> = {
   agreement: 'The raters agree within one point.',
   claims_checked: 'The raters differed by more than one point; the consolidator checked each claim against the artifact.',
-  lower_stands: 'The disagreement could not be resolved from the artifact, so the lower score stands. A person should review.',
-  single_rater: 'Only one rater produced a supported score. A person should review.',
+  lower_stands: 'The disagreement could not be resolved from the artifact, so the lower score stands. Flagged as uncertain.',
+  single_rater: 'Only one rater produced a supported score, so it is a single opinion. Flagged as uncertain.',
   code: 'Measured by code.',
   none: '',
 };
 
-function latestByDimension(evidence: HumanEvidence[]): Map<string, HumanEvidence> {
-  const map = new Map<string, HumanEvidence>();
-  for (const item of [...evidence].sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
-    map.set(item.dimensionId, item);
-  }
-  return map;
-}
-
 /**
- * Builds the eight-section report (PDF page 11). The evaluation itself never changes;
- * the verdict, the not-measurable list and the path to green are recomputed from it
- * whenever a person adds evidence or an override.
+ * Builds the eight-section report (PDF page 11). The evaluation itself never changes; the verdict and the
+ * path to green are recomputed from it, so an optional override shows up straight away.
  */
-export function assembleReport(core: EvaluationCore, evidence: HumanEvidence[], override: Override | null): Report {
-  const supplied = latestByDimension(evidence);
-  const specs = new Map(core.scorecard.dimensions.map((d) => [d.id, d]));
-
-  const dimensions: DimensionResult[] = core.dimensions.map((dim) => {
-    const person = supplied.get(dim.id);
-    if (!person || (dim.measuredBy !== 'human' && dim.status !== 'not_measurable')) return dim;
-    return {
-      ...dim,
-      status: person.score !== null ? 'scored' : 'not_measurable',
-      consolidated: person.score,
-      rationale: `${person.by}: ${person.note}`,
-      flagged: false,
-    };
-  });
-
+export function assembleReport(core: EvaluationCore, override: Override | null): Report {
   const agreement: AgreementRow[] = core.dimensions
     .filter((dim) => dim.measuredBy === 'raters')
     .map((dim) => ({
@@ -60,6 +27,7 @@ export function assembleReport(core: EvaluationCore, evidence: HumanEvidence[], 
       note: dim.status === 'scored' ? RESOLUTION_NOTE[dim.resolution] : dim.rationale,
     }));
 
+  const treatment = core.scorecard.unmeasured === 'zero' ? 'zero' : 'skipped';
   const notMeasurable: NotMeasurableItem[] = core.dimensions
     .filter((dim) => dim.measuredBy === 'human' || dim.status === 'not_measurable')
     .map((dim) => ({
@@ -67,24 +35,26 @@ export function assembleReport(core: EvaluationCore, evidence: HumanEvidence[], 
       name: dim.name,
       critical: dim.critical,
       weight: dim.weight,
-      reason:
-        dim.measuredBy === 'human'
-          ? 'Only a person can provide this evidence.'
-          : 'The raters could not measure this from the artifact.',
-      whatIsNeeded: specs.get(dim.id)?.needs ?? 'A person scores this dimension and records the evidence.',
-      evidence: supplied.get(dim.id) ?? null,
+      reason: dim.rationale || 'The examiners found nothing in the file that measures this.',
+      treatment,
     }));
 
-  const verdict = buildVerdictSection(core.scorecard, core.dimensions, evidence, override, core.findings);
+  const verdict = buildVerdictSection(core.scorecard, core.dimensions, override, core.findings);
+  // A score from two examiners is not a score from three: say so next to the colour, not only in the run notes.
+  const lost = core.notes.map((n) => /^Rater (\w+) \(.*\) failed and was left out/.exec(n)?.[1]).filter((id): id is string => Boolean(id));
+  if (lost.length > 0) {
+    verdict.reasons.push(`Needs attention: examiner${lost.length === 1 ? '' : 's'} ${lost.join(', ')} failed and ${lost.length === 1 ? 'was' : 'were'} left out, so this score rests on ${core.header.raters.length - lost.length} of ${core.header.raters.length} examiners. Run it again before relying on it.`);
+  }
   return {
     header: core.header,
     verdict,
-    dimensions,
+    dimensions: core.dimensions,
     strengths: core.strengths,
     findings: core.findings,
     agreement,
     notMeasurable,
-    pathToGreen: buildPathToGreen(core.scorecard, core.dimensions, evidence, core.findings),
+    pathToGreen: buildPathToGreen(core.scorecard, core.dimensions, core.findings),
     notes: core.notes,
+    ...(core.droppedFindings && core.droppedFindings.length > 0 ? { droppedFindings: core.droppedFindings } : {}),
   };
 }

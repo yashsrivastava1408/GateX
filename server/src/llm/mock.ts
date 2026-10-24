@@ -66,10 +66,22 @@ export class MockProvider implements LlmProvider {
 
     const text = request.system.includes('SCORECARD_IMPORT')
       ? this.importDraft()
-      : request.system.includes('You are the consolidator')
+      : request.system.includes('You check claims that something is missing')
+        ? this.presence(request)
+        : request.system.includes('You are the consolidator')
         ? this.consolidate(request)
         : this.rate(request);
     return { text, inputTokens: Math.ceil(request.user.length / 4), outputTokens: Math.ceil(text.length / 4) };
+  }
+
+  /** The "is it really missing?" check: every claim is answered "not present", except one whose text says "(mock-present)", which cites the first cell of its first row. */
+  private presence(request: LlmRequest): string {
+    const results = [...request.user.matchAll(/<claim id="([^"]+)">\n([\s\S]*?)<\/claim>/g)].map((m) => {
+      const first = /\[([^\]]+)\] ([A-Z]+\d+)=("(?:[^"\\]|\\.)*")/.exec(m[2]!);
+      if (m[2]!.includes('(mock-present)') && first) return { id: m[1], present: true, cell: `${first[1]}!${first[2]}`, quote: (JSON.parse(first[3]!) as string).slice(0, 30) };
+      return { id: m[1], present: false, cell: '', quote: '' };
+    });
+    return JSON.stringify({ results });
   }
 
   /** A small fixed draft, so the import screen can be shown without a live model. */
@@ -87,7 +99,7 @@ export class MockProvider implements LlmProvider {
         dimensions: [
           { id: 'G01', name: 'Purpose and scope are clear', weight: 40, critical: false, measured_by: 'raters', measure: 'Does the opening say what the document is for?', anchors, reads: ['Page 1-2'] },
           { id: 'G02', name: 'Definitions are complete', weight: 40, critical: true, measured_by: 'raters', measure: 'Is every field defined?', anchors },
-          { id: 'G03', name: 'Author understanding', weight: 20, critical: false, measured_by: 'human', needs: 'A scored interview with the author.' },
+          { id: 'G03', name: 'Author understanding', weight: 20, critical: false, measured_by: 'raters', measure: 'Could the author defend the design?', criteria: [{ id: 'G03-C01', name: 'Author interview', kind: 'unmeasurable' }, { id: 'G03-C02', name: 'Decisions explained', kind: 'judged' }] },
         ],
       },
       uncertain: ['This is the mock model: the draft is a fixed sample and does not come from your file.'],

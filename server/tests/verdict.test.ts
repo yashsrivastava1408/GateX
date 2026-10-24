@@ -1,135 +1,161 @@
 import { describe, expect, it } from 'vitest';
-import type { Finding } from '@ddd/shared';
+import { SCORE_BANDS, bandOf, type Finding } from '@ddd/shared';
 import { buildVerdictSection } from '../src/agent/verdict.js';
-import { build, evidence } from './factories.js';
+import { build } from './factories.js';
 
-const decide = (inputs: Parameters<typeof build>[0], ev = [] as ReturnType<typeof evidence>[]) => {
+const decide = (inputs: Parameters<typeof build>[0]) => {
   const { scorecard, dimensions } = build(inputs);
-  return buildVerdictSection(scorecard, dimensions, ev, null);
+  return buildVerdictSection(scorecard, dimensions, null);
 };
 
-describe('verdict rule (PDF page 12)', () => {
-  it('is green at exactly 90 with every critical gate passed', () => {
-    const v = decide([{ id: 'A', weight: 50, score: 5, critical: true }, { id: 'B', weight: 50, score: 4 }]);
-    expect(v.weightedScore).toBe(90);
-    expect(v.decision).toBe('green');
+describe('the colour of a score: below 60 red, 60 to 74 amber, 75 and above green', () => {
+  it('has one fixed rule for the whole app', () => {
+    expect(SCORE_BANDS).toEqual({ accept: 75, refine: 60 });
+    expect([0, 59.9, 60, 74.9, 75, 99, 100].map(bandOf)).toEqual(['red', 'red', 'amber', 'amber', 'green', 'green', 'green']);
   });
 
-  it('is amber just under 90, and shows it rounded down so 89.96 never reads as 90', () => {
-    const v = decide([{ id: 'A', weight: 10000, score: 5 }, { id: 'B', weight: 4, score: 0 }]);
-    expect(v.decision).toBe('green'); // 99.96
-    const under = decide([{ id: 'A', weight: 4496, score: 5 }, { id: 'B', weight: 504, score: 4 }, { id: 'C', weight: 5000, score: 4.5 }]);
-    expect(under.weightedScore).toBeLessThan(100);
-    const near = decide([{ id: 'A', weight: 1, score: 5 }, { id: 'B', weight: 2499, score: 4.5 }, { id: 'C', weight: 2500, score: 4.5 }]);
-    expect(near.weightedScore).toBeCloseTo(90, 0);
+  it('is red below 60, amber from 60 up to 75, and green from 75, by the score alone', () => {
+    expect(decide([{ id: 'A', weight: 59, score: 5 }, { id: 'B', weight: 41, score: 0 }]).decision).toBe('red');
+    expect(decide([{ id: 'A', weight: 60, score: 5 }, { id: 'B', weight: 40, score: 0 }]).decision).toBe('amber');
+    expect(decide([{ id: 'A', weight: 74, score: 5 }, { id: 'B', weight: 26, score: 0 }]).decision).toBe('amber');
+    expect(decide([{ id: 'A', weight: 75, score: 5 }, { id: 'B', weight: 25, score: 0 }]).decision).toBe('green');
+    expect(decide([{ id: 'A', weight: 100, score: 5 }]).decision).toBe('green');
   });
 
-  it('is amber from 75 up to (not including) 90 and red below 75', () => {
-    // 75 exactly: one dim at score 3.75 equivalent via weights 75/25
-    expect(decide([{ id: 'A', weight: 75, score: 5 }, { id: 'B', weight: 25, score: 0 }]).decision).toBe('amber');
-    expect(decide([{ id: 'A', weight: 74, score: 5 }, { id: 'B', weight: 26, score: 0 }]).decision).toBe('red');
-    expect(decide([{ id: 'A', weight: 89, score: 5 }, { id: 'B', weight: 11, score: 0 }]).decision).toBe('amber');
-  });
-
-  it('is amber, not green, when a critical gate is below 4 even with a high score', () => {
-    const v = decide([{ id: 'A', weight: 10, score: 3, critical: true }, { id: 'B', weight: 90, score: 5 }]);
-    expect(v.weightedScore).toBeGreaterThan(90);
+  it('shows the score rounded down, so 74.96 never reads as 75', () => {
+    const v = decide([{ id: 'A', weight: 7496, score: 5 }, { id: 'B', weight: 2504, score: 0 }]);
+    expect(v.weightedScore).toBe(74.9);
     expect(v.decision).toBe('amber');
-    expect(v.criticalGates[0]).toMatchObject({ dimensionId: 'A', status: 'failed' });
-    expect(v.reasons.join(' ')).toMatch(/Critical gate A/);
   });
 
-  it('counts an unscored dimension as 0 and fails its critical gate', () => {
+  it('reports the same fixed bands whatever the scorecard says', () => {
+    const { scorecard, dimensions } = build([{ id: 'A', weight: 100, score: 4 }], { accept: 90, refine: 75 });
+    const v = buildVerdictSection(scorecard, dimensions, null);
+    expect(v.weightedScore).toBe(80);
+    expect(v.thresholds).toEqual({ accept: 75, refine: 60 });
+    expect(v.decision).toBe('green');
+    expect(v.reasons[0]).toBe('Score 80 is in the green band (75 and above).');
+  });
+
+  it('says which band the score is in, and where the next one starts', () => {
+    expect(decide([{ id: 'A', weight: 100, score: 3 }]).reasons[0]).toBe('Score 60 is in the amber band (60 to 74). Green starts at 75.');
+    expect(decide([{ id: 'A', weight: 100, score: 2 }]).reasons[0]).toBe('Score 40 is in the red band (below 60). Amber starts at 60.');
+  });
+
+  it('counts an unscored dimension as 0, which can pull the colour down', () => {
     const v = decide([{ id: 'A', weight: 50, score: null, critical: true }, { id: 'B', weight: 50, score: 5 }]);
     expect(v.weightedScore).toBe(50);
     expect(v.decision).toBe('red');
     expect(v.criticalGates[0]!.status).toBe('failed');
   });
 
-  it('cannot be green while human-only evidence is outstanding', () => {
-    const inputs = [{ id: 'A', weight: 100, score: 5 }, { id: 'H', weight: 10, score: null, critical: true, measuredBy: 'human' as const }];
-    const pending = decide(inputs);
-    expect(pending.weightedScore).toBe(100);
-    expect(pending.decision).toBe('amber');
-    expect(pending.criticalGates.find((g) => g.dimensionId === 'H')!.status).toBe('pending');
-
-    expect(decide(inputs, [evidence('H', 5)]).decision).toBe('green');
-  });
-
-  it('uses the score a person supplied, and a low interview score fails the critical gate', () => {
-    const inputs = [{ id: 'A', weight: 90, score: 5 }, { id: 'H', weight: 10, score: null, critical: true, measuredBy: 'human' as const }];
-    const low = decide(inputs, [evidence('H', 2)]);
-    expect(low.weightedScore).toBe(94);
-    expect(low.decision).toBe('amber');
-    expect(low.criticalGates.find((g) => g.dimensionId === 'H')!.status).toBe('failed');
-  });
-
-  it('treats a note without a score as the person having supplied the evidence', () => {
-    const inputs = [{ id: 'A', weight: 100, score: 5 }, { id: 'H', weight: 10, score: null, measuredBy: 'human' as const }];
-    expect(decide(inputs, [evidence('H', null)]).decision).toBe('green');
-  });
-
-  it('keeps the latest evidence when a person updates it', () => {
-    const inputs = [{ id: 'A', weight: 90, score: 5 }, { id: 'H', weight: 10, score: null, critical: true, measuredBy: 'human' as const }];
-    const v = decide(inputs, [evidence('H', 1, '2026-10-22T09:00:00Z'), evidence('H', 5, '2026-10-22T11:00:00Z')]);
-    expect(v.decision).toBe('green');
-  });
-
   it('records an override with its reason and keeps the agent verdict visible', () => {
     const { scorecard, dimensions } = build([{ id: 'A', weight: 100, score: 2 }]);
-    const v = buildVerdictSection(scorecard, dimensions, [], {
+    const v = buildVerdictSection(scorecard, dimensions, {
       id: 'o', runId: 'r', decision: 'amber', reason: 'Lead accepts the risk', by: 'Lead', createdAt: '2026-10-22T10:00:00Z',
     });
     expect(v.agentDecision).toBe('red');
     expect(v.decision).toBe('amber');
     expect(v.reasons.join(' ')).toMatch(/overrode the verdict to AMBER: Lead accepts the risk/);
   });
-
-  it('honours the thresholds written in the scorecard', () => {
-    const { scorecard, dimensions } = build([{ id: 'A', weight: 100, score: 4 }], { accept: 80, refine: 60 });
-    expect(buildVerdictSection(scorecard, dimensions, [], null).decision).toBe('green');
-  });
 });
 
-describe('high-risk findings block green (PDF p.11)', () => {
+describe('things that need attention, which do not change the colour', () => {
   const finding = (id: string, severity: Finding['severity']): Finding => ({
     id, severity, dimensionId: 'A', location: null, title: 'x', detail: '', fix: 'f', returnTo: 'Define', source: 'raters', reportedBy: ['A'],
   });
-  const verdictWith = (findings: Finding[]) => {
-    const { scorecard, dimensions } = build([{ id: 'A', weight: 100, score: 5 }]);
-    return buildVerdictSection(scorecard, dimensions, [], null, findings);
-  };
 
-  it('a perfect score with an open HIGH finding is amber, not green', () => {
-    const v = verdictWith([finding('F-01', 'HIGH')]);
-    expect(v.weightedScore).toBe(100);
-    expect(v.decision).toBe('amber');
-    expect(v.blockingFindings).toEqual(['F-01']);
-    expect(v.reasons.join(' ')).toMatch(/1 high-risk finding blocks green until fixed: F-01/);
-  });
-
-  it('MEDIUM and LOW findings do not block green', () => {
-    const v = verdictWith([finding('F-01', 'MEDIUM'), finding('F-02', 'LOW')]);
+  it('keeps the colour green when a critical question is below 4, and says so as a note', () => {
+    const v = decide([{ id: 'A', weight: 10, score: 3, critical: true }, { id: 'B', weight: 90, score: 5 }]);
+    expect(v.weightedScore).toBeGreaterThan(90);
     expect(v.decision).toBe('green');
-    expect(v.blockingFindings).toEqual([]);
+    expect(v.criticalGates[0]).toMatchObject({ dimensionId: 'A', status: 'failed' });
+    expect(v.reasons.join(' ')).toMatch(/Needs attention: critical question A \(Dim A\) scored 3, below 4/);
   });
 
-  it('lists every blocking finding, and a low-weight dimension scoring 2 cannot slip through as green', () => {
-    // 96 weight at 5 and 4 weight at 2 scores 99.2, which the score rule alone would call green
-    const { scorecard, dimensions } = build([{ id: 'A', weight: 96, score: 5 }, { id: 'B', weight: 4, score: 2 }]);
-    const alone = buildVerdictSection(scorecard, dimensions, [], null, []);
-    expect(alone.decision).toBe('green');
-    const withHigh = buildVerdictSection(scorecard, dimensions, [], null, [{ ...finding('F-01', 'HIGH'), dimensionId: 'B' }, finding('F-02', 'HIGH')]);
-    expect(withHigh.decision).toBe('amber');
-    expect(withHigh.blockingFindings).toEqual(['F-01', 'F-02']);
-    expect(withHigh.reasons.join(' ')).toMatch(/2 high-risk findings block green until fixed: F-01, F-02/);
+  it('does not force red when a critical question is at the scorecard\'s old red line', () => {
+    const { scorecard, dimensions } = build([{ id: 'A', weight: 10, score: 2, critical: true }, { id: 'B', weight: 90, score: 5 }]);
+    scorecard.redAtOrBelow = 2;
+    const v = buildVerdictSection(scorecard, dimensions, null);
+    expect(v.decision).toBe('green');
+    expect(v.reasons.join(' ')).toMatch(/Needs attention: critical question A/);
   });
 
-  it('never turns a red into amber, and an override still wins', () => {
-    const { scorecard, dimensions } = build([{ id: 'A', weight: 100, score: 2 }]);
-    expect(buildVerdictSection(scorecard, dimensions, [], null, [finding('F-01', 'HIGH')]).decision).toBe('red');
-    const overridden = buildVerdictSection(scorecard, dimensions, [], { id: 'o', runId: 'r', decision: 'green', reason: 'accepted', by: 'Lead', createdAt: '2026-10-22T10:00:00Z' }, [finding('F-01', 'HIGH')]);
-    expect(overridden.agentDecision).toBe('red');
-    expect(overridden.decision).toBe('green');
+  it('keeps a perfect score green with an open HIGH finding, and lists it as needing a fix', () => {
+    const { scorecard, dimensions } = build([{ id: 'A', weight: 100, score: 5 }]);
+    const v = buildVerdictSection(scorecard, dimensions, null, [finding('F-01', 'HIGH'), finding('F-02', 'MEDIUM')]);
+    expect(v.weightedScore).toBe(100);
+    expect(v.decision).toBe('green');
+    expect(v.blockingFindings).toEqual(['F-01']);
+    expect(v.reasons.join(' ')).toMatch(/Needs attention: 1 high-risk finding \(F-01\) should be fixed before sign-off/);
+  });
+
+  it('lists every high-risk finding', () => {
+    const { scorecard, dimensions } = build([{ id: 'A', weight: 100, score: 4 }]);
+    const v = buildVerdictSection(scorecard, dimensions, null, [finding('F-01', 'HIGH'), finding('F-02', 'HIGH')]);
+    expect(v.blockingFindings).toEqual(['F-01', 'F-02']);
+    expect(v.reasons.join(' ')).toMatch(/2 high-risk findings \(F-01, F-02\)/);
+  });
+
+  it('notes a score only one examiner could back, or the examiners could not agree on, without changing the colour', () => {
+    const { scorecard, dimensions } = build([{ id: 'A', weight: 50, score: 5, critical: true, measuredBy: 'raters' }, { id: 'B', weight: 50, score: 5, measuredBy: 'raters' }]);
+    dimensions[0]!.resolution = 'single_rater';
+    const v = buildVerdictSection(scorecard, dimensions, null);
+    expect(v.decision).toBe('green');
+    expect(v.reasons.join(' ')).toMatch(/only one examiner could back the score, or the examiners could not agree, on A \(Dim A\)\. Run it again/);
+    dimensions[0]!.resolution = 'lower_stands';
+    expect(buildVerdictSection(scorecard, dimensions, null).reasons.join(' ')).toMatch(/only one examiner/);
+    dimensions[0]!.resolution = 'agreement';
+    expect(buildVerdictSection(scorecard, dimensions, null).reasons.join(' ')).not.toMatch(/only one examiner/);
+  });
+
+  it('notes a score built on a small part of the scorecard', () => {
+    const { scorecard, dimensions } = build([
+      { id: 'A', weight: 20, score: 5, measuredBy: 'code' },
+      { id: 'B', weight: 80, score: null, measuredBy: 'human', status: 'not_measurable' },
+    ]);
+    const v = buildVerdictSection(scorecard, dimensions, null);
+    expect(v.weightedScore).toBe(100);
+    expect(v.decision).toBe('green');
+    expect(v.reasons.join(' ')).toMatch(/Needs attention: only 20% of the scorecard could be scored/);
+  });
+});
+
+describe('nothing ever waits for a person', () => {
+  const unmeasurable = (critical = false) => ({ id: 'U', weight: 20, score: null, critical, measuredBy: 'raters' as const, status: 'not_measurable' as const });
+
+  it('leaves a question the file cannot show out of the score by default', () => {
+    const v = decide([{ id: 'A', weight: 80, score: 5 }, unmeasurable(true)]);
+    expect(v.weightedScore).toBe(100);
+    expect(v.decision).toBe('green');
+    expect(v.skipped).toEqual(['U']);
+    expect(v.criticalGates.find((g) => g.dimensionId === 'U')!.status).toBe('skipped');
+    expect(v.reasons.join(' ')).toMatch(/The file holds nothing to measure these, so they are left out of the score: U \(Dim U\)/);
+  });
+
+  it('counts such a question as 0 when the scorecard says unmeasured: zero', () => {
+    const { scorecard, dimensions } = build([{ id: 'A', weight: 80, score: 5 }, unmeasurable(true)]);
+    scorecard.unmeasured = 'zero';
+    const v = buildVerdictSection(scorecard, dimensions, null);
+    expect(v.weightedScore).toBe(80);
+    expect(v.decision).toBe('green');
+    expect(v.skipped).toEqual([]);
+    expect(v.criticalGates.find((g) => g.dimensionId === 'U')).toMatchObject({ score: 0, status: 'failed' });
+    expect(v.reasons.join(' ')).toMatch(/so they count as 0: U \(Dim U\)/);
+  });
+
+  it('treats a question an older run kept for a person like any unmeasurable one', () => {
+    const v = decide([{ id: 'A', weight: 90, score: 5 }, { id: 'H', weight: 10, score: null, critical: true, measuredBy: 'human' }]);
+    expect(v.decision).toBe('green');
+    expect(v.skipped).toEqual(['H']);
+  });
+
+  it('never asks a person for anything, in any verdict', () => {
+    const cases = [
+      decide([{ id: 'A', weight: 100, score: 5 }]),
+      decide([{ id: 'A', weight: 50, score: 2, critical: true }, unmeasurable()]),
+      decide([{ id: 'A', weight: 80, score: 4 }, { id: 'H', weight: 20, score: null, measuredBy: 'human' }]),
+    ];
+    for (const v of cases) expect(v.reasons.join(' ')).not.toMatch(/a person|must supply|human/i);
   });
 });

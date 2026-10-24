@@ -54,7 +54,7 @@ describe('how far to trust a judged score', () => {
   });
 });
 
-describe('the red line needs a score that can be trusted', () => {
+describe('the colour follows the score, not the red line or the examiners\' agreement', () => {
   const card = (): Scorecard =>
     parseScorecard(`
 scorecard:
@@ -74,13 +74,14 @@ scorecard:
     { id: 'B', name: 'b', weight: 10, critical: true, measuredBy: 'raters', status: 'scored', raterScores: {}, consolidated: 2, spread: 0, resolution, flagged: resolution !== 'agreement', rationale: '', evidence: [] },
   ] as DimensionResult[];
 
-  it('forces RED when several examiners agree, but only flags it when one examiner scored it or they disagreed', () => {
+  it('does not let a scorecard\'s red line change the colour; a shaky or single-examiner score is only noted', () => {
     const sc = card();
-    expect(decide(sc, effectiveDimensions(sc, results('agreement'), [])).decision).toBe('red');
+    // The score is 90 + 10 x 2 / 5 = 94, which is green whatever the examiners' agreement.
+    expect(decide(sc, effectiveDimensions(sc, results('agreement'))).decision).toBe('green');
     for (const resolution of ['single_rater', 'lower_stands'] as const) {
-      const verdict = decide(sc, effectiveDimensions(sc, results(resolution), []));
-      expect(verdict.decision).toBe('amber');
-      expect(verdict.reasons.join(' ')).toMatch(/cannot force RED on its own/);
+      const verdict = decide(sc, effectiveDimensions(sc, results(resolution)));
+      expect(verdict.decision).toBe('green');
+      expect(verdict.reasons.join(' ')).toMatch(/only one examiner could back the score/);
     }
   });
 });

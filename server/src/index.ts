@@ -30,6 +30,9 @@ const store = new Store(db);
 const interrupted = await store.failInterrupted();
 if (interrupted > 0) log(`${interrupted} unfinished run(s) from a previous session marked as failed`);
 
+const refreshed = await store.refreshVerdicts();
+if (refreshed > 0) log(`${refreshed} saved result(s) updated to the current decision rule`);
+
 const providers = createProviderFactory(config.models, { env, mockDelayMs: config.mockDelayMs });
 const service = new EvaluationService({ store, config, providers, env, log });
 const webDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../web/dist');

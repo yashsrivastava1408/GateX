@@ -17,9 +17,20 @@ export function serializeSheet(wb: WorkbookModel, spec: SheetSpec | string): str
   const size = wb.dimensions(real)!;
 
   let keep: Set<number> | null = null;
+  let firstRow = headerRow;
   if (columns) {
-    const table = wb.table(real, headerRow);
-    const wanted = columns.map((title) => table.headers.find((h) => h.title === title));
+    let table = wb.table(real, headerRow);
+    let wanted = columns.map((title) => table.headers.find((h) => h.title === title));
+    if (wanted.some((h) => !h)) {
+      // The titles may come from another reading of the sheet than the header row given (a reused conversion pinned row 6; the file now has its titles on row 5).
+      // If one nearby row holds every title, that row is the header; only when none does is the scorecard's column list wrong.
+      const holder = headerRowHolding(wb, real, columns, size.rows);
+      if (holder !== undefined) {
+        firstRow = holder;
+        table = wb.table(real, holder);
+        wanted = columns.map((title) => table.headers.find((h) => h.title === title));
+      }
+    }
     const missing = columns.filter((_, i) => !wanted[i]);
     if (missing.length > 0) {
       throw new UserError(
@@ -40,7 +51,7 @@ export function serializeSheet(wb: WorkbookModel, spec: SheetSpec | string): str
   };
 
   for (const [row, col, text] of wb.cells(real)) {
-    if (keep && (row < headerRow || !keep.has(col))) continue;
+    if (keep && (row < firstRow || !keep.has(col))) continue;
     if (row !== currentRow) {
       flush();
       currentRow = row;
@@ -49,6 +60,15 @@ export function serializeSheet(wb: WorkbookModel, spec: SheetSpec | string): str
   }
   flush();
   return lines.join('\n');
+}
+
+/** The first of the top rows whose cells include every one of these titles, if any. */
+function headerRowHolding(wb: WorkbookModel, sheet: string, titles: string[], rows: number): number | undefined {
+  for (let r = 1; r <= Math.min(rows, 30); r++) {
+    const have = new Set(wb.table(sheet, r).headers.map((h) => h.title));
+    if (titles.every((title) => have.has(title))) return r;
+  }
+  return undefined;
 }
 
 export function serializeSheets(wb: WorkbookModel, sheets: Array<SheetSpec | string>): string {

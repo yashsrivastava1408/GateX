@@ -5,7 +5,7 @@ export interface TabSpec {
   label: string;
   /** A number shown on the tab, for example how many problems there are. */
   count?: number;
-  /** Colours the count: red for things that block, amber for things waiting on a person. */
+  /** Colours the count: red for things that block, amber for things worth a look. */
   tone?: 'red' | 'amber' | 'accent';
 }
 

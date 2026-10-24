@@ -1,7 +1,7 @@
 # Architecture
 
-This page describes how the DDD Evaluator is put together: the parts, how they talk, where the data lives,
-and how it is meant to be deployed. For what the evaluator agent itself does, see [agent.md](agent.md).
+This page describes how GateX is put together: the parts, how they talk, where the data lives, and how it is
+deployed. For what the GateX engine does with your file, see [agent.md](agent.md).
 
 ## Contents
 
@@ -14,66 +14,65 @@ and how it is meant to be deployed. For what the evaluator agent itself does, se
 7. [Data model](#data-model)
 8. [Runtime model](#runtime-model)
 9. [Deployment](#deployment)
-10. [Failure modes](#failure-modes)
+10. [Keeping steady](#keeping-steady)
 11. [Observability](#observability)
 12. [Technology](#technology)
 
 ## Goals and constraints
 
-The system exists to carry out **Level 1** of the Agentic Roadmap: evaluator agents score every deliverable
-against its scorecard, and people keep the judgement. That fixes the shape of the design.
+GateX carries out **Level 1** of the Agentic Roadmap: every deliverable is scored against its scorecard. That fixes the shape of the design.
 
 | Goal | What it means for the design |
 |---|---|
-| Trustworthy scores | Everything that can be counted is counted in code; models only judge what needs judging, and every claim they make is checked against the file |
+| Trustworthy scores | Everything that can be counted is counted in code; the Examiners only judge what needs judging, and every claim they make is checked against the file |
 | Auditable | Every input, prompt, raw reply, score and decision is stored; any result can be explained |
-| Independent | The evaluator never edits the work it judges and never shares a session with the author; raters come from different model families |
-| People decide | The agent recommends. Human evidence and overrides are first-class, stored beside the agent's own verdict |
-| Honest under failure | Degrade visibly (flag, leave out, fail loudly), never silently |
+| Independent | GateX never edits the work it judges and never shares a session with the author; Examiners 1, 2 and 3 come from different model families |
+| Automatic | Every question is marked and the colour decided by a fixed rule, with nobody waiting; a scorecard in any layout is converted once and reused |
+| Open about how a result was made | Every step is recorded and the report says how it was produced (flags, notes, set-aside claims) |
 | Small and replaceable parts | Providers, storage and report formats sit behind thin adapters |
 
-Out of scope by design: generating schemas or scorecards, auto-fixing, template pipelines (Levels 2-4).
+GateX evaluates; you fix. That keeps the evaluator independent of the work it judges.
 
 ## System context
 
 ![System context](images/01-system-context.svg)
 
-Three kinds of people use it. The **author** submits work and fixes findings. The **peer reviewer** checks fixes
-before a re-evaluation. The **mentor or lead** supplies human-only evidence (for example the author interview),
-approves gates and may override a verdict. All three use the dashboard.
+Three kinds of people use it. The **author** adds a file and a scorecard and fixes the issues. The **peer reviewer** checks the fixes
+before the next check. The **mentor or lead** reads the reports and the score trend. Nobody has to approve a scorecard or a
+result: scoring is automatic ([ADR-17](decisions.md#adr-17-fully-automatic-scoring-no-person-in-the-loop)).
 
 ## Layers
 
 ```mermaid
 %% source: docs/diagrams/00-architecture.mmd
 flowchart TB
-  subgraph PEOPLE["PEOPLE · Level 1: people own every judgement"]
+  subgraph PEOPLE["PEOPLE · add the work and fix the issues; the marking is automatic"]
     direction LR
-    AU["Author<br/>defines schema + scorecard<br/>fixes findings"] ~~~ PR["Peer reviewer<br/>checks fixes before<br/>re-evaluation"] ~~~ ME["Mentor / Lead<br/>human evidence<br/>gates and overrides"]
+    AU["Author<br/>adds a file and a scorecard<br/>fixes the issues"] ~~~ PR["Peer reviewer<br/>checks the fixes before<br/>the next check"] ~~~ ME["Mentor / Lead<br/>reads the reports<br/>and the score trend"]
   end
 
   subgraph WEB["PRESENTATION · web/ · React 19 + Vite"]
     direction LR
-    P1["Projects"] ~~~ P2["New evaluation"] ~~~ P6["Import a<br/>scorecard"] ~~~ P3["Run report"] ~~~ P4["History"] ~~~ P5["Models"]
+    P1["Projects"] ~~~ P2["New<br/>check"] ~~~ P6["Convert a<br/>scorecard"] ~~~ P3["Report"] ~~~ P4["History"] ~~~ P5["Examiners"]
   end
 
   subgraph API["API + SERVICE · server/src/api/ · Express 5"]
     direction LR
-    RT["Routes<br/>app.ts"] ~~~ SV["EvaluationService<br/>service.ts<br/>runs in background"] ~~~ SI["Scorecard import<br/>draft, check,<br/>person approves"] ~~~ DL["Report downloads<br/>xlsx, pdf, md, json"]
+    RT["Routes<br/>app.ts"] ~~~ SV["Check service<br/>service.ts<br/>runs in the background"] ~~~ SI["Scorecard conversion<br/>any layout, kept and<br/>reused every time"] ~~~ DL["Report downloads<br/>PDF, Excel, Markdown"]
   end
 
-  subgraph AGENT["EVALUATOR AGENT · server/src/agent/ · 3 raters + 1 consolidator · verdict decided by code"]
+  subgraph AGENT["GATEX ENGINE · server/src/agent/ · 3 AI Examiners + a Final reviewer · colour decided by a fixed rule"]
     direction TB
-    ORCH["orchestrator.ts<br/>evaluate()<br/>runs the six stages,<br/>re-hashes at the end"]
+    ORCH["orchestrator.ts<br/>evaluate()<br/>runs the six steps,<br/>checks the file is unchanged at the end"]
 
-    subgraph STAGES["The six stages"]
+    subgraph STAGES["The six steps"]
       direction LR
-      S1["1 Freeze<br/>hash workbook<br/>+ scorecard"] --> S2["2 Count<br/>exact checks<br/>in code"] --> S3["3 Rate x3<br/>blind, 3 families,<br/>median of repeats"] --> S4["4 Consolidate<br/>a 4th model<br/>reconciles"] --> S5["5 Decide<br/>verdict<br/>by rule"] --> S6["6 Explain<br/>findings, path<br/>to green"]
+      S1["1 Freeze<br/>lock the file<br/>and the scorecard"] --> S2["2 Count<br/>exact counts<br/>done in code"] --> S3["3 Examiners 1-3<br/>mark on their own,<br/>blind to each other"] --> S4["4 Final reviewer<br/>compares<br/>their marks"] --> S5["5 Decide<br/>green, amber or red<br/>by a fixed rule"] --> S6["6 Explain<br/>issues, path<br/>to green"]
     end
 
     subgraph GUARD["GUARDRAILS · enforced in code, not in prompts"]
       direction LR
-      G1["evidence.ts<br/>claims must cite<br/>a real cell"] ~~~ G2["callModel.ts<br/>strict JSON, one<br/>repair attempt"] ~~~ G3["raterSchema.ts<br/>replies checked<br/>for shape"] ~~~ G4["prompts/<br/>versioned and<br/>hashed per run"]
+      G1["evidence.ts<br/>every claim must point<br/>at a real cell"] ~~~ G2["callModel.ts<br/>strict reply format,<br/>one repair attempt"] ~~~ G3["raterSchema.ts<br/>every reply checked<br/>for shape"] ~~~ G4["prompts/<br/>versioned and<br/>recorded per run"]
     end
 
     ORCH --> STAGES --> GUARD
@@ -81,17 +80,17 @@ flowchart TB
 
   subgraph ADAPT["ADAPTERS · swap one without touching the agent"]
     direction LR
-    A1["Workbook + PDF<br/>reader<br/>excel/"] ~~~ A2["Report<br/>renderer<br/>report/"] ~~~ A3["Store<br/>db/<br/>Postgres, SQL"] ~~~ A4["Provider<br/>adapters<br/>llm/"]
+    A1["File reader<br/>Excel, CSV, PDF<br/>excel/"] ~~~ A2["Report<br/>writer<br/>report/"] ~~~ A3["Store<br/>db/<br/>Postgres"] ~~~ A4["Model service<br/>adapters<br/>llm/"]
   end
 
   subgraph DATA["YOUR DATA · stays on your machine"]
     direction LR
-    UP[["Upload folder<br/>data/uploads<br/>copies, never edited"]] ~~~ RP[["Saved reports<br/>data/reports<br/>json, md, xlsx, pdf"]] ~~~ PG[("Postgres 16<br/>docker compose<br/>up --build")]
+    UP[["Upload folder<br/>data/uploads<br/>copies, never edited"]] ~~~ RP[["Saved reports<br/>data/reports<br/>PDF, Excel, Markdown"]] ~~~ PG[("Postgres 16<br/>docker compose<br/>up --build")]
   end
 
-  subgraph MODELS["MODEL PROVIDERS · approved models only"]
+  subgraph MODELS["MODEL SERVICES · approved models only"]
     direction LR
-    GQ["Groq"] ~~~ GM["Gemini"] ~~~ BR["Amazon<br/>Bedrock"] ~~~ OA["Any OpenAI-<br/>style API"]
+    GQ["Model<br/>service 1"] ~~~ GM["Model<br/>service 2"] ~~~ BR["Model<br/>service 3"] ~~~ OA["Any OpenAI-<br/>style API"]
   end
 
   PEOPLE -->|browser| WEB
@@ -128,15 +127,15 @@ flowchart TB
 
 | Layer | Folder | Responsibility |
 |---|---|---|
-| Presentation | `web/` | React dashboard: projects, new evaluation, live run, report, history, models. Talks only to `/api` |
-| API + service | `server/src/api/` | HTTP routes, request validation, uploads; `EvaluationService` validates a submission, stores it and runs the evaluation in the background |
-| **Evaluator agent** | `server/src/agent/` | The six-stage evaluation, the guardrails and the decision rule. No knowledge of HTTP, databases or report formats |
-| Adapters | `excel/`, `llm/`, `report/`, `db/` | One job each: read a workbook, call a model provider, render a report, persist data |
+| Presentation | `web/` | The dashboard: projects, check a new file, live progress, report, history, models. Talks only to `/api` |
+| API + service | `server/src/api/` | HTTP routes, request validation, uploads; `EvaluationService` validates a submission, stores it and runs the check in the background |
+| **GateX engine** | `server/src/agent/` | The six steps, the safeguards and the decision rule. No knowledge of HTTP, databases or report formats |
+| Adapters | `excel/`, `llm/`, `report/`, `db/` | One job each: read a file, call a model service, write a report, keep data |
 | Shared contract | `shared/` | Types and the scorecard schema used by both server and dashboard |
 
 ## Dependency rules
 
-Dependencies point **inwards** towards the agent, and the agent depends on very little:
+Dependencies point **inwards** towards the engine, and the engine depends on very little:
 
 ```
 web  ──►  /api  ──►  api/  ──►  agent/  ──►  llm/ · excel/ · util/
@@ -145,38 +144,36 @@ web  ──►  /api  ──►  api/  ──►  agent/  ──►  llm/ · exc
                       └──►  report/ ──►  agent/ (verdict, path to green)
 ```
 
-- `agent/` imports only `llm/`, `excel/`, `util/` and a config type. It never imports `api/`, `db/` or `report/`.
+- `agent/` imports only `llm/`, `excel/`, `util/` and a config type. It does not import `api/`, `db/` or `report/`.
 - `llm/`, `excel/` and `scorecard/` never import `agent/`.
 - Everything outside `agent/` reaches it through its single door, [`agent/index.ts`](../server/src/agent/index.ts).
 
-These were checked against the actual imports when this was written. Because the agent knows nothing about
-Express or Postgres, it can be run from the command line (`npm run evaluate`) and tested without a server.
+Because the engine knows nothing about Express or Postgres, it can be run from the command line (`npm run evaluate`) and tested without a server.
 
 ## One evaluation, end to end
 
 ![Sequence](images/03-evaluation-sequence.svg)
 
-Points worth knowing:
+How it flows:
 
 - The `POST /api/runs` call **returns at once** with `202 Accepted`. The evaluation continues in the background and
   the dashboard polls `GET /api/runs/:id` every 1.5 seconds, showing which stage is running and which model has answered.
-- All submission mistakes (unfrozen scorecard, unknown sheet, roster not ready, wrong file type) are caught **before**
-  anything is stored or any model is called, and come back as a plain-language error.
-- The three raters run in parallel; the consolidator runs after them.
-- The report you read is **assembled on read** from the stored, immutable evaluation plus any human evidence
-  and override. Adding evidence or an override never changes the agent's own scores.
+- Everything about a submission (the scorecard, the sheet names, the models, the file type) is checked **before**
+  anything is stored or any model is called, and any problem comes back as a plain-language message.
+- The three Examiners run at the same time; the Final reviewer runs after them.
+- The report you read is **assembled on read** from the stored, unchanging result plus any override recorded through
+  the API. An override never changes the agent's own scores.
 
 ## The iteration loop
 
 ![Iteration loop](images/06-iteration-loop.svg)
 
-This is PDF page 12. The agent produces the verdict and the path to green; **a person** fixes the file and
-resubmits. Each submission becomes a new iteration of the same project, scored independently. Resubmitting
-under an existing project name adds an iteration to it, so the score trend, the fixed / still-open / new findings
-and the per-dimension heatmap build up automatically.
+This is PDF page 12. GateX produces the verdict and the path to green; **you** fix the file and check it again. Each
+check becomes a new round (iteration) of the same project, scored independently. Adding a file under an existing project name adds a round to it, so
+the score trend, the fixed / still-open / new issues and the per-question heatmap build up automatically.
 
-A finding's identity across iterations (`fingerprint`) is the dimension for code findings (the failing cell moves
-as rows get fixed) and dimension + cell for rater findings.
+An issue's identity across rounds (`fingerprint`) is the question for code issues (the failing cell moves
+as rows get fixed) and question + cell for Examiner issues.
 
 ## Data model
 
@@ -184,12 +181,11 @@ as rows get fixed) and dimension + cell for rater findings.
 
 | Table | Holds |
 |---|---|
-| `projects` | A schema being iterated; name is unique |
-| `runs` | One evaluation: status and stage, both hashes, a frozen copy of the scorecard, the immutable `core` (the evaluation), the `run_log`, the score and the agent / final decision |
+| `projects` | The work being checked round after round; name is unique |
+| `runs` | One check: status and stage, both hashes, a frozen copy of the scorecard, the unchanging `core` (the result), the `run_log`, the score and the GateX / final decision |
 | `model_calls` | Every model call: provider, model, family, exact prompt, raw reply, discarded claims, tokens, latency |
-| `dimension_scores` | Each dimension's score, spread, rater scores and flag, queryable for trends |
-| `findings` | Each finding with its location, fix and fingerprint |
-| `human_evidence` | What a person supplied for a human-only dimension (optional score, note, who) |
+| `dimension_scores` | Each question's score, spread, Examiner marks and flag, queryable for trends |
+| `findings` | Each issue with its location, fix and fingerprint |
 | `overrides` | A person's override of a verdict, with the required reason |
 
 Migrations are plain SQL in `server/src/db/migrations/`, applied once each in name order, on server start or with
@@ -199,10 +195,10 @@ used for tests and the no-Docker demo.
 ## Runtime model
 
 - **One Node process** serves the API and, in production, the built dashboard.
-- **Evaluations run in-process**, in the background of the request that started them. There is no separate queue
-  or worker. This keeps the system small; the cost is that a crash loses in-flight work. On the next start,
-  any run left "queued" or "running" is marked **failed** with an explanatory message, so nothing hangs forever.
-- **Concurrency**: several evaluations can run at once. Provider rate limits are handled by the HTTP layer
+- **Checks run in-process**, in the background of the request that started them. There is no separate queue
+  or worker, which keeps the system small. On the next start, any run that was still "queued" or "running" is
+  closed with a clear message ("Submit it again"), so the list is always up to date.
+- **Concurrency**: several checks can run at once. Service rate limits are handled by the HTTP layer
   (retry with back-off, honouring `Retry-After`).
 - **State**: the database holds all state. The only files are the uploaded workbooks (`data/uploads/`), kept as
   read-only copies so a run can be re-examined.
@@ -215,24 +211,23 @@ used for tests and the no-Docker demo.
 |---|---|
 | Demo | `MOCK_LLM=1 npm run start`: scripted models, in-memory database, no keys, no Docker |
 | Local, real | `docker compose up -d db`, keys in `.env`, `npm run start` |
-| Shared / production | The same, on a VM, behind a reverse proxy that provides TLS and sign-in. **The app has no login of its own** (see [security.md](security.md)) |
+| Whole app in Docker | `docker compose up --build`: GateX and Postgres together |
+| Shared / production | The same, on a VM, behind a reverse proxy that adds HTTPS and sign-in (see [security.md](security.md)) |
 
-`docker-compose.yml` starts **Postgres only**. The application is not containerised yet.
+A single process is sufficient for a team. To grow beyond it, the natural step is to move
+`EvaluationService.execute` onto a job queue and run several workers; the engine needs no change, because it is
+a function of its inputs apart from the model calls.
 
-Scaling notes: a single process is sufficient for a team. To go beyond it, the natural step is to move
-`EvaluationService.execute` onto a job queue and run several workers; the agent needs no change, because it is
-a pure function of its inputs apart from the model calls.
+## Keeping steady
 
-## Failure modes
+How GateX handles a busy model service is described in [agent.md](agent.md#6-staying-steady-when-a-service-is-busy). At system level:
 
-How each failure is handled is tabulated in [agent.md](agent.md#6-when-things-go-wrong). At system level:
-
-| Failure | Effect | Recovery |
-|---|---|---|
-| Database down | API returns 500; nothing is lost that was stored | Restart the database; the app reconnects per request |
-| Server crash mid-run | That run is marked failed on next start | Submit again |
-| Provider outage or rate limit | Retries, then that rater is left out (or the run fails if all are down) | Fix the provider or change the roster |
-| Disk full / uploads folder missing | Submission fails with a server error | Free space or set `DATA_DIR` |
+| Situation | What happens |
+|---|---|
+| Postgres is restarted | The app reconnects on the next request, and everything stored is still there |
+| The server restarts mid-run | The run is closed with a clear message on the next start, and you add the file again |
+| A model service is busy or rate-limited | Requests are retried, then fallback models answer; the report names the model that answered |
+| The uploads folder moves | Set `DATA_DIR` to point at it |
 
 ## Observability
 
@@ -240,7 +235,6 @@ How each failure is handled is tabulated in [agent.md](agent.md#6-when-things-go
   problems, interrupted runs, unhandled errors. API keys are never logged.
 - `GET /api/health` returns `{ ok: true, db: "postgres" | "memory" }` for liveness checks.
 - Per-run observability is in the data: the `run_log` (timings, tokens, attempts per model) and `model_calls`.
-- There are no metrics endpoint or tracing yet.
 
 ## Technology
 
@@ -250,7 +244,7 @@ How each failure is handled is tabulated in [agent.md](agent.md#6-when-things-go
 | API | Express 5 | Small, well known, async errors handled |
 | Dashboard | React 19, React Router 7, Vite | Plain CSS with design tokens; no UI framework |
 | Database | Postgres 16 (Docker), `pg` driver, plain SQL | Durable and inspectable; same SQL runs in-memory for tests |
-| Models | Plain HTTPS to each provider; no agent framework | The flow is fixed; every rule must be enforceable and testable |
+| Models | Plain HTTPS to each service; no agent framework | The flow is fixed; every rule must be enforceable and testable |
 | Validation | Zod at every boundary (scorecard, requests, model replies) | Untrusted input is checked once, at the edge |
-| Excel | Custom read-only reader (input), ExcelJS (report output) | The common library cannot open the Talentra file |
-| Tests | Vitest; scripted mock models | Deterministic, fast, and able to simulate misbehaving models |
+| Excel | Custom read-only reader (input), ExcelJS (report output) | Opens every sample file, and only ever reads |
+| Tests | Vitest; scripted mock models | Repeatable, fast, and able to simulate models that answer badly |

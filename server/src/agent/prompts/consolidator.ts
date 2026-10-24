@@ -7,7 +7,7 @@ You receive: the results of three independent raters, the frozen scorecard, and 
 For each dimension:
 - if the raters agree within 1 point, take the score that is best supported by evidence
 - if they differ by more than 1 point, check each rater's claim against the artifact text, then choose a score between the lowest and the highest rater score
-- if the disagreement still cannot be resolved from the artifact text, set "resolved" to false; the lower score will stand and a person will be asked to look
+- if the disagreement still cannot be resolved from the artifact text, set "resolved" to false; the lower score will stand and the item is flagged as uncertain
 Also merge duplicate findings, listing the finding references ("from") that each merged finding replaces.
 
 Rules you must follow:

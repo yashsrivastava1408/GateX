@@ -48,3 +48,38 @@ export function medianOutcome(runs: RaterOutcome[]): RaterOutcome {
     discarded: runs.flatMap((r) => r.discarded),
   };
 }
+
+/** A spread above this, between the examiners' first answers, is worth asking again. */
+export const REPEAT_SPREAD = 1;
+
+/**
+ * Adaptive repeats: after every rater has scored a section once, the questions worth scoring again. A question is
+ * repeated when two or more examiners are more than a point apart, or when an examiner that answered gave no usable
+ * score for it (missing, or discarded for lack of evidence) without calling it not measurable. Questions the examiners
+ * agree on, or all called not measurable, are not asked again, which is where the saving comes from. Generic over
+ * whatever ids the rater outcomes carry (dimensions today, criteria if raters score those).
+ */
+export function idsToRepeat(ids: string[], firstPass: RaterOutcome[]): string[] {
+  const answered = firstPass.filter((o) => o.status === 'ok');
+  if (answered.length === 0) return [];
+  return ids.filter((id) => {
+    const entries = answered.map((o) => o.dimensions.find((d) => d.id === id));
+    const scores = entries.filter((d): d is RaterDimension => d !== undefined && d.score !== null).map((d) => d.score!);
+    const unusable = entries.some((d) => !d || (d.score === null && !d.notMeasurable));
+    const spread = scores.length >= 2 ? Math.max(...scores) - Math.min(...scores) : 0;
+    return unusable || spread > REPEAT_SPREAD;
+  });
+}
+
+/** How many rater calls a run made, against what scoring every section `repeats` times would have made. */
+export interface RepeatStats {
+  mode: 'all' | 'adaptive';
+  repeats: number;
+  /** Calls scoring everything `repeats` times would make. */
+  planned: number;
+  /** Calls actually made (one per rater, section and repeat; fallbacks inside a call are not counted). */
+  made: number;
+  saved: number;
+  /** Question ids that were scored again. */
+  repeated: string[];
+}

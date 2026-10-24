@@ -1,10 +1,9 @@
 erDiagram
-  projects ||--o{ runs : "has iterations"
+  projects ||--o{ runs : "has rounds"
   runs ||--o{ model_calls : "logs"
   runs ||--o{ dimension_scores : "scores"
   runs ||--o{ findings : "reports"
-  runs ||--o{ human_evidence : "receives"
-  runs ||--o{ overrides : "receives"
+    runs ||--o{ overrides : "receives"
 
   projects {
     text id PK
@@ -21,7 +20,7 @@ erDiagram
     text scorecard_hash
     text artifact_hash
     jsonb scorecard "frozen copy"
-    jsonb core "immutable evaluation"
+    jsonb core "the unchanging result"
     jsonb run_log
     float weighted_score
     text agent_decision
@@ -30,7 +29,7 @@ erDiagram
   model_calls {
     text run_id PK
     text participant_id PK
-    text role "rater or consolidator"
+    text role "examiner or final reviewer"
     text provider
     text model
     text family
@@ -44,7 +43,7 @@ erDiagram
   dimension_scores {
     text run_id PK
     text dimension_id PK
-    text measured_by "code, raters, human"
+    text measured_by "code or examiners"
     text status
     float score
     float spread
@@ -54,20 +53,12 @@ erDiagram
   findings {
     text run_id PK
     text finding_id PK
-    text fingerprint "same problem across iterations"
+    text fingerprint "same issue across rounds"
     text severity
     text dimension_id
     text sheet
     text cell
     text fix
-  }
-  human_evidence {
-    text id PK
-    text run_id FK
-    text dimension_id
-    int score
-    text note
-    text by_name
   }
   overrides {
     text id PK

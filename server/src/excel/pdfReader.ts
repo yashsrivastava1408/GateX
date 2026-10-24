@@ -1,5 +1,6 @@
 import { getDocumentProxy } from 'unpdf';
 import { UserError } from '../util/errors.js';
+import { tableLines } from './pdfTables.js';
 import type { RawGrid } from './xlsxReader.js';
 
 /**
@@ -58,7 +59,8 @@ export async function readPdf(bytes: Uint8Array): Promise<Map<string, RawGrid>> 
         if (!('str' in item) || item.str.trim() === '') continue;
         pieces.push({ text: item.str, x: item.transform[4]!, y: item.transform[5]!, width: item.width });
       }
-      pages.push(toLines(pieces));
+      // A page with a table gets its rows rebuilt (wrapped cells joined); any other page reads line by line as before.
+      pages.push(tableLines(pieces) ?? toLines(pieces));
     }
   } catch (error) {
     throw new UserError(`The PDF could not be read (${error instanceof Error ? error.message : 'unknown error'}).`);

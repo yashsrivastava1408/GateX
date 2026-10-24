@@ -1,4 +1,4 @@
-import type { DimensionResult, DimensionSpec, HumanEvidence, Scorecard } from '@ddd/shared';
+import type { DimensionResult, DimensionSpec, Scorecard } from '@ddd/shared';
 
 export interface DimInput {
   id: string;
@@ -44,8 +44,4 @@ export function build(inputs: DimInput[], thresholds = { accept: 90, refine: 75 
     evidence: [],
   }));
   return { scorecard, dimensions };
-}
-
-export function evidence(dimensionId: string, score: number | null, at = '2026-10-22T10:00:00Z'): HumanEvidence {
-  return { id: `e-${dimensionId}-${at}`, runId: 'r', dimensionId, score, note: 'interview done', by: 'Mentor', createdAt: at };
 }

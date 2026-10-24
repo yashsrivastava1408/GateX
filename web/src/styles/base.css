@@ -13,11 +13,11 @@ body {
   margin: 0;
   background-color: var(--bg);
   background-image: 
-    radial-gradient(circle at 50% -10%, rgba(45, 212, 191, 0.08), transparent 50%),
+    radial-gradient(circle at 50% -10%, rgb(var(--accent-rgb) / 0.08), transparent 50%),
     radial-gradient(circle at 90% 20%, rgba(56, 189, 248, 0.05), transparent 45%),
-    radial-gradient(circle at 10% 80%, rgba(129, 140, 248, 0.05), transparent 45%),
-    linear-gradient(rgba(255, 255, 255, 0.012) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.012) 1px, transparent 1px);
+    radial-gradient(circle at 10% 80%, rgb(var(--violet-rgb) / 0.05), transparent 45%),
+    linear-gradient(rgb(var(--ink) / 0.012) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--ink) / 0.012) 1px, transparent 1px);
   background-size: 100% 100%, 100% 100%, 100% 100%, 24px 24px, 24px 24px;
   background-attachment: fixed;
   color: var(--text);
@@ -69,7 +69,7 @@ h1 {
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: -0.035em;
-  color: #ffffff;
+  color: var(--strong);
 }
 h2 {
   font-size: var(--text-lg);
@@ -101,15 +101,11 @@ code,
   font-family: var(--font-mono);
   font-weight: 500;
 }
-
-/* Tabular figures keep columns of numbers aligned. */
 .num,
 .stat-value,
 .ring-score,
-.heat,
 .scorebar,
 .threshold-labels,
-.section-count,
 .side-item-meta,
 .counter {
   font-variant-numeric: tabular-nums;
@@ -118,15 +114,15 @@ code,
 code {
   padding: 0.18em 0.5em;
   border-radius: var(--radius-xs);
-  background: rgba(45, 212, 191, 0.08);
-  border: 1px solid rgba(45, 212, 191, 0.2);
+  background: rgb(var(--accent-rgb) / 0.08);
+  border: 1px solid rgb(var(--accent-rgb) / 0.2);
   color: var(--accent-strong);
   font-size: 0.88em;
 }
 
 ::selection {
-  background: rgba(45, 212, 191, 0.25);
-  color: #ffffff;
+  background: rgb(var(--accent-rgb) / 0.25);
+  color: var(--strong);
 }
 
 :focus-visible {
@@ -142,7 +138,7 @@ code {
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgb(var(--ink) / 0.15);
   border-radius: 10px;
   border: 2px solid var(--bg);
   transition: background var(--fast) var(--ease);

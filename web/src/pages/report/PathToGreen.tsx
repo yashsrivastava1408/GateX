@@ -2,7 +2,7 @@ import type { PathToGreen as Path } from '@ddd/shared';
 import { DecisionChip } from '../../components/Chip';
 import { Icon } from '../../components/Icons';
 
-export function PathToGreen({ path }: { path: Path }) {
+export function PathToGreen({ path, issues }: { path: Path; issues: Map<string, string> }) {
   return (
     <>
       {path.steps.length > 0 && (
@@ -13,11 +13,11 @@ export function PathToGreen({ path }: { path: Path }) {
               <div className="path-body">
                 <div className="path-title">
                   {s.name}
-                  {s.reason === 'critical gate' && <span className="crit" title="Unblocks a must-pass check">★</span>}
+                  {s.reason === 'critical gate' && <span className="crit" title="Raises a key check">★</span>}
                 </div>
                 <div className="path-sub">
-                  {s.reason === 'critical gate' ? 'Stops it being green: a must-pass check needs 4 or more.' : 'Adds the most points for the least effort.'}
-                  {s.findingIds.length > 0 && <> Also fixes <span className="mono">{s.findingIds.join(', ')}</span>.</>}
+                  {s.reason === 'critical gate' ? 'Fix early: a key check needs 4 or more.' : 'Adds the most points for the least effort.'}
+                  {s.findingIds.length > 0 && <> Also fixes {s.findingIds.map((id) => issues.get(id)?.toLowerCase() ?? 'an issue').join(', ')}.</>}
                 </div>
               </div>
               <span className="path-move mono">
@@ -33,26 +33,12 @@ export function PathToGreen({ path }: { path: Path }) {
         <div className="path-person path-block">
           <Icon name="flag" />
           <div>
-            <strong>Fix these must-fix problems before you submit again</strong>
+            <strong>Fix these must-fix issues first</strong>
             <p className="path-block-ids">
               {path.blockingFindingIds.map((id) => (
-                <a key={id} className="mono finding-link" href="#fix">{id}</a>
+                <a key={id} className="mono finding-link" href="#fix">{issues.get(id) ?? 'An issue'}</a>
               ))}
             </p>
-          </div>
-        </div>
-      )}
-
-      {path.needsPerson.length > 0 && (
-        <div className="path-person">
-          <Icon name="user" />
-          <div>
-            <strong>A person also has to supply</strong>
-            <ul>
-              {path.needsPerson.map((n) => (
-                <li key={n}>{n}</li>
-              ))}
-            </ul>
           </div>
         </div>
       )}

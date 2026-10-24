@@ -14,6 +14,7 @@ import type { WorkbookModel } from '../excel/workbook.js';
 import type { LlmProvider } from '../llm/types.js';
 import { CONSOLIDATOR_SYSTEM } from './prompts/consolidator.js';
 import { normalise } from '../util/text.js';
+import { sha256 } from '../util/hash.js';
 import { callJsonModel, extractJson, type CallSettings } from './callModel.js';
 import { validateCitations } from './evidence.js';
 import {
@@ -153,6 +154,85 @@ export async function consolidate(input: ConsolidationInput): Promise<Consolidat
   };
 }
 
+/**
+ * How many questions one consolidation call covers. The reply holds a score, a rationale and evidence for each, so a scorecard with
+ * dozens of criteria asked all at once outgrows the model's output limit and comes back cut off mid-JSON. Eight keeps a reply well inside it.
+ */
+export const CONSOLIDATION_BATCH = 8;
+
+export interface BatchedConsolidationInput extends Omit<ConsolidationInput, 'user'> {
+  /** The prompt for one batch: only that batch's questions, results and (for disputes) the sheets behind them. */
+  buildUser: (rated: DimensionSpec[], outcomes: RaterOutcome[]) => string;
+  batchSize?: number;
+}
+
+/** The raters' outcomes narrowed to the questions of one batch. Findings and strengths follow their question. */
+function outcomesFor(outcomes: RaterOutcome[], ids: ReadonlySet<string>, keepOrphans: boolean, all: ReadonlySet<string>): RaterOutcome[] {
+  const inBatch = (id: string) => ids.has(id) || (keepOrphans && !all.has(id));
+  return outcomes.map((o) => ({
+    ...o,
+    dimensions: o.dimensions.filter((d) => ids.has(d.id)),
+    findings: o.findings.filter((f) => inBatch(f.dimensionId)),
+    strengths: o.strengths.filter((st) => inBatch(st.dimensionId)),
+  }));
+}
+
+/**
+ * Consolidates in batches of questions, one model call each, and puts the results back together. A batch that fails only affects
+ * its own questions (the lower score stands there, as when the whole call fails); the run is "failed" only when every batch is.
+ */
+export async function consolidateInBatches(input: BatchedConsolidationInput): Promise<ConsolidationResult> {
+  const size = Math.max(1, input.batchSize ?? CONSOLIDATION_BATCH);
+  const batches: DimensionSpec[][] = [];
+  for (let i = 0; i < input.rated.length; i += size) batches.push(input.rated.slice(i, i + size));
+  const everyId = new Set(input.rated.map((d) => d.id));
+  const { buildUser, batchSize: _size, ...rest } = input;
+  const didFail = (p: ConsolidationResult) => p.call.status === 'failed' && p.call.attempts > 0;
+  // A batch whose reply was unusable (usually a long reply cut off or malformed) is split in half and each half asked again, so
+  // one bad reply costs a few questions their review, not eight. A single question that still fails stays failed.
+  const run = async (rated: DimensionSpec[], first: boolean): Promise<ConsolidationResult[]> => {
+    const outcomes = outcomesFor(input.outcomes, new Set(rated.map((d) => d.id)), first, everyId);
+    const part = await consolidate({ ...rest, rated, outcomes, user: buildUser(rated, outcomes) });
+    // Only a reply that arrived but could not be read is worth splitting; a service that is down would fail every half too.
+    if (!didFail(part) || !/not usable/.test(part.call.error ?? '') || rated.length < 2) return [part];
+    const middle = Math.ceil(rated.length / 2);
+    const left = await run(rated.slice(0, middle), first);
+    const right = await run(rated.slice(middle), false);
+    return [...left, ...right];
+  };
+  const parts: ConsolidationResult[] = [];
+  for (const [index, rated] of batches.entries()) parts.push(...(await run(rated, index === 0)));
+  if (parts.length === 1) return parts[0]!;
+
+  const failed = parts.filter(didFail);
+  const sum = (pick: (c: CallMeta) => number | null) => (parts.some((p) => pick(p.call) !== null) ? parts.reduce((t, p) => t + (pick(p.call) ?? 0), 0) : null);
+  const allFailed = failed.length === parts.length;
+  const call: CallMeta = {
+    model: parts[0]!.call.model,
+    role: 'consolidator',
+    status: allFailed ? 'failed' : 'ok',
+    prompt: parts.map((p) => p.call.prompt).join('\n---\n'),
+    promptHash: sha256(parts.map((p) => p.call.promptHash).join(',')),
+    rawResponse: parts.map((p) => p.call.rawResponse).join('\n---\n'),
+    attempts: parts.reduce((t, p) => t + p.call.attempts, 0),
+    latencyMs: parts.reduce((t, p) => t + p.call.latencyMs, 0),
+    inputTokens: sum((c) => c.inputTokens),
+    outputTokens: sum((c) => c.outputTokens),
+    ...(failed.length > 0 ? { error: `${failed.length} of ${parts.length} review batches failed: ${failed[0]!.call.error}` } : {}),
+  };
+  const strengths: Strength[] = [];
+  for (const st of parts.flatMap((p) => p.strengths)) {
+    if (!strengths.some((x) => normalise(x.text) === normalise(st.text))) strengths.push(st);
+  }
+  return {
+    call,
+    dimensions: parts.flatMap((p) => p.dimensions),
+    findings: parts.flatMap((p) => p.findings),
+    strengths: strengths.slice(0, 8),
+    consolidatorFailed: parts.some((p) => p.consolidatorFailed),
+  };
+}
+
 /* ----------------------------- dimensions ----------------------------- */
 
 function reconcileDimension(
@@ -196,8 +276,8 @@ function reconcileDimension(
       status: notMeasurable ? 'not_measurable' : 'unscored',
       flagged: true,
       rationale: notMeasurable
-        ? 'The raters could not measure this dimension from the artifact. A person must supply it.'
-        : 'No rater produced an evidence-backed score for this dimension. It counts as 0 until a person reviews it.',
+        ? 'The examiners found nothing in the file that measures this dimension.'
+        : 'No examiner produced an evidence-backed score for this dimension, so it counts as 0.',
     };
   }
 
@@ -237,7 +317,7 @@ function reconcileDimension(
     consolidated = proposed;
     resolution = 'claims_checked';
   } else {
-    // PDF page 10: an unresolved disagreement keeps the lower score and goes to a person.
+    // PDF page 10: an unresolved disagreement keeps the lower score, and the item is flagged as uncertain.
     consolidated = low;
     resolution = 'lower_stands';
     flagged = true;
@@ -256,7 +336,11 @@ function reconcileDimension(
     resolution,
     flagged,
     confidence,
-    rationale: (fromConsolidator?.rationale || supporting.rationale || '').trim(),
+    // The final reviewer's words can say "all examiners agree" when only one score survived the evidence check, so say what really happened.
+    rationale: (given.length === 1
+      ? `Only examiner ${given[0]!.raterId} gave a score that the file could back up, so this is a single opinion. ${supporting.rationale || ''}`
+      : fromConsolidator?.rationale || supporting.rationale || ''
+    ).trim(),
     evidence: evidence.slice(0, 5),
   };
 }

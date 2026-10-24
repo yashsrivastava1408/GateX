@@ -1,0 +1,49 @@
+{
+  "approved": [
+    "bedrock:us.meta.llama4-maverick-17b-instruct-v1:0",
+    "bedrock:nvidia.nemotron-super-3-120b",
+    "bedrock:minimax.minimax-m2.5",
+    "bedrock:us.amazon.nova-pro-v1:0"
+  ],
+  "providers": {
+    "bedrock": {
+      "type": "bedrock",
+      "region": "us-east-1",
+      "keyEnv": "AWS_BEARER_TOKEN_BEDROCK"
+    }
+  },
+  "raters": [
+    {
+      "id": "A",
+      "provider": "bedrock",
+      "model": "us.meta.llama4-maverick-17b-instruct-v1:0",
+      "family": "meta"
+    },
+    {
+      "id": "B",
+      "provider": "bedrock",
+      "model": "nvidia.nemotron-super-3-120b",
+      "family": "nvidia"
+    },
+    {
+      "id": "C",
+      "provider": "bedrock",
+      "model": "minimax.minimax-m2.5",
+      "family": "minimax"
+    }
+  ],
+  "consolidator": {
+    "id": "K",
+    "provider": "bedrock",
+    "model": "us.amazon.nova-pro-v1:0",
+    "family": "amazon"
+  },
+  "settings": {
+    "temperature": 0,
+    "maxOutputTokens": 8192,
+    "timeoutMs": 120000,
+    "retries": 5,
+    "sectionConcurrency": 3,
+    "repeats": 1
+  }
+}

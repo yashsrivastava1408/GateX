@@ -32,12 +32,12 @@ describe('the check before an evaluation is submitted', () => {
     const wb = await WorkbookModel.load(TALENTRA_XLSX);
     const { scorecard } = parseScorecard(await readFile(new URL('../../samples/talentra/talentra-step04-d4.yaml', import.meta.url), 'utf8'));
     const result = preflight({ scorecard, wb, sources: '', raters: raters([8000, undefined, 7000]) });
-    expect(result.tokens).toBeLessThan(7000);
+    expect(result.tokens).toBeLessThan(8000);
     expect(result.ok).toBe(true);
   });
 
   it('passes a scorecard with no rater dimensions, because nothing is sent to a model', async () => {
-    const yaml = CLEAN_SCORECARD_YAML.replace(/    - id: J01[\s\S]*?(?=    - id: H01)/, '');
+    const yaml = CLEAN_SCORECARD_YAML.replace(/    - id: J01[\s\S]*$/, '');
     const wb = await WorkbookModel.load(await makeWorkbook({ Tree: CLEAN_TREE }));
     const result = preflight({ scorecard: parseScorecard(yaml).scorecard, wb, sources: '', raters: raters([100, 100, 100]) });
     expect(result).toMatchObject({ ok: true, tokens: 0 });

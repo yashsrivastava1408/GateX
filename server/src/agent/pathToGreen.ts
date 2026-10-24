@@ -1,4 +1,5 @@
-import type { DimensionResult, Finding, HumanEvidence, PathStep, PathToGreen, Scorecard } from '@ddd/shared';
+import { SCORE_BANDS } from '@ddd/shared';
+import type { DimensionResult, Finding, PathStep, PathToGreen, Scorecard } from '@ddd/shared';
 import { floor1 } from '../util/text.js';
 import { CRITICAL_MINIMUM, blockingFindings, decide, effectiveDimensions, weightedScore, type EffectiveDimension } from './verdict.js';
 
@@ -10,19 +11,16 @@ import { CRITICAL_MINIMUM, blockingFindings, decide, effectiveDimensions, weight
 export function buildPathToGreen(
   scorecard: Scorecard,
   dimensions: DimensionResult[],
-  evidence: HumanEvidence[],
   findings: Finding[],
 ): PathToGreen {
-  const start = effectiveDimensions(scorecard, dimensions, evidence);
+  const start = effectiveDimensions(scorecard, dimensions);
   const blockingIds = blockingFindings(findings).map((f) => f.id);
   const current = decide(scorecard, start);
-  const needsPerson = start.filter((d) => d.pending).map((d) => `${d.id} · ${d.name}`);
 
   if (current.decision === 'green' && blockingIds.length === 0) {
     return {
       steps: [],
       blockingFindingIds: [],
-      needsPerson: [],
       resultingScore: floor1(current.score),
       resultingDecision: 'green',
       note: 'Already green. Nothing to fix.',
@@ -46,7 +44,7 @@ export function buildPathToGreen(
     order.push({ id: dim.id, reason: 'critical gate' });
   }
 
-  while (weightedScore(simulated()) < scorecard.thresholds.accept) {
+  while (weightedScore(simulated()) < SCORE_BANDS.accept) {
     const next = start
       .filter((d) => d.counted && (sim.get(d.id) ?? 0) < 5)
       .sort((a, b) => b.weight * (5 - (sim.get(b.id) ?? 0)) - a.weight * (5 - (sim.get(a.id) ?? 0)))[0];
@@ -82,19 +80,16 @@ export function buildPathToGreen(
 
   // The simulation assumes the fixes are made, which also clears the findings they address.
   const after = decide(scorecard, simulated());
-  const resultingDecision = needsPerson.length > 0 && after.decision === 'green' ? 'amber' : after.decision;
   const parts: string[] = [];
   if (steps.length > 0) parts.push('These fixes reach the score and gate targets.');
   else if (blockingIds.length > 0) parts.push('The score and gates are already enough.');
   if (blockingIds.length > 0) parts.push('Every high-risk finding must also be fixed before resubmission.');
-  if (needsPerson.length > 0) parts.push('Green also needs a person to supply the human-only evidence listed below.');
   if (parts.length === 0) parts.push('If these dimensions reach the scores shown, the verdict becomes green.');
   return {
     steps,
     blockingFindingIds: blockingIds,
-    needsPerson,
     resultingScore: floor1(after.score),
-    resultingDecision,
+    resultingDecision: after.decision,
     note: parts.join(' '),
   };
 }

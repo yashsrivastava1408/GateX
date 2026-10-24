@@ -2,7 +2,7 @@ import type { Report, Severity } from '@ddd/shared';
 
 export interface ImprovementRow {
   priority: number;
-  severity: Severity | 'SCORE' | 'PERSON';
+  severity: Severity | 'SCORE' | 'UNMEASURED';
   dimension: string;
   where: string;
   problem: string;
@@ -13,7 +13,7 @@ export interface ImprovementRow {
 
 const RANK: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
 
-/** One ordered to-do list: findings by severity, then low-scoring dimensions without a finding, then items only a person can supply. */
+/** One ordered to-do list: findings by severity, then low-scoring dimensions without a finding, then questions the file gave nothing to measure. */
 export function improvementPlan(report: Report): ImprovementRow[] {
   const gainByDimension = new Map(report.pathToGreen.steps.map((s) => [s.dimensionId, s.scoreGain]));
   const rows: Omit<ImprovementRow, 'priority'>[] = [];
@@ -49,13 +49,12 @@ export function improvementPlan(report: Report): ImprovementRow[] {
   }
 
   for (const n of report.notMeasurable) {
-    if (n.evidence) continue;
     rows.push({
-      severity: 'PERSON',
+      severity: 'UNMEASURED',
       dimension: `${n.dimensionId} ${n.name}`,
       where: '',
-      problem: n.reason,
-      action: n.whatIsNeeded,
+      problem: `${n.reason} ${n.treatment === 'zero' ? 'It counts as 0.' : 'It is left out of the score.'}`,
+      action: 'Add to the file what this question asks for, so the examiners can score it next time.',
       returnTo: '',
       gain: null,
     });

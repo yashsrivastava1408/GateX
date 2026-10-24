@@ -1,95 +1,75 @@
-import type { Report } from '@ddd/shared';
+import { BRAND, type Report } from '@ddd/shared';
+import { BAND_WORD, buildView, formatNumber } from './view.js';
 
-const cell = (text: string | number | null | undefined) =>
-  String(text ?? '—').replace(/\|/g, '\\|').replace(/\n/g, ' ');
-const where = (loc: { sheet: string; cell: string } | null) => (loc ? `${loc.sheet}!${loc.cell}` : '—');
-const score = (value: number | null) => (value === null ? '—' : String(value));
+const cell = (text: string | number | null | undefined) => String(text ?? '-').replace(/\|/g, '\\|').replace(/\n/g, ' ');
+const score = (value: number | null) => (value === null ? '-' : formatNumber(value));
+const tag = { HIGH: 'Must fix', MEDIUM: 'Should fix', LOW: 'Nice to fix' } as const;
 
-/** The readable summary that goes next to the workbook (PDF page 16). */
-export function renderMarkdown(report: Report): string {
-  const { header, verdict } = report;
-  const raterIds = header.raters.map((r) => r.id);
+/** A short briefing that goes next to the workbook: the headline, what it means, what to fix first, then the detail. */
+export function renderMarkdown(input: Report): string {
+  const v = buildView(input);
   const out: string[] = [];
 
-  out.push(`# Evaluation report · ${header.projectName} · iteration ${header.iteration}`, '');
-  out.push(`## 1. Header`, '');
+  out.push(`# ${BRAND.name} report: ${v.fileName}`, '', `_${BRAND.tagline}_`, '');
+  out.push(`**${BAND_WORD[v.decision]} - ${v.headline}** | Score **${formatNumber(v.score)} out of 100**`, '');
+  out.push(`${v.subline} (Green needs ${v.thresholds.accept} or more. Amber is ${v.thresholds.refine} to ${v.thresholds.accept - 1}. Red is below ${v.thresholds.refine}.)`, '');
+  out.push(`| | |`, `|---|---|`, `| File | ${cell(v.fileName)} |`, `| Scorecard | ${cell(v.scorecard)} |`, `| Checked on | ${v.finishedLong} |`, `| Check number | ${v.checkNumber} |`);
+  if (v.report.header.instructions) out.push(`| Extra instructions | ${cell(v.report.header.instructions)} |`);
+  out.push('');
+
+  out.push('## What this means', '', ...v.meaning.map((m) => `- ${m}`), '');
   out.push(
-    `| | |`,
-    `|---|---|`,
-    `| Artifact | ${cell(header.artifactName)} (\`${header.artifactHash.slice(0, 12)}\`) |`,
-    `| Scorecard | ${cell(header.scorecardName)} v${cell(header.scorecardVersion)} (\`${header.scorecardHash.slice(0, 12)}\`) |`,
-    `| Scorecard approval | ${cell(header.scorecardApproval ?? 'not stated')} |`,
-    `| Gate | ${header.gate === 'D1' ? 'D1 schema design' : 'D3 output document'}${header.step ? ` · step ${cell(header.step)}` : ''} |`,
-    `| Raters | ${header.raters.map((r) => `${r.id}: ${r.provider}/${r.model}`).join(' · ')} |`,
-    `| Consolidator | ${header.consolidator.provider}/${header.consolidator.model} |`,
-    `| Prompts | ${header.promptVersion} |`,
-    ...(header.instructions ? [`| Extra instructions | ${cell(header.instructions)} (\`${(header.instructionsHash ?? '').slice(0, 12)}\`) |`] : []),
-    `| Run | ${header.runId} · ${header.finishedAt} |`,
+    `**Key numbers:** ${v.bySeverity.HIGH.length} must fix, ${v.bySeverity.MEDIUM.length} should fix, ${v.bySeverity.LOW.length} nice to fix | ` +
+      `${v.keyChecks.passed} of ${v.keyChecks.total} key checks passed | ${v.areasAtFour.count} of ${v.areasAtFour.of} areas scored 4 or more`,
     '',
   );
 
-  out.push(`## 2. Verdict`, '');
-  out.push(`**${verdict.decision.toUpperCase()}** · weighted score **${verdict.weightedScore}** (accept ≥ ${verdict.thresholds.accept}, refine ≥ ${verdict.thresholds.refine})`);
-  if (verdict.override) out.push('', `Agent verdict was ${verdict.agentDecision.toUpperCase()}; overridden by ${verdict.override.by}.`);
-  out.push('', ...verdict.reasons.map((r) => `- ${r}`), '');
-  if (verdict.criticalGates.length > 0) {
-    out.push(`| Critical gate | Score | Result |`, `|---|---|---|`);
-    for (const g of verdict.criticalGates) out.push(`| ${g.dimensionId} ${cell(g.name)} | ${score(g.score)} | ${g.status} |`);
-    out.push('');
-  }
-
-  out.push(`## 3. Dimension scores`, '');
-  out.push(`| ID | Dimension | Weight | By | ${raterIds.join(' | ')} | Score | Spread |`, `|---|---|---|---|${raterIds.map(() => '---').join('|')}|---|---|`);
-  for (const d of report.dimensions) {
-    out.push(
-      `| ${d.id}${d.critical ? ' ★' : ''} | ${cell(d.name)} | ${d.weight} | ${d.measuredBy} | ${raterIds.map((id) => score(d.raterScores[id] ?? null)).join(' | ')} | ${score(d.consolidated)} | ${score(d.spread)} |`,
-    );
-  }
-  out.push('', '★ critical gate (needs 4 or more)', '');
-
-  out.push(`## 4. Strengths`, '');
-  out.push(...(report.strengths.length > 0 ? report.strengths.map((s) => `- ${s.dimensionId}: ${s.text} (${where(s.location)})`) : ['None recorded.']), '');
-
-  out.push(`## 5. Gaps and findings`, '');
-  if (report.findings.length === 0) out.push('No findings.', '');
-  else {
-    out.push(`| ID | Severity | Dimension | Location | Finding | Fix | Return to |`, `|---|---|---|---|---|---|---|`);
-    for (const f of report.findings) {
-      out.push(`| ${f.id} | ${f.severity} | ${f.dimensionId} | ${where(f.location)} | ${cell(f.title)} | ${cell(f.fix)} | ${f.returnTo} |`);
+  out.push('## What to fix first', '');
+  if (v.issues.length === 0) out.push('Nothing to fix. No issues were raised.', '');
+  for (const sev of ['HIGH', 'MEDIUM', 'LOW'] as const) {
+    const items = v.bySeverity[sev];
+    if (items.length === 0) continue;
+    out.push(`### ${tag[sev]} (${items.length})`, '');
+    for (const i of items) {
+      out.push(`**${i.label}** - ${i.title}`, `- Area: ${i.area}`);
+      if (i.where) out.push(`- Where: ${i.where}`);
+      if (i.detail) out.push(`- What is wrong: ${i.detail}`);
+      out.push(`- What to do: ${i.fix}`, '');
     }
-    out.push('');
+  }
+  if (input.droppedFindings && input.droppedFindings.length > 0) {
+    // Counted as a number only: the examiners' dropped claims are not issues.
+    out.push(`_${input.droppedFindings.length} claim${input.droppedFindings.length === 1 ? ' was' : 's were'} set aside because the file plainly contradicts ${input.droppedFindings.length === 1 ? 'it' : 'them'}._`, '');
   }
 
-  out.push(`## 6. Rater agreement`, '');
-  if (report.agreement.length === 0) out.push('No rater dimensions in this scorecard.', '');
+  out.push('## How each area scored', '', '| Area | Score out of 5 | Result | Key check |', '|---|---|---|---|');
+  for (const a of v.areas) {
+    out.push(`| ${cell(a.name)} | ${score(a.score)} | ${a.score === null ? 'Not scored' : a.passed ? 'Pass' : 'Below the pass mark of 4'} | ${a.critical ? 'Yes' : ''} |`);
+  }
+  out.push('');
+
+  out.push('## Your path to green', '');
+  if (v.path.steps.length === 0) out.push(v.path.note, '');
   else {
-    out.push(`| Dimension | ${raterIds.join(' | ')} | Spread | How it was resolved |`, `|---|${raterIds.map(() => '---').join('|')}|---|---|`);
-    for (const a of report.agreement) {
-      out.push(`| ${a.dimensionId} ${cell(a.name)} | ${raterIds.map((id) => score(a.scores[id] ?? null)).join(' | ')} | ${score(a.spread)} | ${cell(a.note)}${a.flagged ? ' **Flagged for a person.**' : ''} |`);
-    }
-    out.push('');
+    v.path.steps.forEach((s) => out.push(`${s.order}. Raise "${s.area}" from ${s.from} to ${s.to} out of 5 (about +${s.gain} points).${s.fixes.length ? ` Fixes ${s.fixes.map((f) => f.toLowerCase()).join(', ')}.` : ''}`));
+    out.push('', v.path.note, `After these fixes the score would be ${formatNumber(v.path.resultingScore)} (${BAND_WORD[v.path.resultingDecision]}).`, '');
   }
 
-  out.push(`## 7. Not measurable here`, '');
-  if (report.notMeasurable.length === 0) out.push('Nothing. Every dimension was measured.', '');
+  out.push('## What is already good', '');
+  out.push(...(v.strengths.length > 0 ? v.strengths.map((s) => `- ${s.text}${s.where ? ` (${s.where})` : ''}`) : ['None recorded.']), '');
+
+  out.push('## How the examiners compared', '');
+  if (v.examinerRows.length === 0) out.push('No area was marked by examiners.', '');
   else {
-    for (const n of report.notMeasurable) {
-      const have = n.evidence ? `Supplied by ${n.evidence.by}${n.evidence.score !== null ? `, score ${n.evidence.score}` : ''}: ${n.evidence.note}` : '**Outstanding**';
-      out.push(`- **${n.dimensionId} ${n.name}**${n.critical ? ' (critical)' : ''}: ${n.whatIsNeeded} ${have}`);
-    }
+    out.push(`| Area | ${v.examiners.join(' | ')} | Note |`, `|---|${v.examiners.map(() => '---').join('|')}|---|`);
+    for (const r of v.examinerRows) out.push(`| ${cell(r.area)} | ${r.scores.map((s) => score(s.score)).join(' | ')} | ${cell(r.note)} |`);
     out.push('');
   }
 
-  out.push(`## 8. Path to green`, '');
-  const path = report.pathToGreen;
-  if (path.steps.length === 0 && path.needsPerson.length === 0) out.push(path.note, '');
-  else {
-    path.steps.forEach((s) => out.push(`${s.order}. ${s.dimensionId} ${s.name}: ${s.from} → ${s.to} (+${s.scoreGain} points)${s.findingIds.length ? ` · fixes ${s.findingIds.join(', ')}` : ''}`));
-    out.push('', path.note, `Resulting score ${path.resultingScore}, verdict ${path.resultingDecision.toUpperCase()}.`);
-    if (path.needsPerson.length > 0) out.push('', `A person must supply: ${path.needsPerson.join('; ')}.`);
-    out.push('');
-  }
+  out.push('## Not checked from the file', '');
+  if (v.leftOut.length === 0) out.push('Nothing was left out. Every area could be checked from the file.', '');
+  else out.push(...v.leftOut.map((n) => `- **${n.name}**${n.critical ? ' (key check)' : ''}: ${n.reason} ${n.treatment}.`), '');
 
-  if (report.notes.length > 0) out.push(`## Run notes`, '', ...report.notes.map((n) => `- ${n}`), '');
+  out.push('## About this check', '', `- File: ${v.fileName}`, `- Scorecard: ${v.scorecard}`, `- Checked on: ${v.finishedLong}`, `- Marked by: ${v.examinerCount} examiners (${v.examiners.join(', ')}) and a Final reviewer`, '');
   return out.join('\n');
 }

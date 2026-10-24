@@ -3,10 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="dark" />
-    <meta name="description" content="Level 1 evaluator: three raters and a consolidator score a schema against its frozen scorecard." />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="description" content="GateX checks your work against a scorecard. Three examiners and a final reviewer mark it and tell you what to fix." />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <title>DDD Evaluator</title>
+    <script>
+      // Set the theme before the page paints, so a light-theme visitor never sees a dark flash.
+      try {
+        var saved = localStorage.getItem('ddd-theme');
+        var light = saved ? saved === 'light' : window.matchMedia('(prefers-color-scheme: light)').matches;
+        document.documentElement.dataset.theme = light ? 'light' : 'dark';
+      } catch (e) {}
+    </script>
+    <title>GateX</title>
   </head>
   <body>
     <div id="root"></div>

@@ -56,31 +56,26 @@ export function useResource<T>(load: () => Promise<T>, deps: unknown[], poll?: (
   return { data, error, loading, reload, setData };
 }
 
-/** A string kept in localStorage; falls back silently when storage is unavailable. */
-export function useStoredText(key: string, initial = ''): [string, (value: string) => void] {
-  const [value, setValue] = useState(() => {
-    try {
-      return localStorage.getItem(key) ?? initial;
-    } catch {
-      return initial;
-    }
-  });
-  const update = useCallback(
-    (next: string) => {
-      setValue(next);
-      try {
-        localStorage.setItem(key, next);
-      } catch {
-        /* private mode: keep it in memory only */
-      }
-    },
-    [key],
-  );
-  return [value, update];
-}
-
 export function useDocumentTitle(title: string): void {
   useEffect(() => {
-    document.title = `${title} · DDD Evaluator`;
+    document.title = `${title} · GateX`;
   }, [title]);
+}
+
+export type Theme = 'dark' | 'light';
+
+/** The colour theme. index.html sets it before the first paint; this changes it and remembers the choice. */
+export function useTheme(): [Theme, () => void] {
+  const [theme, setTheme] = useState<Theme>(() => (document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'));
+  const toggle = useCallback(() => {
+    const next: Theme = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = next;
+    setTheme(next);
+    try {
+      localStorage.setItem('ddd-theme', next);
+    } catch {
+      /* private mode: the choice lasts until the tab closes */
+    }
+  }, []);
+  return [theme, toggle];
 }

@@ -1,21 +1,22 @@
 import type { Report } from '@ddd/shared';
 import { Chip } from '../../components/Chip';
 import { Hint } from '../../components/Hint';
+import { examinerLabel } from '@ddd/shared';
 import { RESOLUTION, TERMS } from '../../copy';
 
 export function AgreementTable({ report }: { report: Report }) {
   const raters = report.header.raters;
   if (report.agreement.length === 0) {
-    return <p className="muted pad">This scorecard has no rater dimensions, so there is nothing for the examiners to agree on.</p>;
+    return <p className="muted pad">The examiners did not mark anything in this check, so there is nothing for them to agree on.</p>;
   }
   return (
     <div className="table-scroll">
       <table className="table">
         <thead>
           <tr>
-            <th>Criterion</th>
+            <th>Area</th>
             {raters.map((r) => (
-              <th key={r.id} className="num" title={`${r.provider}/${r.model}`}>Examiner {r.id}</th>
+              <th key={r.id} className="num">{examinerLabel(r.id)}</th>
             ))}
             <th className="num">Disagreement <Hint text={TERMS.disagreement.help} /></th>
             <th>Outcome</th>
@@ -33,7 +34,7 @@ export function AgreementTable({ report }: { report: Report }) {
               <td>
                 <Chip tone={a.flagged ? 'amber' : RESOLUTION[a.resolution].tone}>{RESOLUTION[a.resolution].label}</Chip>
               </td>
-              <td className="muted">{a.note}{a.flagged && <strong className="flagged"> Please take a look.</strong>}</td>
+              <td className="muted">{a.note}{a.flagged && <strong className="flagged"> Worth a look.</strong>}</td>
             </tr>
           ))}
         </tbody>

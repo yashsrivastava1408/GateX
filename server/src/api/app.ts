@@ -11,7 +11,9 @@ import { PROMPT_VERSION } from '../agent/index.js';
 import { renderMarkdown } from '../report/markdown.js';
 import { renderPdf } from '../report/pdf.js';
 import { renderXlsx } from '../report/xlsx.js';
+import { listLibrary, listPlanted, loadReliability, measureReliability, readLibraryCase } from '../library/library.js';
 import { buildScorecardTemplate } from '../scorecard/template.js';
+import { SCORECARD_TYPES } from '../scorecard/resolve.js';
 import { UserError } from '../util/errors.js';
 import type { EvaluationService } from './service.js';
 
@@ -25,13 +27,6 @@ export interface AppDeps {
 }
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
-
-const evidenceBody = z.object({
-  dimensionId: z.string().min(1),
-  score: z.number().int().min(0).max(5).nullable().optional(),
-  note: z.string().trim().min(3, 'Say what the evidence is, in a few words.'),
-  by: z.string().trim().min(1, 'Say who supplied it.'),
-});
 
 const overrideBody = z.object({
   decision: z.enum(['green', 'amber', 'red']),
@@ -60,9 +55,26 @@ export function createApp(deps: AppDeps): express.Express {
       problems: roster.problems,
       ready: roster.ready,
       promptVersion: PROMPT_VERSION,
-      thresholds: { accept: 90, refine: 75 },
+      thresholds: { accept: 75, refine: 60 },
     };
     res.json(body);
+  });
+
+  app.get('/api/library', async (_req, res) => {
+    res.json(await listLibrary(config.dataDir));
+  });
+
+  // The saved table the agent uses; when none is saved yet, what the checked runs would give now. Read-only: `npm run reliability` saves it.
+  app.get('/api/library/reliability', async (_req, res) => {
+    res.json((await loadReliability(config.dataDir)) ?? (await measureReliability(config.dataDir)));
+  });
+
+  app.get('/api/library/planted', async (_req, res) => {
+    res.json(await listPlanted(config.dataDir));
+  });
+
+  app.get('/api/library/:id', async (req, res) => {
+    res.json(await readLibraryCase(config.dataDir, req.params.id));
   });
 
   app.get('/api/projects', async (_req, res) => {
@@ -73,6 +85,16 @@ export function createApp(deps: AppDeps): express.Express {
     res.json(await store.getHistory(req.params.id));
   });
 
+  app.delete('/api/projects/:id', async (req, res) => {
+    await service.deleteProject(req.params.id);
+    res.status(204).end();
+  });
+
+  app.delete('/api/runs/:id', async (req, res) => {
+    await service.deleteRun(req.params.id);
+    res.status(204).end();
+  });
+
   app.post(
     '/api/runs',
     upload.fields([{ name: 'workbook', maxCount: 1 }, { name: 'scorecard', maxCount: 1 }]),
@@ -80,9 +102,10 @@ export function createApp(deps: AppDeps): express.Express {
       const files = req.files as Record<string, Express.Multer.File[]> | undefined;
       const workbook = files?.workbook?.[0];
       const scorecard = files?.scorecard?.[0];
-      if (!workbook) throw new UserError('Attach the file to evaluate (.xlsx or .pdf).');
-      if (!scorecard) throw new UserError('Attach the frozen scorecard (.xlsx, .yaml or .json).');
-      if (!/\.(xlsx|pdf)$/i.test(workbook.originalname)) throw new UserError('The file to check must be an .xlsx or .pdf file.');
+      if (!workbook) throw new UserError('Attach the file to evaluate (.xlsx, .csv or .pdf).');
+      if (!scorecard) throw new UserError('Attach the scorecard (any layout: .xlsx, .csv, .pdf, .yaml, .json, .txt or .md).');
+      if (!/\.(xlsx|csv|pdf)$/i.test(workbook.originalname)) throw new UserError('The file to check must be an .xlsx, .csv or .pdf file.');
+      if (!SCORECARD_TYPES.test(scorecard.originalname)) throw new UserError('The scorecard must be an .xlsx, .csv, .pdf, .yaml, .json, .txt or .md file.');
 
       const body = req.body as Record<string, string | undefined>;
       const created = await service.submit({
@@ -91,6 +114,7 @@ export function createApp(deps: AppDeps): express.Express {
         sources: body.sources ?? '',
         instructions: body.instructions,
         projectName: body.projectName,
+        quick: body.quick === '1' || body.quick === 'true',
       });
       res.status(202).json(created);
     },
@@ -104,7 +128,8 @@ export function createApp(deps: AppDeps): express.Express {
       const scorecard = files?.scorecard?.[0];
       const document = files?.document?.[0];
       if (!scorecard) throw new UserError('Attach the scorecard to import.');
-      if (document && !/\.(xlsx|pdf)$/i.test(document.originalname)) throw new UserError('The document the scorecard will judge must be an .xlsx or .pdf file.');
+      if (!SCORECARD_TYPES.test(scorecard.originalname)) throw new UserError('The scorecard must be an .xlsx, .csv, .pdf, .yaml, .json, .txt or .md file.');
+      if (document && !/\.(xlsx|csv|pdf)$/i.test(document.originalname)) throw new UserError('The document the scorecard will judge must be an .xlsx, .csv or .pdf file.');
       const result = await service.importScorecard({
         source: { name: scorecard.originalname, bytes: scorecard.buffer },
         ...(document ? { document: { name: document.originalname, bytes: document.buffer } } : {}),
@@ -115,8 +140,8 @@ export function createApp(deps: AppDeps): express.Express {
   );
 
   app.post('/api/scorecards/check', (req, res) => {
-    const body = z.object({ yaml: z.string().min(1).max(500_000), approvedBy: z.string().trim().max(120).optional() }).parse(req.body);
-    res.json(service.approveScorecard(body.yaml, body.approvedBy));
+    const body = z.object({ yaml: z.string().min(1).max(500_000) }).parse(req.body);
+    res.json(service.checkScorecard(body.yaml));
   });
 
   app.get('/api/scorecard-template.xlsx', async (_req, res) => {
@@ -125,13 +150,6 @@ export function createApp(deps: AppDeps): express.Express {
   });
 
   app.get('/api/runs/:id', async (req, res) => {
-    res.json(await store.getRunDetail(req.params.id));
-  });
-
-  app.post('/api/runs/:id/evidence', async (req, res) => {
-    const body = evidenceBody.parse(req.body);
-    await store.addEvidence(req.params.id, { ...body, score: body.score ?? null });
-    await service.snapshot(req.params.id);
     res.json(await store.getRunDetail(req.params.id));
   });
 

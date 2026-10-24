@@ -1,19 +1,19 @@
 flowchart LR
-  D["<b>Author drafts</b><br/>schema (D1) and<br/>scorecard (D2)"]
-  S["<b>Submit</b><br/>workbook +<br/>frozen scorecard"]
-  E(["<b>Evaluator agent</b><br/>scores it, writes the<br/>report and path to green"])
-  V{"Verdict"}
-  G["<b>GREEN</b><br/>a person at the gate<br/>confirms"]
-  N["Next stage"]
-  A["<b>AMBER</b><br/>author fixes the findings,<br/>path to green first"]
-  P["<b>Peer reviewer</b><br/>checks the fixes"]
-  S2["<b>Resubmit</b><br/>a new iteration with<br/>its own score"]
-  R["<b>RED</b><br/>back to Discover or Define<br/>with a mentor"]
+  D["<b>Author prepares</b><br/>the file and<br/>its scorecard"]
+  S["<b>Add them</b><br/>file +<br/>scorecard (any layout)"]
+  E(["<b>GateX</b><br/>3 Examiners mark it,<br/>a Final reviewer compares,<br/>a fixed rule picks the colour"])
+  V{"Colour from<br/>the score"}
+  G["<b>GREEN</b><br/>75 or more"]
+  N["Done: ready to move on"]
+  A["<b>AMBER</b><br/>60 to 74: fix the issues,<br/>path to green first"]
+  P["<b>Peer reviewer</b><br/>checks the fixes (optional)"]
+  S2["<b>Check again</b><br/>a new round with<br/>its own score"]
+  R["<b>RED</b><br/>below 60: fix the issues,<br/>path to green first"]
 
   D --> S --> E --> V
-  V -- "90+, gates passed,<br/>evidence supplied" --> G --> N
-  V -- "75 to 89, or a gate under 4,<br/>or evidence missing" --> A --> P --> S2 --> E
-  V -- "under 75" --> R --> D
+  V -- "75 or more" --> G --> N
+  V -- "60 to 74" --> A --> P --> S2 --> E
+  V -- "below 60" --> R --> P
 
   classDef agent fill:#0f2a27,stroke:#2dd4bf,color:#ececf0,stroke-width:2px
   classDef good fill:#0f2218,stroke:#3ecf8e,color:#ececf0

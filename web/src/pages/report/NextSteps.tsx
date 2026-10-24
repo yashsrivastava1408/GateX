@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import type { RunDetail } from '@ddd/shared';
 import { Icon, type IconName } from '../../components/Icons';
 import { plural } from '../../copy';
@@ -16,19 +15,19 @@ interface Step {
 export function NextSteps({ run, onGo }: { run: RunDetail; onGo: (tab: string) => void }) {
   const report = run.report!;
   const { verdict, pathToGreen } = report;
-  const pending = report.notMeasurable.filter((n) => !n.evidence);
+  const unmeasured = report.notMeasurable;
   const blocking = verdict.blockingFindings.length;
   const failedGates = verdict.criticalGates.filter((g) => g.status === 'failed');
   const steps: Step[] = [];
 
   if (blocking > 0) {
-    steps.push({ tone: 'red', icon: 'alert', title: `Fix the ${plural(blocking, 'must-fix problem')}`, detail: 'These block green until they are fixed. They are marked “Must fix”.', tab: 'fix', cta: 'See them' });
+    steps.push({ tone: 'red', icon: 'alert', title: `Fix the ${plural(blocking, 'must-fix issue')}`, detail: 'These matter most, so fix them first. They are marked “Must fix”.', tab: 'fix', cta: 'See them' });
   }
   if (failedGates.length > 0) {
     steps.push({
       tone: 'red', icon: 'flag',
-      title: failedGates.length <= 2 ? `Raise ${failedGates.map((g) => g.name).join(' and ')} to 4 or more` : `Raise these ${failedGates.length} must-pass checks to 4 or more`,
-      detail: 'A must-pass check can never fail, however high the total score is.', tab: 'path', cta: 'See how',
+      title: failedGates.length <= 2 ? `Raise ${failedGates.map((g) => g.name).join(' and ')} to 4 or more` : `Raise these ${failedGates.length} key checks to 4 or more`,
+      detail: 'These key checks scored low. Until they reach 4, the result cannot be green.', tab: 'path', cta: 'See how',
     });
   }
   const improvements = pathToGreen.steps.filter((s) => s.reason === 'score').slice(0, 2);
@@ -39,17 +38,17 @@ export function NextSteps({ run, onGo }: { run: RunDetail; onGo: (tab: string) =
       detail: `That adds about ${improvements.reduce((n, s) => n + s.scoreGain, 0).toFixed(1)} points towards green.`, tab: 'path', cta: 'Full path',
     });
   }
-  if (pending.length > 0) {
+  if (unmeasured.length > 0) {
     steps.push({
-      tone: 'amber', icon: 'user',
-      title: pending.length <= 3 ? `Record ${pending.map((p) => p.name).join(' and ')}` : `Record scores for the ${pending.length} items only a person can supply`,
-      detail: 'Only a person can supply these, and the result cannot be green without them.', tab: 'input', cta: 'Add them',
+      tone: 'accent', icon: 'list',
+      title: unmeasured.length <= 2 ? `Add what is missing for ${unmeasured.map((p) => p.name).join(' and ')} to your file` : `Add what is missing to your file for ${unmeasured.length} questions`,
+      detail: unmeasured.some((n) => n.treatment === 'zero') ? 'They count as 0 until your file shows something for them.' : 'They are left out of the score until your file shows something for them.', tab: 'input', cta: 'See them',
     });
   }
 
   const clear = steps.length === 0;
   if (clear) {
-    steps.push({ tone: 'green', icon: 'check', title: 'Nothing left to fix', detail: 'A person confirms this result at the gate.' });
+    steps.push({ tone: 'green', icon: 'check', title: 'Nothing left to fix', detail: 'This passes. It can move on to the next step.' });
   }
 
   return (
@@ -78,20 +77,6 @@ export function NextSteps({ run, onGo }: { run: RunDetail; onGo: (tab: string) =
             )}
           </li>
         ))}
-        {!clear && (
-          <li className="next-step next-accent">
-            <span className="next-icon">
-              <Icon name="refresh" size={18} />
-            </span>
-            <div className="next-body">
-              <div className="next-title"><span className="next-n">{steps.length + 1}</span>Fix the file, then submit the next iteration</div>
-              <div className="next-detail">Each submission is scored on its own, so you can watch the score climb.</div>
-            </div>
-            <Link to={`/new?project=${encodeURIComponent(run.projectName)}`} className="btn btn-primary btn-sm">
-              Submit again <Icon name="arrow" size={14} />
-            </Link>
-          </li>
-        )}
       </ol>
     </section>
   );

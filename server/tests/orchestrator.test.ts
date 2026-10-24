@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
-import type { HumanEvidence, Scorecard } from '@ddd/shared';
+import { bandOf } from '@ddd/shared';
+import type { Scorecard } from '@ddd/shared';
 import { parseScorecard } from '../src/scorecard/parse.js';
 import { evaluate } from '../src/agent/orchestrator.js';
 import { assembleReport } from '../src/report/assemble.js';
@@ -10,21 +11,17 @@ import {
   CLEAN_SCORECARD_YAML, CLEAN_TREE, TALENTRA_XLSX, loadTalentraScorecard, makeWorkbook, mockModels, patchCells, runEvaluation, writeTemp,
 } from './helpers.js';
 
-const signOff = (score = 5): HumanEvidence => ({
-  id: 'e', runId: 'r', dimensionId: 'H01', score, note: 'Interview passed', by: 'Mentor', createdAt: '2026-10-22T10:00:00Z',
-});
-
-const verdictOf = (run: Awaited<ReturnType<typeof runEvaluation>>, evidence: HumanEvidence[] = []) =>
-  assembleReport(run.core, evidence, null).verdict;
+const verdictOf = (run: Awaited<ReturnType<typeof runEvaluation>>) => assembleReport(run.core, null).verdict;
 
 describe('Level 1 evaluation of the Talentra workbook', () => {
-  it('finds the real defects with exact cells, and is never green while the author interview is outstanding', async () => {
+  it('finds the real defects with exact cells, and scores the author-interview question itself instead of waiting for a person', async () => {
     const run = await runEvaluation({ workbook: TALENTRA_XLSX });
-    const report = assembleReport(run.core, [], null);
+    const report = assembleReport(run.core, null);
 
-    expect(report.verdict.decision).toBe('amber');
-    expect(report.verdict.reasons.join(' ')).toMatch(/H01/);
-    expect(report.notMeasurable.map((n) => n.dimensionId)).toEqual(['H01']);
+    expect(report.verdict.decision).toBe(bandOf(report.verdict.weightedScore));
+    expect(report.notMeasurable).toEqual([]);
+    expect(report.dimensions.find((d) => d.id === 'H01')).toMatchObject({ measuredBy: 'raters', status: 'scored' });
+    expect(report.verdict.reasons.join(' ')).not.toMatch(/person|must supply/i);
 
     const c06 = report.findings.find((f) => f.dimensionId === 'C06')!;
     expect(c06.location).toEqual({ sheet: 'Tree', cell: 'L121' });
@@ -34,19 +31,11 @@ describe('Level 1 evaluation of the Talentra workbook', () => {
     expect(report.dimensions.find((d) => d.id === 'C02')!.consolidated).toBe(5);
   });
 
-  it('stays amber with middling raters even after the interview, because the score is under 90', async () => {
+  it('takes its colour from the score alone, and says which band it is in', async () => {
     const run = await runEvaluation({ workbook: TALENTRA_XLSX });
-    const v = verdictOf(run, [signOff(5)]);
-    expect(v.weightedScore).toBeLessThan(90);
-    expect(v.decision).toBe('amber');
-    expect(v.reasons.join(' ')).toMatch(/below 90/);
-  });
-
-  it('a failed interview keeps it amber even when the score is high', async () => {
-    const run = await runEvaluation({ workbook: TALENTRA_XLSX, models: mockModels(['mock-lenient', 'mock-lenient', 'mock-lenient']) });
-    const v = verdictOf(run, [signOff(2)]);
-    expect(v.weightedScore).toBeGreaterThan(90);
-    expect(v.decision).toBe('amber');
+    const v = verdictOf(run);
+    expect(v.decision).toBe(bandOf(v.weightedScore));
+    expect(v.reasons[0]).toMatch(new RegExp(`in the ${v.decision} band`));
   });
 
   it('writes a header that proves what was evaluated, and never touches the workbook', async () => {
@@ -55,8 +44,8 @@ describe('Level 1 evaluation of the Talentra workbook', () => {
     expect(run.core.header.artifactHash).toBe(before);
     expect(sha256(await readFile(TALENTRA_XLSX))).toBe(before);
     expect(run.core.header.raters.map((r) => r.model)).toEqual(['mock-mid', 'mock-lenient', 'mock-strict']);
-    expect(run.core.header.scorecardApproval).toMatch(/pending mentor approval/);
-    expect(run.runLog.promptVersion).toBe('l1-prompts/1.1');
+    expect(run.core.header.scorecardApproval).toMatch(/Sample scorecard/);
+    expect(run.runLog.promptVersion).toBe('l1-prompts/1.5');
     expect(run.runLog.participants).toHaveLength(4);
   });
 
@@ -74,7 +63,10 @@ describe('Level 1 evaluation of the Talentra workbook', () => {
     const prompt = raters[0]!.prompt;
     expect(prompt).not.toMatch(/mock-|rater_results|self-?assess/i);
     const card = JSON.parse(/<scorecard>\n([\s\S]*?)\n<\/scorecard>/.exec(prompt)![1]!);
-    expect(card.dimensions.map((d: { id: string }) => d.id)).toEqual(['J01', 'J02', 'J03', 'J04', 'J05', 'J06']);
+    // H01 was written for a person (an author interview): it needs evidence from outside the file, so it is one outside criterion, and the examiners
+    // score it now from what the file shows.
+    expect(card.dimensions.map((d: { id: string }) => d.id)).toEqual(['J01', 'J02', 'J03', 'J04', 'J05', 'J06', 'H01-C01']);
+    expect(card.dimensions.find((d: { id: string }) => d.id === 'H01-C01').measure).toMatch(/Score only what the file itself shows/);
     expect(prompt).toContain('## Sheet: Tree');
     expect(prompt).toContain('## Sheet: Playbook map');
     const consolidator = run.calls.find((c) => c.role === 'consolidator')!;
@@ -115,29 +107,30 @@ describe('planted defects must never come out green (false greens are the most e
     return runEvaluation({ workbook: await patchCells(source, sheet, edits), models: lenient });
   }
 
-  it('baseline: the unmodified workbook with perfect raters and a passed interview is green', async () => {
+  it('baseline: the unmodified workbook with perfect raters is green, with nobody signing anything off', async () => {
     const run = await runEvaluation({ workbook: TALENTRA_XLSX, models: lenient });
-    expect(verdictOf(run, [signOff()]).decision).toBe('green');
+    expect(verdictOf(run).decision).toBe('green');
   });
 
   it('a tree that goes four levels deep', async () => {
     const run = await planted({ E10: 4 });
-    const v = verdictOf(run, [signOff()]);
-    expect(v.decision).toBe('amber');
+    const v = verdictOf(run);
+    expect(v.decision).toBe(bandOf(v.weightedScore));
     expect(v.criticalGates.find((g) => g.dimensionId === 'C01')).toMatchObject({ status: 'failed' });
+    expect(v.reasons.join(' ')).toMatch(/Needs attention: critical question C01/);
     expect(run.core.findings.find((f) => f.dimensionId === 'C01')).toMatchObject({ severity: 'HIGH', location: { sheet: 'Tree', cell: 'E10' } });
   });
 
   it('a duplicated path id', async () => {
     const run = await planted({ D10: '1.1.1' });
-    expect(verdictOf(run, [signOff()]).decision).toBe('amber');
+    expect(verdictOf(run).blockingFindings.length).toBeGreaterThan(0);
     expect(run.core.findings.some((f) => f.dimensionId === 'C05' && f.severity === 'HIGH')).toBe(true);
   });
 
   it('ten missing definitions', async () => {
     const blank = Object.fromEntries(Array.from({ length: 10 }, (_, i) => [`H${20 + i}`, null]));
     const run = await planted(blank);
-    expect(verdictOf(run, [signOff()]).decision).toBe('amber');
+    expect(verdictOf(run).weightedScore).toBeLessThan(100);
     const finding = run.core.findings.find((f) => f.dimensionId === 'C02')!;
     expect(finding.location!.sheet).toBe('Tree');
     expect(finding.location!.cell).toMatch(/^H\d+$/);
@@ -148,7 +141,7 @@ describe('planted defects must never come out green (false greens are the most e
     const run = await planted({ L6: 'unbounded' });
     expect(run.core.findings.some((f) => f.dimensionId === 'C09' && f.location?.cell === 'L6')).toBe(true);
     const base = await runEvaluation({ workbook: TALENTRA_XLSX, models: lenient });
-    expect(verdictOf(run, [signOff()]).weightedScore).toBeLessThan(verdictOf(base, [signOff()]).weightedScore);
+    expect(verdictOf(run).weightedScore).toBeLessThan(verdictOf(base).weightedScore);
   });
 
   it('a list reference with a rule glued onto the name is already in the real file, and is found', async () => {
@@ -158,12 +151,12 @@ describe('planted defects must never come out green (false greens are the most e
 });
 
 describe('high-risk findings from the raters', () => {
-  it('stop a perfect-scoring evaluation from turning green until they are fixed', async () => {
+  it('keep a perfect-scoring evaluation green but list the high-risk findings to fix', async () => {
     const run = await runEvaluation({ workbook: TALENTRA_XLSX, models: mockModels(['mock-alarmist', 'mock-alarmist', 'mock-alarmist']) });
-    const report = assembleReport(run.core, [signOff(5)], null);
+    const report = assembleReport(run.core, null);
     expect(report.verdict.weightedScore).toBeGreaterThan(95);
     expect(report.findings.some((f) => f.severity === 'HIGH' && f.source === 'raters')).toBe(true);
-    expect(report.verdict.decision).toBe('amber');
+    expect(report.verdict.decision).toBe('green');
     expect(report.verdict.blockingFindings.length).toBeGreaterThan(0);
     expect(report.pathToGreen.blockingFindingIds).toEqual(report.verdict.blockingFindings);
   });
@@ -173,7 +166,7 @@ describe('when models misbehave', () => {
   it('leaves out a rater that never returns JSON, after one repair attempt, and says so', async () => {
     const run = await runEvaluation({ workbook: TALENTRA_XLSX, models: mockModels(['mock-mid', 'mock-garbage', 'mock-strict']) });
     const garbage = run.calls.find((c) => c.model.model === 'mock-garbage')!;
-    expect(garbage).toMatchObject({ status: 'failed', attempts: 2 });
+    expect(garbage).toMatchObject({ status: 'failed', attempts: 3 });
     expect(run.core.notes.join(' ')).toMatch(/Rater B .* failed and was left out/);
     expect(run.core.dimensions.find((d) => d.id === 'J01')).toMatchObject({ raterScores: { A: 4, B: null, C: 3 }, consolidated: 4 });
   });
@@ -181,10 +174,10 @@ describe('when models misbehave', () => {
   it('discards scores that cite no evidence, and does not let them count', async () => {
     const run = await runEvaluation({ workbook: TALENTRA_XLSX, models: mockModels(['mock-mid', 'mock-nocite', 'mock-strict']) });
     const rater = run.calls.find((c) => c.model.model === 'mock-nocite')!;
-    expect(rater.discarded).toBe(6);
+    expect(rater.discarded).toBe(7); // six J questions plus H01, which the examiners now score
     expect(rater.discardedDetail[0]!.reason).toMatch(/no supported evidence/);
     expect(run.core.dimensions.find((d) => d.id === 'J02')!.raterScores).toEqual({ A: 4, B: null, C: 3 });
-    expect(run.core.notes.join(' ')).toMatch(/6 claim\(s\) discarded/);
+    expect(run.core.notes.join(' ')).toMatch(/7 claim\(s\) discarded/);
   });
 
   it('fails loudly, not with a misleading red, when every rater fails', async () => {
@@ -193,14 +186,14 @@ describe('when models misbehave', () => {
     );
   });
 
-  it('keeps the lower score and flags it for a person when a big disagreement cannot be resolved', async () => {
+  it('keeps the lower score and flags it as uncertain when a big disagreement cannot be resolved', async () => {
     const run = await runEvaluation({
       workbook: TALENTRA_XLSX,
       models: mockModels(['mock-low', 'mock-lenient', 'mock-strict'], 'mock-consolidator-unresolved'),
     });
     const j01 = run.core.dimensions.find((d) => d.id === 'J01')!;
     expect(j01).toMatchObject({ consolidated: 1, spread: 4, resolution: 'lower_stands', flagged: true });
-    expect(assembleReport(run.core, [], null).agreement.find((a) => a.dimensionId === 'J01')!.flagged).toBe(true);
+    expect(assembleReport(run.core, null).agreement.find((a) => a.dimensionId === 'J01')!.flagged).toBe(true);
   });
 
   it('accepts the consolidator\'s score for a big disagreement only when it cites real evidence', async () => {
@@ -224,17 +217,48 @@ describe('when models misbehave', () => {
     expect(run.core.findings.some((f) => f.source === 'raters')).toBe(true);
   });
 
-  it('treats a dimension every rater declines as not measurable, which needs a person', async () => {
+  it('sets aside findings about a question the file cannot measure, and says so', async () => {
     const run = await runEvaluation({ workbook: TALENTRA_XLSX, models: mockModels(['mock-abstain', 'mock-abstain', 'mock-abstain']) });
-    const report = assembleReport(run.core, [], null);
     expect(run.core.dimensions.find((d) => d.id === 'J01')!.status).toBe('not_measurable');
-    expect(report.notMeasurable.map((n) => n.dimensionId)).toContain('J01');
-    expect(report.verdict.decision).not.toBe('green');
+    expect(run.core.findings.filter((f) => f.dimensionId === 'J01' && f.source === 'raters')).toEqual([]);
+    expect(run.core.droppedFindings?.find((d) => d.dimensionId === 'J01')?.reason).toMatch(/nothing that could measure this question/);
+    expect(run.core.notes.join(' ')).toMatch(/cannot measure \(.*J01/);
+  });
+
+  it('does the same when the question is made of criteria, whose findings carry the criterion id', async () => {
+    const parsed = await loadTalentraScorecard();
+    const scorecard = {
+      ...parsed.scorecard,
+      dimensions: parsed.scorecard.dimensions.map((d) =>
+        d.id === 'J01' ? { ...d, criteria: [{ id: 'J01-C1', name: 'First', kind: 'judged' as const }, { id: 'J01-C2', name: 'Second', kind: 'judged' as const }] } : d,
+      ),
+    };
+    const run = await runEvaluation({ workbook: TALENTRA_XLSX, scorecard: { ...parsed, scorecard }, models: mockModels(['mock-abstain', 'mock-abstain', 'mock-abstain']) });
+    expect(run.core.dimensions.find((d) => d.id === 'J01')!.status).toBe('not_measurable');
+    expect(run.core.findings.filter((f) => f.dimensionId === 'J01' && f.source === 'raters')).toEqual([]);
+    expect(run.core.droppedFindings?.some((d) => /^J01/.test(d.dimensionId) && /nothing that could measure/.test(d.reason))).toBe(true);
+  });
+
+  it('leaves a dimension every rater declines out of the score, without waiting for a person', async () => {
+    const run = await runEvaluation({ workbook: TALENTRA_XLSX, models: mockModels(['mock-abstain', 'mock-abstain', 'mock-abstain']) });
+    const report = assembleReport(run.core, null);
+    expect(run.core.dimensions.find((d) => d.id === 'J01')!.status).toBe('not_measurable');
+    expect(report.notMeasurable.find((n) => n.dimensionId === 'J01')).toMatchObject({ treatment: 'skipped' });
+    expect(report.verdict.skipped).toContain('J01');
+    // Only the code-counted questions are left, and they alone decide the result.
+    const counted = report.dimensions.filter((d) => d.measuredBy === 'code');
+    expect(report.verdict.weightedScore).toBeCloseTo(
+      Math.floor((counted.reduce((sum, d) => sum + d.weight * (d.consolidated ?? 0), 0) * 1000) / (counted.reduce((sum, d) => sum + d.weight, 0) * 5)) / 10,
+      1,
+    );
+    expect(report.verdict.reasons.join(' ')).not.toMatch(/person|must supply/i);
   });
 
   it('flags a dimension scored by only one rater', async () => {
     const run = await runEvaluation({ workbook: TALENTRA_XLSX, models: mockModels(['mock-mid', 'mock-garbage', 'mock-down']) });
     expect(run.core.dimensions.find((d) => d.id === 'J01')).toMatchObject({ consolidated: 4, resolution: 'single_rater', flagged: true });
+    // The note says what really happened, not that "all examiners agree".
+    expect(run.core.dimensions.find((d) => d.id === 'J01')!.rationale).toMatch(/^Only examiner A gave a score that the file could back up, so this is a single opinion\./);
   });
 });
 
@@ -244,8 +268,11 @@ describe('guardrails (PDF page 13)', () => {
     return { scorecard: { ...scorecard, frozen: false }, hash };
   };
 
-  it('Freeze: refuses an unfrozen scorecard', async () => {
-    await expect(runEvaluation({ workbook: TALENTRA_XLSX, scorecard: await unfrozen() })).rejects.toThrow(/not frozen/);
+  it('Freeze: a scorecard not marked frozen is not refused; it is frozen by its hash, which the report records', async () => {
+    const card = await unfrozen();
+    const run = await runEvaluation({ workbook: TALENTRA_XLSX, scorecard: card });
+    expect(run.core.header.scorecardHash).toBe(card.hash);
+    expect(run.runLog.scorecardHash).toBe(card.hash);
   });
 
   it('Freeze: aborts if the workbook changes while it is being evaluated', async () => {
@@ -305,11 +332,11 @@ describe('guardrails (PDF page 13)', () => {
 
 describe('a scorecard with nothing for the raters', () => {
   it('runs code checks only and does not call a model', async () => {
-    const yaml = CLEAN_SCORECARD_YAML.replace(/    - id: J01[\s\S]*?(?=    - id: H01)/, '');
+    const yaml = CLEAN_SCORECARD_YAML.replace(/    - id: J01[\s\S]*$/, '');
     const run = await runEvaluation({ workbook: await makeWorkbook({ Tree: CLEAN_TREE }), scorecard: parseScorecard(yaml) });
     expect(run.calls).toHaveLength(0);
     expect(run.core.notes.join(' ')).toMatch(/no rater dimensions/);
-    expect(verdictOf(run, [{ ...signOff(), dimensionId: 'H01' }]).decision).toBe('green');
+    expect(verdictOf(run).decision).toBe('green');
   });
 });
 
@@ -319,9 +346,24 @@ describe('the output gate (D3 against D4)', () => {
     const parsed = parseScorecard(await read(new URL('../../samples/talentra/talentra-step04-d4.yaml', import.meta.url), 'utf8'));
     const run = await runEvaluation({ workbook: TALENTRA_XLSX, scorecard: parsed });
     expect(run.core.header.gate).toBe('D3');
-    const report = assembleReport(run.core, [], null);
+    const report = assembleReport(run.core, null);
     expect(report.dimensions.filter((d) => d.measuredBy === 'code').every((d) => d.status === 'scored')).toBe(true);
-    expect(report.notMeasurable.map((n) => n.dimensionId)).toEqual(['H01']);
-    expect(report.verdict.decision).toBe('amber');
+    expect(report.notMeasurable).toEqual([]);
+    expect(report.dimensions.find((d) => d.id === 'H01')).toMatchObject({ measuredBy: 'raters' });
+    expect(report.verdict.decision).toBe(bandOf(report.verdict.weightedScore));
+  });
+});
+
+describe('extra run notes', () => {
+  it('puts where the scorecard came from first in the run notes', async () => {
+    const { evaluate } = await import('../src/agent/index.js');
+    const { createProviderFactory } = await import('../src/llm/registry.js');
+    const models = mockModels();
+    const parsed = await loadTalentraScorecard();
+    const out = await evaluate({
+      runId: 'r', projectName: 'p', iteration: 1, workbookPath: TALENTRA_XLSX, artifactName: 'a.xlsx', scorecard: parsed.scorecard,
+      scorecardHash: parsed.hash, sources: '', scorecardNotes: ['Converted from GS1.xlsx.'], models, providers: createProviderFactory(models, { mockDelayMs: 0 }), env: {},
+    });
+    expect(out.core.notes[0]).toBe('Converted from GS1.xlsx.');
   });
 });

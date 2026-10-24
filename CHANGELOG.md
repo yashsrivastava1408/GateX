@@ -1,6 +1,238 @@
 # Changelog
 
-All notable changes to the DDD Evaluator. Format follows [Keep a Changelog](https://keepachangelog.com/).
+All notable changes to GateX (earlier entries call it the DDD Evaluator). Format follows [Keep a Changelog](https://keepachangelog.com/).
+
+## [Unreleased]
+
+### GateX: new name, new documentation (24 Oct 2026)
+- **The product is now called GateX**, with the tagline "Checks your work against a scorecard". The README and every page under `docs/` use the new name.
+  Folder and package names such as `ddd` and `@ddd/*` are unchanged.
+- **Plainer words.** The three AI models are described as Examiner 1, 2 and 3, and the model that compares them as the Final reviewer. Issues are
+  described as Must fix, Should fix or Nice to fix. The colour rule is stated everywhere the same way: below 60 red, 60 to 74 amber, 75 or more green.
+- **A shorter README** with how it works, a five-step quick start, what you get (verdict, issues, path to green, PDF with charts, Excel and Markdown)
+  and where to read more. Scorecard conversion and PDF checking moved to `docs/scorecard-reference.md`; the Amazon Bedrock setup moved to `docs/operations.md`.
+- **Redrawn diagrams** (`docs/diagrams/*.mmd`, the rendered `docs/images/*.svg` and the hand-drawn `docs/images/architecture.svg`) use the new names.
+
+### Phases 1 to 4 after the R3 report (24 Oct 2026)
+- **"The file already has it" check** (`agent/presence.ts`): a finding that says something is missing is set aside when a model points at a cell that really
+  holds it and code proves the quote is in that cell. On 23 labelled findings it dropped 8 of 15 the file already answers and 0 of 8 real gaps; it keeps
+  everything if the call fails. `npm run presence:eval` repeats the measurement.
+- **More code checks in the sweep:** a cell empty on a row of a kind that always has it (the planted blank data type), a value such as "Maybe" in a Required
+  column, and a stated tally that is a little off ("278 parameters" for 276 rows, LOW). The sweep now finds all eight planted defects offline; it found 6 before.
+  Measured on eight real workbooks: no false finding from the new checks.
+- **The report says when an examiner failed**, next to the colour ("this score rests on 2 of 3 examiners. Run it again before relying on it").
+- **`npm run release:check`** runs type-check, tests, docs and the filter replay on every labelled run, so a change that makes the evaluator worse is caught
+  before it ships; `-- --live` adds the model-backed check.
+
+### Fixed and added after the R2 report (24 Oct 2026)
+- **A cited id that exists nowhere is now a finding** (`sweepMissingTargets` in `agent/sweep.ts`). When the file defines a whole family of ids (eight or more
+  of one form, defined in an id column such as `D3-S14-P01..P09`), an id of that form named in running text but defined nowhere (`D3-S14-P15`) is reported
+  with its cell. Zero padding is ignored (PER-01 and PER-001 match), pattern placeholders (PER-000) and example or pattern columns are skipped. On the real
+  Step 2 workbook it finds two ids and no false ones; two other workbooks give none. The first run missed `D3-S14-P15` in `Value_Codes!E130`.
+- **A small-window model can no longer be asked for too much** (`outputBudget` in `agent/rater.ts`). Qwen3-32B was sent a 24,577-token prompt and asked for
+  8,192 back, one token over its 32,768 window, so Bedrock refused it and examiner C was lost. The answer size is cut to what fits, and a model with under
+  2,048 tokens of room left is not asked.
+- **Examiners get a third try** at a reply that is not valid JSON (the last ask also says to keep each text short). The final reviewer still gets two.
+- **Naming columns survives a moved header row** (`excel/serialize.ts`). A reused scorecard conversion pinned README's header row as 6; a file with its
+  titles on row 5 stopped the run with "column not found". Now the one nearby row that holds every named column is used; if none does, the error stands.
+- **Inter-rater agreement counts as evidence from outside the file**, like independent runs and interviews, so a 0 there no longer caps the question.
+
+### Added: a test library, so you can see whether the evaluator is getting better
+- **Test library** page in the dashboard (`/library`, API `GET /api/library` and `GET /api/library/:id`). It lists real file pairs, the runs made on
+  each, and a verdict on every finding checked against the real file: real, partly right, wrong, vague, repeat or not checked. It shows the share of
+  checked findings that are useful. A later run carries a verdict over only for a finding at the same cell and question, and marks it "carried over".
+  The pairs are plain files under `data/library/`, the runs under `data/live-*/`, the verdicts under `data/reviews/`; no database is needed.
+- `npm run survey -- --folder <dir>` reads every file in a folder with no model and prints what the app sees in each (sheets, header rows, sizes).
+- `npm run replay -- --run <dir> --workbook <file> --labels <review.json> [--show]` re-runs the finding filter on a finished run and scores it against
+  the verdicts, with no model call. A filter change is only good if it never drops a finding labelled real or partly right.
+- **A `.csv` can now be the file under test** (`server/src/excel/csvReader.ts`). It reads as one sheet named `Sheet1`; quotes, line breaks inside
+  quotes, a byte-order mark and comma, semicolon or tab separators are handled. Before, only a scorecard could be a CSV.
+
+### Changed: fewer false and empty findings
+Measured on the first real Step 2 run (93 findings, each checked against the real workbook): 12 real, 18 partly right, 39 vague, 14 wrong, 7 repeats and
+3 not checked, so about a third were useful. After these changes the same findings, replayed with no model call, give 55 findings of which about half are
+useful, and no real or partly-right finding is dropped.
+- **Vague findings are dropped.** A finding that is short, hedged ("some", "may", "could", "not all") and names no id, number, quote or acronym is dropped
+  with its reason (`isVague` in `agent/findingCheck.ts`).
+- **"Missing X" is tested against the whole file.** If every word of X appears together in three or more places (a sheet name, a title, a definition), the
+  finding is dropped. A claim about a sheet it names is tested on that sheet only.
+- **Repeats merge more.** Findings in the same question at the same cell with similar wording are merged (the threshold was 0.4, now 0.2); the other
+  wordings stay in an "Also reported as" note.
+- **The review of disagreements recovers.** If the final reviewer's reply for a batch cannot be read, the batch is split in half and each half asked again,
+  so one bad reply costs a few questions their review, not eight. A service error (for example 503) is not split.
+- **Prompts `l1-prompts/1.5`.** Four rules are added: a schema defines, it is not filled data; every finding must point at a specific id, row, column or
+  quote; a `<workbook_map>` lists every sheet so a rater who sees only some sheets does not say a thing is missing from the file; and a figure the file
+  states about itself ("definitions 71/71 100%") is a claim, not proof (score no higher than 4 unless checked). Each rater prompt is about 400 tokens
+  longer, so the Step 04 sample (7,252 tokens) no longer fits a 7,000-token limit; the live roster does not use one.
+- **Findings about what the examiner was shown are dropped.** "The sheet was not provided", "not visible in the provided artifact" describe the prompt,
+  not the file (`complainsAboutThePrompt`).
+- **Findings about a question the file cannot measure are set aside.** A question left out of the score (an interview, a second run) can no longer raise a
+  finding that blocks green; the findings are listed with the dropped ones.
+- **More repeats merge.** The same question on the same sheet, in words that mostly overlap (0.3), merges even when the cited cells differ.
+
+### Changed: one colour rule for every score (ADR-18)
+- **Below 60 is red, 60 to 74 is amber, 75 to 100 is light green**, everywhere: the verdict, the report (PDF, Excel, Markdown, JSON), the dashboard, the history
+  and the per-question scores (3 of 5 is 60, 3.75 is 75). It is one constant in `shared/src/types.ts` (`SCORE_BANDS`, `bandOf`), and no scorecard can change it:
+  the `thresholds` a scorecard states (GS-1 says 90 and 75) are ignored. Old runs are recoloured when opened. The greens are lighter in the dashboard, the PDF and the Excel.
+- **The colour now comes from the score alone.** A critical question below 4, an open high-risk finding, a score only one examiner could back and a score built on a small part
+  of the scorecard are listed as "Needs attention" at the top of the verdict instead of turning a green result amber, and a critical question at the old `red_at_or_below`
+  line no longer forces red. A report that read "RED 79.6, green needs 90" now reads green. This deviates from the PDF's decision table; see ADR-18.
+- Report fixes found in a real report: the `≠`, `≤`, `×` and `§` signs no longer vanish from the PDF; an empty-cell finding keeps the column's own capitalisation
+  and is not raised on a row with no id (a total or a note); the report's run notes say in one line which questions had their sheets chosen by code.
+
+### Added: ready for a team to use (PDF tables, a score that follows the evidence, quick check, user guide)
+- **PDF tables are read row by row** (`excel/pdfTables.ts`). A PDF stores a table as loose pieces of text, and a cell that wraps onto three lines used to
+  become three lines, so the examiners saw `question_to_ask | The exact | A precise` with the rest of each description floating below. Now the columns are
+  found from where many lines start, a new row starts where the gap is wider than between wrapped lines (or, when rows are not padded, where the line starts
+  in the field-name column), and each column's pieces are joined across the lines. The Docket's `question_to_ask` row now reads
+  `The exact question | A precise question gets a precise answer | Text(500) | A | Yes | ANALYST | Ends with "?"`. A page without a table is read exactly as before.
+  Checked on five real PDFs (no crash on any page). The Docket pair had only 5% useful findings, mostly from this misreading.
+- **The score follows the exact evidence.** A question cannot keep a clean score the examiners gave it when the row-by-row sweep found mistakes under it:
+  4 for one or two, 3 for three to five, 2 for six or more (`capByExactFindings`). Only MEDIUM findings count, a cap only ever lowers a score, and the report
+  says which question was capped and why. Before, a file with planted defects scored the same as the clean one.
+- **Quick check** (a tick box on the upload page, `quick=1` on `POST /api/runs`): every question is scored once, so a repeat run is about a third faster.
+  The roster's `sectionConcurrency` is now 4 (it was 2), since one person submits at a time.
+- The upload page now accepts a `.csv` as the file to check (the server already did).
+- **Measured on the Docket pair** (a 56-page PDF against a 49-question scorecard): with the PDF table reader and four sections at a time it ran in **13 minutes
+  instead of 31**, gave 11 findings instead of 25, and 2 of the 11 were useful (18%) instead of 1 of 22 (5%). The same Step 2 register that took about 20 minutes
+  took about 10 through the dashboard.
+- `verbal`, `oral defence`, `visual`, `appearance` and `look and feel` join the wording that marks a question as needing evidence from outside the file, and a
+  question with no sub-criteria that matches is wrapped as one outside criterion (`D8-C01`). "Visual / Format Quality" scored 0 on every PDF because the examiners
+  read extracted text with no appearance, which cost about 12 points of the score; it is now left out ("not in the file") instead. On the real converted scorecards the rule
+  touched only the "Verbal", "Visual / Format Quality", independent-runs and build-runs questions.
+- **`docs/user-guide.md`**: one page for authors on how to submit, read the report, fix and check again, and what the score does and does not mean.
+
+### Added: the planted-defect test, and a row-by-row sweep in code
+- **`npm run planted -- --workbook <good register> --scorecard <scorecard> --label <name> [--models <models.json>]`** breaks a copy of a good register
+  on purpose (a blank definition, reason and data type; a duplicate id; a parent that does not exist; an invalid "Required" value; a vague definition; a
+  wrong child count), runs the app with live models, and scores how many were found, per examiner (`server/src/planted/`). The answer key is what was
+  planted, so no reviewer's opinion is needed. Results are saved in `data/planted/<label>/result.json` and shown on the Test library page.
+- **First result: the app found 0 of 8.** On the Step 4 register, GLM 5, Llama 3.3 and Qwen3 found none of the eight planted defects and the broken file
+  scored 95.6. Every question in that scorecard is "judged", so the models read the whole sheet and skim it. Eleven other model slots were tried on the same file (DeepSeek v3.2, Kimi K2.5, gpt-oss-120B, Llama 4 Maverick, Nemotron Super,
+  MiniMax M2.5, Mistral Large 3, GLM 4.7, Qwen3-32B and the current three): ten found none and Kimi found 1 of 8, so a better model does not fix this. The scores
+  they gave the same nearly-clean file ranged from 45.8 (DeepSeek, Kimi, gpt-oss) to 95.6, so their harshness differs a lot. All of them answered with valid JSON,
+  so they are drop-in alternatives; `server/config/candidates/` holds the rosters.
+- **The row-by-row sweep** (`agent/sweep.ts`) reads every row in code, whatever the scorecard asks, and reports what is wrong by the file's own pattern:
+  an empty cell in a column that is otherwise full, a repeated id, a reference to an id that does not exist, a child count that does not match the rows,
+  and a definition made of filler. Each result is an exact code finding at one cell, attached to the scorecard question whose words match, so the finding
+  filters leave it alone. On the planted file it finds 6 of the 8 (the blank definition and reason, the duplicate id, the broken parent, the wrong count and the filler definition). It misses the blank data type, because that column is legitimately empty on section rows, and the invalid "Required" value, which only the removed one-use-value rule could see.
+  It is silent on clean registers (0 findings on the Step 4 CSV, the Step 4 and Step 3 workbooks and the Step 2 schema, apart from a handful of one-cell
+  LOW observations on other sheets). A first version also flagged "a value used once in a column" and was right about 1 time in 9 (for example "Low" among
+  Critical/High/Medium), so that rule was removed.
+- **Known limit:** the planted file still scores about the same as the clean one (95.6 against 93.6), because the sweep adds exact findings but the score is
+  still the examiners' judgement of the scorecard's questions. Making a counted question (for example "every field has a definition") use an exact count instead
+  of a reading is the next step.
+- `npm run survey`, `replay`, `reliability`, `review:dump` and `planted` are the tools of the test loop (see docs/development.md).
+
+### Added: the evaluator learns how reliable each examiner is, from checked work
+- `npm run reliability` measures, from the verdicts in the test library, how often each model family's findings were right once checked against the
+  real file, and saves `data/library/reliability.json` (no model is called). On the 160 findings checked so far: raised by one examiner, 18% were useful;
+  by two, 68%; by three, 80%. Alone, `zhipu` was right 57% of the time, `meta` 2% and `mistral` 0%.
+- **The agent reads that table as a plain rule** (`agent/reliability.ts`). A finding only one examiner raised is set aside when that examiner's family
+  has been right under 20% of the time on its lone findings, once at least 20 were checked. A second examiner agreeing keeps it, and the rule runs after
+  duplicates are merged. A family with fewer than 20 checked findings is never filtered. Each set-aside finding is listed with this reason. The agent does
+  not change while it scores: the table is data, read once at the start of a run (CLI and dashboard).
+- Estimated by leaving one run out at a time (table built from the other runs): filters alone gave 42% useful findings (49 of 118); with the examiner rule
+  53% (48 of 91), losing one useful finding. Five runs on four file pairs is a small sample; re-run `npm run reliability` after reviewing more runs.
+- The Test library page shows the table ("How often each examiner is right"); `GET /api/library/reliability` serves it.
+
+### Changed: the Bedrock roster
+- **Examiner C is now `qwen.qwen3-next-80b-a3b` (family `qwen`)**, with `qwen.qwen3-32b-v1:0` as its same-maker backup, instead of Mistral Large. Mistral hit its
+  daily token limit (HTTP 429) in the middle of the test runs, and its lone findings had been right 0 times in 33 checked. GLM 5 (examiner A) gains
+  `zai.glm-4.7` as a same-maker backup. The old file is kept as `server/config/models.bedrock.mistral-backup.json`. A new maker starts with no reliability
+  history, so nothing it raises alone is set aside until 20 of its lone findings have been checked. Every model was pinged and answered before the switch.
+  Claude models are listed on the account but refused (AWS payment setup); DeepSeek v3.2, Kimi K2.5, gpt-oss-120B, Llama 4 Maverick and Nemotron also answered.
+- **A text value missing its opening quote is repaired** when a model writes `"rationale": The artifact ...` (GLM 5 did, and lost a section each time);
+  only after the reply failed to parse as written (`quoteBareValues` in `agent/callModel.ts`).
+
+### Fixed
+- **A question that needs evidence from outside the file no longer scores 0.** A criterion whose wording needs several independent runs, or the
+  author's interview or answers, is treated as outside the file even when the converter called it `counted` (`retypeOutsideCriteria`). A 0, or no usable
+  score, on such a criterion now counts as "not in the file" (GS-1's own rule caps that at 3) and is no longer an unscored zero. A missing-evidence
+  complaint about such a criterion is set aside too, so it cannot block green. On the Docket pair this had cost SC-D05 (weight 5) and SC-D08 (weight 9.4).
+  Findings tagged with a criterion id (`AU-01`) are now matched to their dimension, which the first version of the unmeasurable-question rule missed.
+- **The exact code checks counted a summary row.** A row whose first cell is `COUNT`, `Total`, `Sum` and so on is no longer counted as data, so a
+  `COUNT` row can no longer fail "every row has a tier" (`isSummaryRow` in `agent/checks/library.ts`).
+- **A big file no longer leaves questions unscored.** A question with no `reads` list was sent the whole workbook (316,000 tokens on the Step 2 schema),
+  which every examiner refused, so it came out unscored. Code now gives it the sheets and columns that best match its words, up to 30,000 tokens
+  (`agent/autoReads.ts`). Each choice is written in the run notes.
+- **A scorecard with missing weights converts.** A question with a blank, zero or non-numeric weight gets the average of the others (or 1), with a note,
+  instead of the whole scorecard being refused (`repairWeights` in `scorecard/importDraft.ts`).
+- Tests: 444 server and 10 dashboard.
+
+### Documented now (built earlier, not yet described here)
+- **Workbook profile** (`excel/profile.ts`): for every sheet its real header row, id column, size, and for every column what it holds and how full it is.
+  Built from the file alone. It decides which columns a question reads, tests findings against the file, and sizes prompts.
+- **Criteria** (`agent/aggregate.ts`): a dimension can hold criteria, each scored on its own (examiners or exact code counts), then combined by the
+  scorecard's own rule (`aggregate`, for example mean with a floor and caps), so the score follows the scorecard's arithmetic.
+- **Fact check and merge of findings** (`agent/findingCheck.ts`): a finding that says cells are empty is tested cell by cell; a claim about every field is
+  tested against nearly-full columns; duplicates are merged. Dropped findings are listed in the report with the reason.
+- **Adaptive repeats** (`repeatMode`, default `adaptive`): every rater scores everything once, then only the questions the examiners disagreed on are
+  scored again, and the median is kept.
+- **Scorecard pinning** (migration `003_scorecard_pins.sql`): a project keeps the scorecard its first iteration was converted to, so later iterations are
+  marked against the identical target. Use a new project name when the saved scorecard is wrong.
+- **Batched review**: the final reviewer is asked about 8 questions per call.
+- A guard refuses the same file uploaded as both the file to check and the scorecard.
+
+### Changed: result bands
+- Default bands are now **0-59 red, 60-74 amber, 75-100 green** (accept 75, refine 60; was 90 and 75). A scorecard that states its own `thresholds` keeps them
+  (the GS-1 workbook states 90 and 75). The green is lighter in the dashboard. Docs and diagram sources updated.
+
+### Changed: fully automatic scoring (no person in the loop)
+- **Any scorecard layout is scored straight away.** Upload a GS-1 workbook, CSV, PDF or text rubric on *Check a new file* (or `--scorecard` on the CLI):
+  it is converted by one model call, checked by code and used. There is no draft, no approval and no name to type. The conversion is cached in
+  `data/scorecards/`, so every iteration uses the identical scorecard (same hash) and the model is called once per scorecard; simultaneous submissions share it.
+- **Nothing waits for a person.** A question written for a person (`measured_by: human`, "unmeasurable" criteria such as an interview or a second run)
+  is scored by the examiners from what the file records. Only when they find nothing at all is it left out (`unmeasured: skip`, the default) or counted
+  as 0 (`unmeasured: zero`). The old `unmeasured: person` reads as `skip`.
+- **`frozen` is optional.** Every scorecard is frozen by its hash at submission; an unfrozen one is no longer refused. Reports never say "provisional".
+- **Converted questions stay small.** The converter names the columns each question needs (`Sheet[Col|Col]`); code matches them to the real headers and,
+  if a question still reads more than the tightest rater allows, cuts its widest sheets to the id column plus the columns that match the question.
+  On the Talentra Master Schema this took the largest section from about 135,000 to about 36,000 tokens.
+- Dashboard: *Import a scorecard* is now *Convert a scorecard* (optional preview); "Needs your input" is now a read-only "Not in the file" list;
+  the "Change the result" button and the approval banner are gone. Wording no longer asks anyone to check, approve or supply anything.
+- `PROMPT_VERSION` is `l1-prompts/1.2` (raters score outside-evidence questions from what the file records). `IMPORT_VERSION` is `import/2.2`.
+
+### Removed
+- `POST /api/runs/:id/evidence`, the human-evidence form, `pathToGreen.needsPerson`, `RunDetail.evidence`, and the `approvedBy` field of
+  `POST /api/scorecards/check` (it now just re-checks and freezes a YAML scorecard). The override API remains, optional.
+
+### Verified
+- 282 server tests and 10 web tests pass, on the in-memory database (not re-run against a real Postgres this time). New tests cover the converter (format detection, cache across restarts,
+  concurrent submissions, damaged cache, no model), the column and size safety net, `unmeasured: zero`, and that no verdict, report or screen asks a person for anything.
+- **Live, on Bedrock, no mock:** the GS-1 workbook (`Talentra_Step2_Master_Scorecard_Final.xlsx`) converted in 40-76 s into its 13 dimensions
+  (weights 100, the 7 GATE dimensions critical, red line 2, evidence gates E1-E3 left out as the workbook says they are not scored). The Master Schema
+  was then evaluated against it end to end: **RED 53.0** in 3 min 44 s, all 13 dimensions scored, 159 findings (54 HIGH), about 1.85M input tokens.
+  Mistral Large sat out the five sections over its 24,000-token limit; the other two examiners covered them.
+
+### Added
+- **Delete a report or a project** from the dashboard, after a confirmation. `DELETE /api/runs/:id` and `DELETE /api/projects/:id` remove the
+  database rows and the saved upload and report files; a run that is still in progress cannot be deleted.
+- **Findings that repeat are folded into one** in the report view, with the other wordings under "Also said", a search box, and expand/collapse.
+- **Light theme**, a theme switch in the sidebar, a redesigned "New evaluation" page, live progress and elapsed time while a run works,
+  toasts, and a "Copy summary" button on a finished report.
+- **Server setup.** The image is smaller and runs as a non-root user with a health check. The app and the database listen on this machine only;
+  `docker compose --profile https up -d` adds Caddy for automatic HTTPS. `POSTGRES_PASSWORD` and `DOMAIN` in `.env` (see "Putting it on a server"
+  in `docs/operations.md`).
+
+- **Import scores everything it can.** Questions are no longer given to a person because they are counts. With the file the scorecard will be used on, the
+  importer sees each sheet's real column headings (it finds the header row by itself), proposes exact computer counts for a workbook (column filled, unique,
+  values in an allowed list, maximum value, not one of these values, minimum rows), and each proposal is **tried on the real file** and dropped if the
+  sheet or column is wrong. A count no exact check can make is scored by the AI examiners from the file, on a standard 0 to 5 scale when the source has none.
+- **`unmeasured: skip`** on a scorecard leaves a question that needs something outside the file (a second run, an interview, a document not given) out of the
+  score instead of waiting for a person. It is listed as "Not measured" and does not hold green back. Imported scorecards use it; `person` stays the default.
+
+- **A score one examiner alone could back cannot make a green result.** Before, a 100 built on a single examiner's 5 on several questions, including must-pass
+  ones, read as Green. Now the verdict stays amber and names the questions that need a second opinion. The note beside such a score says "Only examiner B gave
+  a score that the file could back up" instead of the final reviewer's "all examiners agree". The import also tells you when the scorecard refers to sheets
+  the file does not have.
+
+- **A score built on a small part of the scorecard cannot be green.** At least half of the scorecard's weight must be scored (the rest being left out as not
+  measured). A file scored on 12% of the questions had read Green 100. On start-up the server also brings every saved result in line with the current rule,
+  so lists and the sidebar never show an older rule's answer.
+
+### Changed
+- The dashboard stops at the scorecard report: the "next iteration" buttons, trend chart and round-by-round comparison are no longer shown.
 
 ## [1.6.0] - 2026-10-23
 
@@ -151,4 +383,4 @@ First release: the **Level 1 evaluator agent** from the Agentic Roadmap.
 
 ### Not in this release
 Calibration, shadow mode, the gate tracker, authentication and roles, sectioned evaluation. See
-[docs/pdf-traceability.md](docs/pdf-traceability.md#not-built-yet).
+[docs/pdf-traceability.md](docs/pdf-traceability.md).

@@ -1,29 +1,29 @@
 flowchart TD
-  IN["<b>Inputs</b><br/>workbook (.xlsx) · frozen scorecard · optional source documents"]
+  IN["<b>Inputs</b><br/>your file (Excel, CSV or PDF) · your scorecard · optional source documents"]
 
-  F["<b>1 · Freeze</b><br/>read once · SHA-256 of workbook and scorecard<br/>refuse an unfrozen scorecard or an invalid roster<br/>check every sheet the scorecard names exists"]
+  F["<b>1 · Freeze</b><br/>read once · lock the file and the scorecard with a fingerprint (hash)<br/>make sure three different AI families are set up<br/>check every sheet the scorecard names exists"]
 
-  C["<b>2 · Count in code</b><br/>exact checks give a pass ratio per dimension<br/>bands turn the ratio into a 0-5 score"]
+  C["<b>2 · Count in code</b><br/>exact counts give a pass share per question<br/>the share turns into a 0-5 mark"]
 
-  R["<b>3 · Rate</b>  three blind raters, three model families, in parallel<br/>same prompt · JSON only · 0-5 per dimension · cite a cell"]
+  R["<b>3 · Examiners 1, 2, 3 mark</b>  on their own, at the same time<br/>same instructions · 0-5 per question · each mark points at a cell"]
 
-  EV{"Citation valid?<br/>sheet and cell exist<br/>quote really in the cell"}
-  DISC["Discard the claim<br/>(logged, counted in the report)"]
+  EV{"Does the mark point at a real cell?<br/>sheet and cell exist<br/>quote really in the cell"}
+  DISC["Set the claim aside<br/>(recorded in the report)"]
 
-  K["<b>4 · Consolidate</b>  a fourth model reconciles the three scorecards<br/>merges duplicate findings"]
+  K["<b>4 · Final reviewer</b>  compares the three sets of marks<br/>merges repeated issues"]
 
-  RULES["Code enforces the PDF rules<br/>score inside the raters' range<br/>gap over 1 point needs cited evidence<br/>otherwise the lower score stands and a person is asked"]
+  RULES["Code applies the rules<br/>the mark stays inside the Examiners' range<br/>a gap over 1 point needs evidence from the file<br/>otherwise the lower mark stands"]
 
-  D["<b>5 · Decide in code</b><br/>weighted score · critical gates need 4+<br/>human-only evidence supplied?"]
+  D["<b>5 · Decide by a fixed rule</b><br/>weighted score out of 100<br/>below 60 red · 60-74 amber · 75+ green"]
 
   OUT{"Verdict"}
-  GRN["GREEN<br/>moves on once a person confirms"]
-  AMB["AMBER<br/>fix findings, peer review, resubmit"]
-  RED["RED<br/>back to Discover or Define with a mentor"]
+  GRN["GREEN<br/>75 or more"]
+  AMB["AMBER<br/>60 to 74"]
+  RED["RED<br/>below 60"]
 
-  REPT["<b>6 · Report</b><br/>eight sections · .xlsx + .md + .json<br/>path to green · full run log in Postgres"]
+  REPT["<b>6 · Report</b><br/>what to fix first · path to green · charts<br/>PDF, Excel and Markdown · full record kept"]
 
-  FREEZE2["Re-hash the workbook<br/>abort if it changed mid-run"]
+  FREEZE2["Check the file again<br/>stop if it changed mid-run"]
 
   IN --> F --> C --> R --> EV
   EV -- no --> DISC --> K

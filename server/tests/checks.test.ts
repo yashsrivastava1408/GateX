@@ -30,6 +30,25 @@ describe('code checks', () => {
     expect(out!.result.consolidated).toBe(2);
   });
 
+  it('leaves a summary row such as COUNT or Total out of every count', async () => {
+    const tree = { Tree: [['Name', 'Type', 'Level'], ['a', 'text', 1], ['b', 'text', 2], ['COUNT', '', 2], ['Total:', '', 3]], Lists: [['List']] };
+    const [filled, max] = await run(tree, [
+      { id: 'F', check: 'column_filled', params: { sheet: 'Tree', column: 'Type' } },
+      { id: 'M', check: 'max_value', params: { sheet: 'Tree', column: 'Level', max: 2 } },
+    ]);
+    // Without the rule the COUNT row would fail "Type is filled" (1 blank) and the Total row would fail "Level at most 2".
+    expect(filled!.result.codeDetail).toMatchObject({ passed: 2, total: 2 });
+    expect(filled!.failures).toEqual([]);
+    expect(max!.result.codeDetail).toMatchObject({ passed: 2, total: 2 });
+  });
+
+  it('keeps a real row whose first cell only starts with a total word', async () => {
+    const [filled] = await run({ Tree: [['Name', 'Type'], ['Counting rules', 'text'], ['Total cost', '']], Lists: [['List']] }, [
+      { id: 'F', check: 'column_filled', params: { sheet: 'Tree', column: 'Type' } },
+    ]);
+    expect(filled!.result.codeDetail).toMatchObject({ passed: 1, total: 2 });
+  });
+
   it('column_filled: honours where and a pattern', async () => {
     const tree = { Tree: [['Level', 'Type', 'Ref'], [1, '', 'x'], [3, 'text', 'list: A'], [3, '', 'list: B'], [3, 'enum', 'oops']], Lists: [['List']] };
     const [filled, pattern] = await run(tree, [

@@ -62,7 +62,7 @@ describe('reading a PDF as a workbook', () => {
 
   it('refuses a PDF with no text and a file that is neither PDF nor xlsx, in plain words', async () => {
     await expect(WorkbookModel.load(await makePdf([[]]))).rejects.toThrow(/no readable text/);
-    await expect(WorkbookModel.load(Buffer.from('not a file'))).rejects.toThrow(/not a valid .xlsx/);
+    await expect(WorkbookModel.load(Buffer.from([0x00, 0x01, 0x02, 0x03, 0x04]))).rejects.toThrow(/not a valid .xlsx/);
   });
 
   it('expands page ranges in sheets and reads, and plans one section per range', async () => {

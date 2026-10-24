@@ -82,3 +82,26 @@ describe('workbook reader', () => {
     expect(parseAddress('12H')).toBeNull();
   });
 });
+
+describe('serializing named columns when the header row given is not where the titles are', () => {
+  const rows = [
+    ['Title line'],
+    ['Note'],
+    ['Id', 'Name', 'Meaning'],
+    ['A1', 'one', 'first'],
+    ['A2', 'two', 'second'],
+  ];
+
+  it('finds the row that holds every title instead of failing (a reused conversion pinned another header row)', async () => {
+    const wb = await WorkbookModel.load(await makeWorkbook({ Sheet1: rows }));
+    const text = serializeSheet(wb, { name: 'Sheet1', headerRow: 5, columns: ['Id', 'Meaning'] });
+    expect(text).toContain('A4="A1"');
+    expect(text).toContain('C5="second"');
+    expect(text).not.toContain('B4=');
+  });
+
+  it('still says so when no row holds the named columns', async () => {
+    const wb = await WorkbookModel.load(await makeWorkbook({ Sheet1: rows }));
+    expect(() => serializeSheet(wb, { name: 'Sheet1', headerRow: 3, columns: ['Nope'] })).toThrow(/Column "Nope" named by the scorecard was not found/);
+  });
+});

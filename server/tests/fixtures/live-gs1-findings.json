@@ -1,0 +1,2733 @@
+{
+ "note": "Findings from the live Bedrock run of 23 Oct 2026: Talentra_Step2_Master_Schema.xlsx scored against the GS-1 scorecard (data/live-gs1-eval/report.json).",
+ "findings": [
+  {
+   "id": "F-001",
+   "severity": "HIGH",
+   "dimensionId": "G01",
+   "location": {
+    "sheet": "README",
+    "cell": "A1"
+   },
+   "title": "Missing executive summary",
+   "detail": "The artifact does not provide an executive summary that clearly states the decisions enabled, consumers, risks controlled, and current status in one page, with goals, non-goals, and alternatives.",
+   "fix": "Add an executive summary row below A1 stating the key decisions enabled, business impact, and recommended actions.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A",
+    "B",
+    "C"
+   ]
+  },
+  {
+   "id": "F-002",
+   "severity": "HIGH",
+   "dimensionId": "G01",
+   "location": {
+    "sheet": "README",
+    "cell": "A1"
+   },
+   "title": "Missing current status",
+   "detail": "The dimension requires stating the 'current status'. While individual conflicts have statuses (Open, Decided, Flagged), there is no overall status for the Step 02 deliverable itself.",
+   "fix": "Add a clear status indicator (e.g., 'Draft', 'In Review', 'Approved') to the README header or a dedicated status cell.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-003",
+   "severity": "HIGH",
+   "dimensionId": "G01",
+   "location": {
+    "sheet": "README",
+    "cell": "A12"
+   },
+   "title": "Missing alternatives considered",
+   "detail": "No alternatives considered are documented. The Conflicts_Decisions sheet records disagreements but not alternative approaches evaluated for the schema design.",
+   "fix": "Add a section in README or a dedicated sheet documenting alternative approaches considered and why they were rejected.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A",
+    "B",
+    "C"
+   ]
+  },
+  {
+   "id": "F-004",
+   "severity": "HIGH",
+   "dimensionId": "G01",
+   "location": {
+    "sheet": "README",
+    "cell": "A5"
+   },
+   "title": "Missing non-goals",
+   "detail": "Goals are stated but non-goals are absent. Without explicit non-goals, readers may assume incorrect boundaries for the schema scope.",
+   "fix": "Add a row after A9 with 'Non-goals:' and list what is explicitly out of scope for Step 02.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A",
+    "B",
+    "C"
+   ]
+  },
+  {
+   "id": "F-005",
+   "severity": "HIGH",
+   "dimensionId": "G02",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "P27"
+   },
+   "title": "Unvalidated assumptions in compliance-related source traces",
+   "detail": "Multiple entries reference DPDP Act 2023 and DPDP Rules 2025 with the qualifier '(ASSUMPTION: applicability not confirmed by counsel)'. These unvalidated assumptions about legal applicability could materially change compliance outcomes if the assumptions prove incorrect.",
+   "fix": "Obtain counsel confirmation on DPDP Act/Rules applicability and update source traces to reflect validated status, or mark as open issues with explicit risk assessment.",
+   "returnTo": "Discover",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-006",
+   "severity": "HIGH",
+   "dimensionId": "G03",
+   "location": {
+    "sheet": "Actor_Register",
+    "cell": "A1"
+   },
+   "title": "Downstream inputs not specified",
+   "detail": "The measure requires checking 'Downstream inputs' as one of three elements, but the artifact contains no sheet, section, or parameter that specifies downstream inputs for any actor class. This is a major element missing from the coverage.",
+   "fix": "Add a 'Downstream Inputs' column or linked sheet documenting the inputs each actor class receives from upstream sources.",
+   "returnTo": "Discover",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-007",
+   "severity": "HIGH",
+   "dimensionId": "G03",
+   "location": {
+    "sheet": "Actor_Register",
+    "cell": "A4"
+   },
+   "title": "Downstream inputs not covered",
+   "detail": "The dimension requires checking 'Downstream inputs' as one of three elements, but the artifact contains no evidence of downstream input coverage. The Actor_Register and Edge_Actors sheets list actors only, with no section or parameter addressing what inputs flow downstream from each actor class.",
+   "fix": "Add a 'Downstream Inputs' section to the Actor_Register or a dedicated sheet listing the downstream inputs each actor class provides, with MECE breakdown.",
+   "returnTo": "Discover",
+   "source": "raters",
+   "reportedBy": [
+    "A",
+    "B",
+    "C"
+   ]
+  },
+  {
+   "id": "F-008",
+   "severity": "HIGH",
+   "dimensionId": "G03",
+   "location": {
+    "sheet": "Actor_Register",
+    "cell": "K14"
+   },
+   "title": "Unresolved actor conflicts",
+   "detail": "Two actors (Gig Worker and Gig Requester) have Evidence Class marked as CONFLICT, indicating stakeholder or source disagreement that has not been resolved. This gap could change project outcomes if these actors' needs are not properly reconciled.",
+   "fix": "Resolve the CONFLICT status for ACT-10 and ACT-11 by confirming stakeholder agreement and updating Evidence Class to SOURCE_EXPLICIT, SOURCE_DERIVED, or removing the actors if not applicable.",
+   "returnTo": "Discover",
+   "source": "raters",
+   "reportedBy": [
+    "A",
+    "B",
+    "C"
+   ]
+  },
+  {
+   "id": "F-009",
+   "severity": "HIGH",
+   "dimensionId": "G03",
+   "location": {
+    "sheet": "Actor_Register",
+    "cell": "K14"
+   },
+   "title": "CONFLICT evidence class unresolved",
+   "detail": "ACT-10 (Gig Worker) and ACT-11 (Gig Requester) both have Evidence Class 'CONFLICT', indicating stakeholder disagreement or conflicting source information. This unresolved conflict could change project outcomes if these actors' needs are not properly reconciled.",
+   "fix": "Resolve the conflict for ACT-10 and ACT-11 by updating the Evidence Class to SOURCE_EXPLICIT, SOURCE_DERIVED, or another appropriate value, and document the resolution rationale.",
+   "returnTo": "Discover",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-010",
+   "severity": "HIGH",
+   "dimensionId": "G04",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "A43"
+   },
+   "title": "Missing definitions for multiple fields",
+   "detail": "Rows 43-44, 59-60, 85-86, 103-104, 121-122, 139-140, 157-158, and 175-176 in Schema_L2_Parameters have Deliverable values but completely lack Definition and Reason columns, leaving those fields undefined.",
+   "fix": "Add Definition and Reason values for all rows currently lacking them, following ISO 11179-4 guidelines.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A",
+    "B"
+   ]
+  },
+  {
+   "id": "F-011",
+   "severity": "HIGH",
+   "dimensionId": "G04",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "M5"
+   },
+   "title": "Missing ISO 11179-4 mandatory metadata",
+   "detail": "No fields in the schema declare ISO 11179-4 required elements: data type, permissible values, or representation class. These 'shall' requirements are mandatory for compliant field definitions.",
+   "fix": "Add columns for Data Type, Permissible Values, and Representation Class to the schema, and populate for each field definition.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-012",
+   "severity": "HIGH",
+   "dimensionId": "G04",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "M59"
+   },
+   "title": "Truncated definitions break completeness",
+   "detail": "Definitions in M59, M85-86, M156-157, M202, and M203 are cut off mid-sentence, leaving the actual attribute meaning incomplete. This could change implementation outcomes.",
+   "fix": "Complete all truncated definitions with full sentences that specify the attribute meaning.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-013",
+   "severity": "HIGH",
+   "dimensionId": "G05",
+   "location": {
+    "sheet": "Hierarchy",
+    "cell": "E4"
+   },
+   "title": "Leaf atomicity not verifiable",
+   "detail": "The Hierarchy sheet lists 'L4 Leaf' as a category but provides no actual leaf node definitions with atomic types. Without leaf definitions, atomicity cannot be verified.",
+   "fix": "Add rows showing actual leaf nodes with their atomic types (e.g., 'L4 Leaf: candidate_email \u2014 STRING').",
+   "returnTo": "Discover",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-014",
+   "severity": "HIGH",
+   "dimensionId": "G05",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "J5"
+   },
+   "title": "Machine-evaluable conditions not specified",
+   "detail": "Column J (Condition) contains 'NOT APPLICABLE' for nearly all parameter rows, meaning the conditions under which parameters are required or optional are not machine-evaluable. This prevents automated validation of schema instances.",
+   "fix": "Replace 'NOT APPLICABLE' with formal condition expressions that can be programmatically evaluated.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A",
+    "B"
+   ]
+  },
+  {
+   "id": "F-015",
+   "severity": "HIGH",
+   "dimensionId": "G05",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "O156"
+   },
+   "title": "Complex conditions rely on prose rather than machine-evaluable notation",
+   "detail": "Validation rules like O156 contain complex conditional logic in prose form ('AUDITED or CRITICAL required when P19 \u2208 {PERSONAL, SENSITIVE} for every action including VIEW and SEARCH...') that cannot be directly machine-evaluated without parsing natural language.",
+   "fix": "Replace prose conditions with formal notation using defined operators and code sets, or reference a separate machine-readable condition table.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-016",
+   "severity": "HIGH",
+   "dimensionId": "G06",
+   "location": {
+    "sheet": "Value_Sets",
+    "cell": "A1"
+   },
+   "title": "Code definitions absent",
+   "detail": "The Value_Sets sheet lists value sets and owners but does not define the actual codes within each set. This is a required element per the dimension measure.",
+   "fix": "Add a 'Code Definitions' column to the Value_Sets sheet listing the actual codes for each value set.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A",
+    "B"
+   ]
+  },
+  {
+   "id": "F-017",
+   "severity": "HIGH",
+   "dimensionId": "G06",
+   "location": {
+    "sheet": "Value_Sets",
+    "cell": "A1"
+   },
+   "title": "Missing concept-specific sets",
+   "detail": "The artifact does not clearly identify which value sets are specific to which concepts, making it difficult to understand the relationships between them and to ensure that they are used appropriately.",
+   "fix": "Clearly identify which value sets are specific to which concepts and provide documentation that explains the relationships between them.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "C"
+   ]
+  },
+  {
+   "id": "F-018",
+   "severity": "HIGH",
+   "dimensionId": "G06",
+   "location": {
+    "sheet": "Value_Sets",
+    "cell": "A1"
+   },
+   "title": "Missing set governance metadata",
+   "detail": "The artifact does not provide information about the governance of the value sets, such as who is responsible for maintaining them, how changes are made and tracked, and how conflicts are resolved. This lack of governance could lead to confusion, inconsistency, and errors in how the value sets are used and maintained.",
+   "fix": "Establish and document clear governance processes for the value sets, including roles and responsibilities, change management procedures, and conflict resolution mechanisms.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "C"
+   ]
+  },
+  {
+   "id": "F-019",
+   "severity": "HIGH",
+   "dimensionId": "G06",
+   "location": {
+    "sheet": "Value_Sets",
+    "cell": "A1"
+   },
+   "title": "Missing unknown value handling",
+   "detail": "The artifact does not specify how unknown values are handled for the provided value sets and codes.",
+   "fix": "Add a row in the Value_Sets sheet to specify how unknown values are handled for each value set.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "C"
+   ]
+  },
+  {
+   "id": "F-020",
+   "severity": "HIGH",
+   "dimensionId": "G06",
+   "location": {
+    "sheet": "Value_Sets",
+    "cell": "A4"
+   },
+   "title": "Unknown handling not specified",
+   "detail": "The artifact lacks any specification of how systems should handle unknown or invalid codes at runtime (e.g., reject, default, log, or substitute). This is a required element per the dimension measure.",
+   "fix": "Add an 'Unknown handling' column to the Value_Sets sheet specifying the behavior for each value set when an unrecognized code is encountered.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-021",
+   "severity": "HIGH",
+   "dimensionId": "G06",
+   "location": {
+    "sheet": "Value_Sets",
+    "cell": "A5"
+   },
+   "title": "Missing code definitions",
+   "detail": "The artifact does not provide clear definitions for all codes, which could lead to confusion and inconsistency in how they are used and interpreted.",
+   "fix": "Provide clear and comprehensive definitions for all codes in the value sets.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "C"
+   ]
+  },
+  {
+   "id": "F-022",
+   "severity": "HIGH",
+   "dimensionId": "G07",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "O47"
+   },
+   "title": "Missing DQ dimension tags on multiple rules",
+   "detail": "Rows 47-52, 122-123, 124, 137, 189-190, 196-197, 201, 204, 227-228, 233-234, 246-247, 273-279 in Schema_L2_Parameters have validation rules in column O but no corresponding DQ dimension tags in column S. This breaks the DQ dimension tagging requirement.",
+   "fix": "Add appropriate DQ dimension tags (e.g., COMPLETENESS, VALIDITY) to column S for each row that has a validation rule in column O.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-023",
+   "severity": "HIGH",
+   "dimensionId": "G07",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "O85"
+   },
+   "title": "Rules split across multiple rows",
+   "detail": "Several validation rules are fragmented across two rows (e.g., rows 85-86, 59-60), making them difficult to parse and test as singular units. This violates the 'singular' requirement and could cause rules to be misinterpreted during automated validation.",
+   "fix": "Merge split rules into single cells; use row 85 for the complete rule and clear or remove row 86.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-024",
+   "severity": "HIGH",
+   "dimensionId": "G07",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "S47"
+   },
+   "title": "Missing DQ dimension tags",
+   "detail": "Multiple validation rules lack DQ dimension tags (e.g., rows 47-52, 122, 124, 137), which are required by the measure. Without tagging, the data-quality impact of each rule cannot be systematically assessed.",
+   "fix": "Add DQ dimension tags to all rules missing them, following the pattern in S5.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-025",
+   "severity": "HIGH",
+   "dimensionId": "G07",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "S47"
+   },
+   "title": "Missing DQ dimensions for validation rules",
+   "detail": "Multiple validation rules in Schema_L2_Parameters lack DQ dimension tags (column S), which are required by the measure. Examples include rows 47-52, 122, 124, 130-131, 137-138, 145-150, 196-197, 201, 204, 227-228, 273-279, and rows 7, 10, 33-35, 44-45, 58, 62, 82-83, 87, 103-104, 114-115, 121-122, 125-126, 129-130, 138 in Schema_L3_SubParameters.",
+   "fix": "Add appropriate DQ dimension tags (e.g., COMPLETENESS, VALIDITY) to all validation rules missing them in column S/U.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-026",
+   "severity": "HIGH",
+   "dimensionId": "G07",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "S5"
+   },
+   "title": "Missing DQ dimension tags",
+   "detail": "Multiple validation rules in Schema_L2_Parameters and Schema_L3_SubParameters lack DQ dimension tags, which are required by the dimension measure.",
+   "fix": "Add DQ dimension tags to all validation rules, following the pattern in S5.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A",
+    "B"
+   ]
+  },
+  {
+   "id": "F-027",
+   "severity": "HIGH",
+   "dimensionId": "G07",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "U47"
+   },
+   "title": "Missing passing and failing examples on multiple rules",
+   "detail": "Rows 47-52, 122-123, 124, 137, 189-190, 196-197, 201, 204, 227-228, 233-234, 246-247, 273-279 in Schema_L2_Parameters have validation rules but no passing or failing examples in columns U and V. This violates the positive and negative examples requirement.",
+   "fix": "Add passing examples in column U and failing examples in column V for each validation rule row.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-028",
+   "severity": "HIGH",
+   "dimensionId": "G08",
+   "location": {
+    "sheet": "Permission_Matrix_Proposed",
+    "cell": "F27"
+   },
+   "title": "Missing precedence rules",
+   "detail": "The Permission_Matrix_Proposed sheet contains actors with multiple role assignments but no rules define how conflicting permissions are resolved when a user holds multiple roles. This could change access outcomes.",
+   "fix": "Add a Precedence sheet or section documenting how conflicting permissions are resolved for multi-role actors.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A",
+    "B"
+   ]
+  },
+  {
+   "id": "F-029",
+   "severity": "HIGH",
+   "dimensionId": "G08",
+   "location": {
+    "sheet": "Permission_Matrix_Proposed",
+    "cell": "Q31"
+   },
+   "title": "Admin enforcement approaches undefined (TBD)",
+   "detail": "PRM-027 through PRM-031 (Admin, Account Admin, Super Admin, Guest, TPO) have Enforcement Approach marked as 'TBD'. Without defined enforcement, these critical permissions cannot be verified or tested, changing security outcomes.",
+   "fix": "Replace all 'TBD' in Enforcement Approach column (Q31-Q35) with specific enforcement mechanisms (e.g., 'Role-based ACL', 'Procedure + audit', 'Integration role check').",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-030",
+   "severity": "HIGH",
+   "dimensionId": "G08",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "A1"
+   },
+   "title": "NIST SP 800-192 properties not documented",
+   "detail": "The authorization model lacks documentation of NIST SP 800-192 properties, which are required for a sound authorization model.",
+   "fix": "Add a section documenting NIST SP 800-192 properties for the authorization model.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A",
+    "B"
+   ]
+  },
+  {
+   "id": "F-031",
+   "severity": "HIGH",
+   "dimensionId": "G08",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "A1"
+   },
+   "title": "NIST SP 800-192 properties not addressed",
+   "detail": "The measure explicitly requires NIST SP 800-192 properties (verifiability, accuracy, granularity, timeliness, coverage) but the artifact contains no explicit mapping or evidence of these properties being addressed.",
+   "fix": "Add a NIST SP 800-192 compliance column or sheet documenting how each property (verifiability, accuracy, granularity, timeliness, coverage) is satisfied by the authorization model.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-032",
+   "severity": "HIGH",
+   "dimensionId": "G08",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "F27"
+   },
+   "title": "No precedence or multi-role combination rules specified",
+   "detail": "The artifact contains multi-actor permissions (e.g., PRM-023 with 'ACT-10; ALL', PRM-024-026 with 'ALL') but provides no rules for how permissions combine or which takes precedence when an actor holds multiple roles. This gap could change access decisions.",
+   "fix": "Add a Precedence sheet or section defining: (1) how permissions combine when an actor has multiple roles, (2) priority order for conflicting rules (e.g., Explicitly Denied > Explicitly Allowed > Conditional), (3) resolution for multi-role scenarios.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-033",
+   "severity": "HIGH",
+   "dimensionId": "G08",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "H5"
+   },
+   "title": "Missing object-scope and field-level rules",
+   "detail": "The authorization model lacks object-scope and field-level rules, which are essential for fine-grained access control.",
+   "fix": "Add object-scope and field-level rules to the authorization model.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "C"
+   ]
+  },
+  {
+   "id": "F-034",
+   "severity": "HIGH",
+   "dimensionId": "G08",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "H5"
+   },
+   "title": "Unspecified authorization rules",
+   "detail": "Several authorization rules are unspecified or left to design decisions, which could lead to inconsistent or incorrect access control.",
+   "fix": "Specify clear authorization rules for all unspecified cells.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "C"
+   ]
+  },
+  {
+   "id": "F-035",
+   "severity": "HIGH",
+   "dimensionId": "G08",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "T4"
+   },
+   "title": "Missing purpose binding",
+   "detail": "The dimension requires purpose binding for data fields, but the artifact contains no columns indicating which fields are bound to which purposes.",
+   "fix": "Add a 'Purpose Binding' column to the Schema_L2_Parameters sheet specifying the legitimate use purposes for each field.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A",
+    "B"
+   ]
+  },
+  {
+   "id": "F-036",
+   "severity": "HIGH",
+   "dimensionId": "G08",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "T4"
+   },
+   "title": "Missing DPDP obligation mapping",
+   "detail": "The artifact does not provide a mapping of DPDP obligations to schema fields, which is required for privacy and regulatory compliance.",
+   "fix": "Add a 'DPDP Obligation' column to the Schema_L2_Parameters sheet mapping each field to relevant DPDP obligations.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A",
+    "B"
+   ]
+  },
+  {
+   "id": "F-037",
+   "severity": "HIGH",
+   "dimensionId": "G09",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "D4"
+   },
+   "title": "Lack of clear masking and field-level visibility specifications",
+   "detail": "The artifact does not provide clear information on how masking and field-level visibility are handled, which could potentially lead to privacy and regulatory compliance issues.",
+   "fix": "Add a column or section in the artifact that clearly specifies how masking and field-level visibility are handled for each role and permission.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "C"
+   ]
+  },
+  {
+   "id": "F-038",
+   "severity": "HIGH",
+   "dimensionId": "G09",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "T4"
+   },
+   "title": "Missing purpose binding specification",
+   "detail": "The dimension requires purpose binding for data fields, but no column or sheet captures the legitimate purpose(s) for which each data field may be used. Without this, compliance with purpose limitation principles cannot be verified.",
+   "fix": "Add a 'Purpose binding' column to Schema_L2_Parameters specifying the legitimate use purposes for each field (e.g., 'Recruitment processing', 'Account management').",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-039",
+   "severity": "HIGH",
+   "dimensionId": "G09",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "T4"
+   },
+   "title": "Missing DPDP obligation mapping",
+   "detail": "The dimension requires DPDP (Data Protection and Privacy) obligations to be mapped, but no sheet or column identifies which regulatory obligations apply to which data fields or processing activities.",
+   "fix": "Add a 'DPDP Obligations' column mapping each field to applicable regulatory requirements (e.g., 'Consent required', 'Right to erasure applies', 'Retention limit: 3 years').",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-040",
+   "severity": "HIGH",
+   "dimensionId": "G09",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "T4"
+   },
+   "title": "Missing masking and field-level visibility controls",
+   "detail": "The dimension requires masking and field-level visibility specifications, but no column indicates which fields require masking, the masking algorithm, or visibility restrictions by actor/role.",
+   "fix": "Add 'Masking Required' and 'Visibility Restrictions' columns specifying masking rules (e.g., 'Partial: last 4 digits', 'Full mask for non-owners') and actor-based visibility constraints.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-041",
+   "severity": "HIGH",
+   "dimensionId": "G09",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "T4"
+   },
+   "title": "Missing masking and field-level visibility specification",
+   "detail": "The dimension requires masking and field-level visibility to be specified, but the artifact contains no columns indicating which fields should be masked, the masking technique to apply, or role-based visibility restrictions at the field level.",
+   "fix": "Add 'Masking' and 'Visibility' columns specifying the masking technique (e.g., 'Hash', 'Partial mask', 'Encrypt') and which roles can view each field (e.g., 'Owner only', 'Recruiter: masked', 'Admin: full').",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-042",
+   "severity": "HIGH",
+   "dimensionId": "G10",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "A1"
+   },
+   "title": "No threat model or threat-model linkage present",
+   "detail": "The dimension requires checking 'Threat-model linkage' as the first element, but the artifact contains no threat model, threat identification, or linkage between threats and the permission controls. Without understanding what threats the controls mitigate, the security design cannot be validated as complete.",
+   "fix": "Add a Threat_Model sheet or section identifying key threats (e.g., unauthorized data access, privilege escalation, data exfiltration) and add a column linking each permission row to the threats it mitigates.",
+   "returnTo": "Discover",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-043",
+   "severity": "HIGH",
+   "dimensionId": "G10",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "A1"
+   },
+   "title": "No threat modeling present",
+   "detail": "The dimension requires threat-model linkage as the first element, but the artifact contains no threat identification, threat categorization, or linkage from threats to risks/controls. Without threat modeling, the permission matrix cannot demonstrate that controls address actual threat scenarios.",
+   "fix": "Add a Threat_Model sheet or section that identifies threats (e.g., unauthorized access, data exfiltration, privilege escalation) and links each to the relevant permission rows via threat IDs.",
+   "returnTo": "Discover",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-044",
+   "severity": "HIGH",
+   "dimensionId": "G11",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "C5"
+   },
+   "title": "Missing independent approval structure",
+   "detail": "The schema lacks any parameter or section for recording independent approval of changes, including the required access-widening sign-off. Without this, change control cannot demonstrate proper authorization.",
+   "fix": "Add an 'Approval' section (e.g., D1-S01-P10 to P12) with parameters for 'Approved by', 'Approval date', and 'Access-widening sign-off' with appropriate types.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-045",
+   "severity": "HIGH",
+   "dimensionId": "G11",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "D254"
+   },
+   "title": "Missing version parameter in governance section",
+   "detail": "The D3 governance section lacks a version parameter, making it impossible to track changes and enforce versioning.",
+   "fix": "Add a version parameter to the D3 governance section with a clear format and pattern.",
+   "returnTo": "Generate",
+   "source": "raters",
+   "reportedBy": [
+    "A",
+    "B"
+   ]
+  },
+  {
+   "id": "F-046",
+   "severity": "HIGH",
+   "dimensionId": "G11",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "G133"
+   },
+   "title": "Exit gate not executable",
+   "detail": "The Gate result parameter (D3-S10-P05-N08) defines only an enum-single type referencing GATE-RESULT value set, but the artifact contains no actual gate execution data, no pass/fail result, and no evidence the gate has been run. An exit gate must be executable and show actual results.",
+   "fix": "Populate the Gate summary composite with actual values including Gate result, Evaluated on date, and all summary counts; or provide a separate execution sheet showing the gate has been run with actual pass/fail determination.",
+   "returnTo": "Validate",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-047",
+   "severity": "HIGH",
+   "dimensionId": "G11",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "T4"
+   },
+   "title": "Missing masking and field-level visibility",
+   "detail": "The artifact lacks specifications for masking and field-level visibility, which are required for privacy and regulatory compliance.",
+   "fix": "Add 'Masking' and 'Field-level Visibility' columns to the Schema_L2_Parameters sheet specifying how each field should be masked and who can view it.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A",
+    "B"
+   ]
+  },
+  {
+   "id": "F-048",
+   "severity": "HIGH",
+   "dimensionId": "G12",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "E260"
+   },
+   "title": "Exit gate not executable",
+   "detail": "The artifact does not provide an executable exit gate, which is required for change control.",
+   "fix": "Add an executable exit gate to the D3 governance section, with clear criteria for pass/fail.",
+   "returnTo": "Validate",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-049",
+   "severity": "HIGH",
+   "dimensionId": "G13",
+   "location": {
+    "sheet": "Persona_Cards",
+    "cell": "A1"
+   },
+   "title": "Missing adoption metrics",
+   "detail": "The artifact does not provide adoption metrics for the persona cards, which are required to track usage and effectiveness.",
+   "fix": "Add an 'Adoption Metrics' column to the Persona_Cards sheet tracking usage statistics and effectiveness metrics.",
+   "returnTo": "Generate",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-050",
+   "severity": "HIGH",
+   "dimensionId": "G13",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "T4"
+   },
+   "title": "Missing fill guidance and examples",
+   "detail": "The dimension requires fill guidance and examples for data entry, but the artifact contains no such information.",
+   "fix": "Add a 'Fill Guidance' and 'Examples' column to the Schema_L2_Parameters sheet providing instructions and examples for each parameter.",
+   "returnTo": "Generate",
+   "source": "raters",
+   "reportedBy": [
+    "A",
+    "B"
+   ]
+  },
+  {
+   "id": "F-051",
+   "severity": "HIGH",
+   "dimensionId": "G13",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "T4"
+   },
+   "title": "Fill guidance and examples absent",
+   "detail": "The measure requires fill guidance and examples for data entry, but neither the Schema_L2_Parameters nor Schema_L3_SubParameters sheets contain any columns or content providing fill instructions or example values for the tiered data.",
+   "fix": "Add a 'Fill guidance' column adjacent to the Critical-data tier column with instructions and example values for each parameter row.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-052",
+   "severity": "HIGH",
+   "dimensionId": "G13",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "T4"
+   },
+   "title": "Missing Critical-data tiering",
+   "detail": "The artifact does not provide tiering of critical data, which is necessary to ensure data is handled appropriately based on its importance and sensitivity.",
+   "fix": "Add a column for 'Critical-data tier' in the Schema_L2_Parameters sheet and populate it with appropriate tiering information.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "C"
+   ]
+  },
+  {
+   "id": "F-053",
+   "severity": "HIGH",
+   "dimensionId": "G13",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "T4"
+   },
+   "title": "Missing Data Tiering",
+   "detail": "The artifact does not provide clear tiering of data. The 'Critical-data tier' is present in the Schema_L2_Parameters and Schema_L3_SubParameters sheets, but it is not clear how the data is tiered.",
+   "fix": "Provide clear tiering of data in the 'Critical-data tier' column.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "C"
+   ]
+  },
+  {
+   "id": "F-054",
+   "severity": "HIGH",
+   "dimensionId": "G13",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "T4"
+   },
+   "title": "Missing Data Tiering Explanation",
+   "detail": "The artifact provides critical-data tier labels in the Schema_L2_Parameters and Schema_L3_SubParameters sheets, but it does not explain what these tiers mean or how they are determined.",
+   "fix": "Add a clear explanation of the data tiering system and how each parameter or sub-parameter is assigned to a tier.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "C"
+   ]
+  },
+  {
+   "id": "F-055",
+   "severity": "MEDIUM",
+   "dimensionId": "G01",
+   "location": {
+    "sheet": "README",
+    "cell": "A13"
+   },
+   "title": "Missing current status summary",
+   "detail": "While Conflicts_Decisions shows individual item statuses (Open, Decided, Flagged), there is no overall current status summary for the deliverable itself.",
+   "fix": "Add a status summary row in README stating overall completion state (e.g., 'Draft', 'In Review', 'Approved').",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A",
+    "B",
+    "C"
+   ]
+  },
+  {
+   "id": "F-056",
+   "severity": "MEDIUM",
+   "dimensionId": "G01",
+   "location": {
+    "sheet": "README",
+    "cell": "A4"
+   },
+   "title": "Missing risks controlled",
+   "detail": "The dimension requires risks controlled to be stated. The artifact documents conflicts and decisions but does not explicitly identify risks this schema design controls or mitigates.",
+   "fix": "Add a row identifying key risks this schema design controls or mitigates.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A",
+    "B",
+    "C"
+   ]
+  },
+  {
+   "id": "F-057",
+   "severity": "MEDIUM",
+   "dimensionId": "G01",
+   "location": {
+    "sheet": "README",
+    "cell": "A5"
+   },
+   "title": "Non-goals not explicitly stated",
+   "detail": "While goals are listed in A5-A10, there is no explicit 'non-goals' section to clarify what is out of scope, which could lead to scope creep or misaligned expectations.",
+   "fix": "Add a 'Non-goals' row under the goals section (e.g., A12) explicitly stating what this Step 02 deliverable does not cover.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-058",
+   "severity": "MEDIUM",
+   "dimensionId": "G02",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "P10"
+   },
+   "title": "Inconsistent tracing notation",
+   "detail": "The tracing notation used throughout the artifact is inconsistent, which may lead to confusion.",
+   "fix": "Standardize the tracing notation used throughout the artifact.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-059",
+   "severity": "MEDIUM",
+   "dimensionId": "G02",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "P20"
+   },
+   "title": "Incomplete traceability for some parameters",
+   "detail": "Some parameters in the Schema_L2_Parameters sheet do not have explicit traceability to the docket or external sources, which could lead to inconsistencies or errors.",
+   "fix": "Add explicit traceability for all parameters, including P20.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-060",
+   "severity": "MEDIUM",
+   "dimensionId": "G02",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "P20"
+   },
+   "title": "Lack of explicit traceability for some requirements",
+   "detail": "Some requirements do not have explicit traceability to their sources, which could lead to confusion or errors in the future.",
+   "fix": "Add explicit traceability for all requirements, including P20.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-061",
+   "severity": "MEDIUM",
+   "dimensionId": "G02",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "P4"
+   },
+   "title": "Instance-level requirement trace absent",
+   "detail": "The measure requires 'Instance-level requirement trace' but the artifact shows no individual requirement IDs linked to specific schema elements. While P225 references the backlog B1\u2013B82, no cells show direct trace from individual parameters to specific requirement instances.",
+   "fix": "Add a column or mechanism to link each parameter row to specific requirement IDs from the backlog (e.g., 'Req-123' or 'B1').",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-062",
+   "severity": "MEDIUM",
+   "dimensionId": "G03",
+   "location": {
+    "sheet": "Actor_Register",
+    "cell": "A4"
+   },
+   "title": "Missing MECE rationale documentation",
+   "detail": "The register lists actors but does not document the MECE breakdown rationale explaining how actor classes were derived, what boundaries separate them, and why no actors are missing. Without this, completeness cannot be verified.",
+   "fix": "Add a MECE_Analysis sheet or section documenting the actor classification methodology, boundary definitions between actor classes, and confirmation of mutual exclusivity and collective exhaustiveness.",
+   "returnTo": "Discover",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-063",
+   "severity": "MEDIUM",
+   "dimensionId": "G03",
+   "location": {
+    "sheet": "Actor_Register",
+    "cell": "D5"
+   },
+   "title": "MECE breakdowns not explicitly stated",
+   "detail": "The artifact does not explicitly state the MECE (Mutually Exclusive, Collectively Exhaustive) breakdowns for the actors. This might lead to overlapping or missing categories.",
+   "fix": "Add a column to the Actor_Register sheet to track MECE breakdowns",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-064",
+   "severity": "MEDIUM",
+   "dimensionId": "G03",
+   "location": {
+    "sheet": "Actor_Register",
+    "cell": "K14"
+   },
+   "title": "Actors marked with CONFLICT evidence class",
+   "detail": "ACT-10 (Gig Worker) and ACT-11 (Gig Requester) have Evidence Class 'CONFLICT', indicating unresolved contradictions in source material that could affect completeness of actor coverage.",
+   "fix": "Resolve the conflicting source information for Gig Worker and Gig Requester actors, then update Evidence Class to SOURCE_EXPLICIT, SOURCE_DERIVED, or SOURCE_IMPLIED as appropriate.",
+   "returnTo": "Discover",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-065",
+   "severity": "MEDIUM",
+   "dimensionId": "G03",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "E49"
+   },
+   "title": "Lack of explicit traceability for some requirements",
+   "detail": "Some requirements, such as 'D1-S07-P01', do not have explicit traceability links to the Actor_Register sheet.",
+   "fix": "Add explicit traceability links to the Actor_Register sheet for all requirements.",
+   "returnTo": "Analyse",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-066",
+   "severity": "MEDIUM",
+   "dimensionId": "G04",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "M14"
+   },
+   "title": "Definitions starting with lowercase letters",
+   "detail": "At least one definition (M14) begins with a lowercase letter ('the stakeholder group...'), violating ISO 11179-4's requirement that definitions be complete, grammatically correct sentences.",
+   "fix": "Capitalize the first letter of all definitions and ensure each is a complete sentence.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-067",
+   "severity": "MEDIUM",
+   "dimensionId": "G04",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "M28"
+   },
+   "title": "Vague definition opening with 'The list of'",
+   "detail": "Many definitions begin with 'The list of' (M28, M30, M37, M39, M40, etc.) which describes the data structure rather than defining the attribute's semantic meaning. ISO 11179-4 requires definitions to state what the attribute IS, not just its format.",
+   "fix": "Rewrite definitions to state the semantic meaning first (e.g., 'The nature of the stakeholder's interest in Talentra' instead of 'The list of nature of the entry's interest').",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-068",
+   "severity": "MEDIUM",
+   "dimensionId": "G04",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "M59"
+   },
+   "title": "Incomplete definition split across rows",
+   "detail": "Rows 59-60 and 156-157 split a single definition across two rows, making each row's Definition column incomplete and harder to read as a coherent definition.",
+   "fix": "Merge split definitions into single cells so each field has one complete definition.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-069",
+   "severity": "MEDIUM",
+   "dimensionId": "G04",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "M59"
+   },
+   "title": "Fragmented definitions across rows",
+   "detail": "Multiple definitions are split across rows without clear continuation markers, making them incomplete and grammatically incoherent. M59, M60, M156, M157, M202, and M203 all contain sentence fragments that do not stand alone as proper definitions.",
+   "fix": "Merge fragmented definitions into single complete sentences, or add explicit continuation markers (e.g., '(continued)') and cross-references.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-070",
+   "severity": "MEDIUM",
+   "dimensionId": "G05",
+   "location": {
+    "sheet": "Hierarchy",
+    "cell": "A4"
+   },
+   "title": "Width and depth not specified",
+   "detail": "The measure requires checking 'Width and depth' but the artifact contains no specification of hierarchy width (number of children per node) or depth limits.",
+   "fix": "Add a row in Hierarchy specifying width and depth constraints (e.g., 'Max depth: 4', 'Max children per node: 50').",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-071",
+   "severity": "MEDIUM",
+   "dimensionId": "G05",
+   "location": {
+    "sheet": "Hierarchy",
+    "cell": "A4"
+   },
+   "title": "Width and depth specifications absent",
+   "detail": "The measure explicitly requires checking 'Width and depth' but the artifact contains no specifications for hierarchy width (fan-out limits) or depth (nesting levels) for any deliverable.",
+   "fix": "Add width and depth constraints to the schema, specifying maximum children per node and maximum hierarchy depth for each deliverable.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-072",
+   "severity": "MEDIUM",
+   "dimensionId": "G05",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "J5"
+   },
+   "title": "Undefined Fields",
+   "detail": "Some fields in the Schema_L2_Parameters and Schema_L3_SubParameters sheets lack explicit definitions, which could lead to confusion or inconsistencies.",
+   "fix": "Add explicit definitions for all fields in the schema.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-073",
+   "severity": "MEDIUM",
+   "dimensionId": "G05",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "O140"
+   },
+   "title": "Cross-reference conditions not machine-evaluable",
+   "detail": "Conditions like O140 ('Resolves to an STK-entry with D1-S02-P09 = ACTOR, and that entry lists this role in D1-S06-P04') require cross-artifact validation that is described in prose rather than formal constraint notation.",
+   "fix": "Define formal foreign key constraints with explicit reference paths that can be validated programmatically.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-074",
+   "severity": "MEDIUM",
+   "dimensionId": "G05",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "R5"
+   },
+   "title": "Incomplete ID Patterns",
+   "detail": "Some sections lack explicit ID patterns and types, which could lead to inconsistencies and errors.",
+   "fix": "Add explicit ID patterns and types to all relevant sections.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-075",
+   "severity": "MEDIUM",
+   "dimensionId": "G06",
+   "location": {
+    "sheet": "Value_Sets",
+    "cell": "A111"
+   },
+   "title": "Unknown handling not specified as general requirement",
+   "detail": "Unknown handling appears only for specific contexts (UNRESOLVED value set for condition evaluation) but there is no general statement of how unknown or invalid values are handled across the schema.",
+   "fix": "Add a schema-wide rule or value-state definition specifying how unknown values are handled for any field that uses a value set.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-076",
+   "severity": "MEDIUM",
+   "dimensionId": "G06",
+   "location": {
+    "sheet": "Value_Sets",
+    "cell": "A4"
+   },
+   "title": "Missing unknown handling",
+   "detail": "The artifact does not provide information on how unknown or unmatched values should be handled.",
+   "fix": "Add a column or section that describes how unknown or unmatched values should be handled for each value set.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "C"
+   ]
+  },
+  {
+   "id": "F-077",
+   "severity": "MEDIUM",
+   "dimensionId": "G07",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "O5"
+   },
+   "title": "Complex multi-condition rules not singular",
+   "detail": "Many rules combine multiple conditions in a single statement (e.g., O5: 'Matches ^STR-\\d{3}$; unique within its parent list or deliverable'). This violates the 'singular' requirement as each rule should test one condition.",
+   "fix": "Split compound rules into separate rows, each testing a single condition with its own DQ dimensions and examples.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-078",
+   "severity": "MEDIUM",
+   "dimensionId": "G07",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "O5"
+   },
+   "title": "Missing machine-readable specification",
+   "detail": "The artifact contains only prose validation rules without a formal machine-readable specification (e.g., regex patterns, code expressions, or structured format) that could be directly consumed by a validation engine.",
+   "fix": "Add a dedicated column for machine-readable rule specifications (e.g., regex patterns, JSON schemas, or executable expressions) alongside the prose descriptions.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-079",
+   "severity": "MEDIUM",
+   "dimensionId": "G07",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "O5"
+   },
+   "title": "No machine-readable specification column",
+   "detail": "The artifact contains only prose rule descriptions. There is no column providing regex patterns, code lists, or formal expressions that a machine could directly execute, limiting automated validation.",
+   "fix": "Add a 'Machine-readable spec' column (e.g., regex, JSON schema, or code list reference) alongside each rule.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-080",
+   "severity": "MEDIUM",
+   "dimensionId": "G07",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "O5"
+   },
+   "title": "No machine-readable specification",
+   "detail": "The artifact contains validation rules only in prose format. There is no evidence of machine-readable specification (e.g., JSON Schema, Schematron, regex patterns in a parseable format, or executable test scripts) that would allow automated validation.",
+   "fix": "Provide a machine-readable specification file (e.g., JSON Schema, Schematron, or validation scripts) that implements these rules.",
+   "returnTo": "Generate",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-081",
+   "severity": "MEDIUM",
+   "dimensionId": "G07",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "U47"
+   },
+   "title": "Missing passing and failing examples",
+   "detail": "Several rules with DQ tags lack passing/failing examples (e.g., rows 47-52, 106, 122, 124, 137), reducing testability and clarity for implementers.",
+   "fix": "Add passing and failing example values to all rules currently missing them.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-082",
+   "severity": "MEDIUM",
+   "dimensionId": "G07",
+   "location": {
+    "sheet": "Validation_Rules",
+    "cell": "A10"
+   },
+   "title": "Inconsistent rule definitions",
+   "detail": "Some rules are not consistently defined, which may lead to confusion and errors.",
+   "fix": "Review and standardize rule definitions to ensure consistency.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-083",
+   "severity": "MEDIUM",
+   "dimensionId": "G08",
+   "location": {
+    "sheet": "Permission_Matrix_Proposed",
+    "cell": "A1"
+   },
+   "title": "Default decision for unresolved actors not explicitly stated",
+   "detail": "While the proposed matrix applies least-privilege by setting unspecified to denied, there is no explicit statement of the system's default decision when an actor is not found in the register or when a permission is queried for an unregistered actor type.",
+   "fix": "Add explicit Default Decision Policy statement: 'Any access request from an unregistered actor or for an undefined resource-action pair defaults to DENY.'",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-084",
+   "severity": "MEDIUM",
+   "dimensionId": "G08",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "E31"
+   },
+   "title": "Privileged access lifecycle not documented",
+   "detail": "There is no evidence of privileged access lifecycle management (provisioning, review, revocation of admin roles). The measure explicitly requires this element.",
+   "fix": "Add a Privileged_Access_Lifecycle sheet documenting: admin role assignment workflow, periodic review cadence, and revocation procedures.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-085",
+   "severity": "MEDIUM",
+   "dimensionId": "G08",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "E33"
+   },
+   "title": "Privileged access lifecycle not specified",
+   "detail": "Admin roles (ACT-01 Super Admin, ACT-02 Admin, ACT-03 Account Admin) lack lifecycle rules: no provisioning workflow, no revocation conditions, no session management, no just-in-time access controls specified.",
+   "fix": "Add Privileged Access Lifecycle section specifying: (1) who provisions admin roles, (2) approval workflow, (3) maximum session duration, (4) revocation triggers, (5) periodic access review requirement.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-086",
+   "severity": "MEDIUM",
+   "dimensionId": "G08",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "H5"
+   },
+   "title": "Unspecified cells in Permission_Matrix",
+   "detail": "Some cells in the Permission_Matrix sheet are marked as 'Unspecified / Design Decision', which could lead to inconsistencies in the authorization model. These cells have been resolved in the Permission_Matrix_Proposed sheet, but it's essential to ensure that all cells are properly specified.",
+   "fix": "Review and specify all 'Unspecified / Design Decision' cells in the Permission_Matrix sheet.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-087",
+   "severity": "MEDIUM",
+   "dimensionId": "G08",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "H5"
+   },
+   "title": "Lack of default deny",
+   "detail": "The authorization model does not explicitly follow the default deny principle, which could lead to unauthorized access or actions.",
+   "fix": "Explicitly deny all permissions that are not granted.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "C"
+   ]
+  },
+  {
+   "id": "F-088",
+   "severity": "MEDIUM",
+   "dimensionId": "G08",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "H5"
+   },
+   "title": "Missing least-privilege guards",
+   "detail": "The authorization model lacks least-privilege guards, which are essential for ensuring users have only the necessary permissions to perform their tasks.",
+   "fix": "Add least-privilege guards to the authorization model.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "C"
+   ]
+  },
+  {
+   "id": "F-089",
+   "severity": "MEDIUM",
+   "dimensionId": "G08",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "Q5"
+   },
+   "title": "Lack of explicit enforcement points",
+   "detail": "The authorization model lacks explicit enforcement points on every rule type, which could lead to inconsistencies in enforcement.",
+   "fix": "Add explicit enforcement points for each rule type",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-090",
+   "severity": "MEDIUM",
+   "dimensionId": "G08",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "R5"
+   },
+   "title": "NIST SP 800-192 properties not explicitly addressed",
+   "detail": "The artifact does not explicitly reference or demonstrate NIST SP 800-192 properties (verifiability, accuracy, plausibility, timeliness) for the authorization decisions, though audit requirements are noted per-rule.",
+   "fix": "Add explicit NIST SP 800-192 compliance mapping showing how each property is satisfied by the authorization model.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-091",
+   "severity": "MEDIUM",
+   "dimensionId": "G08",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "T9"
+   },
+   "title": "No negative test derivability documented",
+   "detail": "The measure requires negative tests to be derivable. While verification tests are listed (column T), there is no explicit mapping to negative test cases that verify denied permissions are enforced.",
+   "fix": "Add a Negative_Tests column or sheet mapping each 'Explicitly Denied' cell to a test case ID verifying the denial is enforced.",
+   "returnTo": "Validate",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-092",
+   "severity": "MEDIUM",
+   "dimensionId": "G09",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "A5"
+   },
+   "title": "Unspecified permissions and restrictions",
+   "detail": "Some cells in the Permission_Matrix sheet are left with 'Unspecified / Design Decision', which could potentially lead to gaps in data classification, purpose binding, DPDP obligation mapping, and masking and field-level visibility.",
+   "fix": "Specify the permissions and restrictions for all roles and resources.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "C"
+   ]
+  },
+  {
+   "id": "F-093",
+   "severity": "MEDIUM",
+   "dimensionId": "G09",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "A5"
+   },
+   "title": "Lack of clear specification for masking and field-level visibility",
+   "detail": "The artifact does not provide clear information about masking and field-level visibility, which could potentially change an outcome or rely on prose.",
+   "fix": "Clearly specify the masking and field-level visibility in the artifact.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "C"
+   ]
+  },
+  {
+   "id": "F-094",
+   "severity": "MEDIUM",
+   "dimensionId": "G09",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "K10"
+   },
+   "title": "Incomplete Permission Specification",
+   "detail": "Some permissions in the Role-Permission Matrix are marked as 'Unspecified / Design Decision', which may lead to inconsistencies or security vulnerabilities if not properly addressed.",
+   "fix": "Specify the permissions for each role and resource to ensure completeness and consistency.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-095",
+   "severity": "MEDIUM",
+   "dimensionId": "G09",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "T4"
+   },
+   "title": "Classification values lack definitions",
+   "detail": "The 'Critical-data tier' column uses STANDARD and CRITICAL values but provides no legend or definition explaining what CRITICAL means for privacy handling, access controls, or regulatory treatment.",
+   "fix": "Add a header row or separate legend defining what CRITICAL and STANDARD classifications imply for data handling, consent requirements, and access restrictions.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-096",
+   "severity": "MEDIUM",
+   "dimensionId": "G09",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "T5"
+   },
+   "title": "Incomplete data classification coverage",
+   "detail": "The 'Critical-data tier' column provides only a binary STANDARD/CRITICAL classification. A complete classification scheme should include additional sensitivity levels (e.g., PUBLIC, CONFIDENTIAL, RESTRICTED) aligned with regulatory requirements.",
+   "fix": "Expand the classification scheme to include a fuller set of sensitivity tiers with clear definitions for each level.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-097",
+   "severity": "MEDIUM",
+   "dimensionId": "G10",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "K8"
+   },
+   "title": "Incomplete Design Decisions",
+   "detail": "Some cells in the role-permission matrix contain 'Unspecified / Design Decision', which may lead to inconsistencies or gaps in the implementation.",
+   "fix": "Specify the design decisions for the affected cells.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-098",
+   "severity": "MEDIUM",
+   "dimensionId": "G10",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "Q31"
+   },
+   "title": "Admin permissions lack enforcement specification",
+   "detail": "Rows 31-35 (Admin, Super Admin, Guest, TPO) have 'TBD' in the Enforcement Approach column, meaning the control mechanism is unspecified. This leaves sensitive admin actions without defined enforcement.",
+   "fix": "Specify the enforcement approach for PRM-027 through PRM-031 (e.g., 'Role-based access control', 'Privileged access management integration').",
+   "returnTo": "Generate",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-099",
+   "severity": "MEDIUM",
+   "dimensionId": "G10",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "R10"
+   },
+   "title": "Incomplete permission matrix",
+   "detail": "Some cells in the permission matrix contain 'Unspecified / Design Decision' values, which may indicate incomplete or missing permissions.",
+   "fix": "Review and complete the permission matrix to ensure all permissions are specified.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-100",
+   "severity": "MEDIUM",
+   "dimensionId": "G10",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "R35"
+   },
+   "title": "Insufficient audit coverage of sensitive actions",
+   "detail": "The artifact does not provide clear audit coverage for some sensitive actions, which could lead to unauthorized access or unmonitored changes.",
+   "fix": "Update the audit requirement fields to ensure that all sensitive actions are audited and monitored.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "C"
+   ]
+  },
+  {
+   "id": "F-101",
+   "severity": "MEDIUM",
+   "dimensionId": "G10",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "R36"
+   },
+   "title": "Incomplete audit coverage of sensitive actions",
+   "detail": "The artifact does not provide complete audit coverage for sensitive actions such as blocking users, revoking licenses, and downloading candidate profiles. This could allow unauthorized actions to go undetected and compromise the system's security.",
+   "fix": "Update the role-permission matrix to include audit requirements for sensitive actions such as blocking users, revoking licenses, and downloading candidate profiles.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "C"
+   ]
+  },
+  {
+   "id": "F-102",
+   "severity": "MEDIUM",
+   "dimensionId": "G10",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "R4"
+   },
+   "title": "Missing audit coverage of sensitive actions",
+   "detail": "The role-permission matrix does not explicitly mention audit coverage of sensitive actions, which could result in untracked actions that pose a security or compliance risk.",
+   "fix": "Update the role-permission matrix to include explicit audit coverage for sensitive actions, and ensure that these audits are properly implemented.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "C"
+   ]
+  },
+  {
+   "id": "F-103",
+   "severity": "MEDIUM",
+   "dimensionId": "G10",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "R5"
+   },
+   "title": "Audit coverage not systematically specified for sensitive actions",
+   "detail": "While many rows specify audit requirements, the coverage is inconsistent (e.g., R5 says 'if sensitive' without defining sensitivity criteria, and R8 says 'No'). There is no systematic mapping ensuring all sensitive actions across the permission matrix have appropriate audit coverage.",
+   "fix": "Define explicit sensitivity criteria for each resource type and ensure the Audit Requirement column consistently specifies 'Required', 'Recommended', or 'No' with justification for sensitive actions.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-104",
+   "severity": "MEDIUM",
+   "dimensionId": "G11",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "E13"
+   },
+   "title": "Missing access-widening sign-off",
+   "detail": "The artifact does not explicitly mention access-widening sign-off, which is a critical aspect of change control.",
+   "fix": "Add a field to capture access-widening sign-off",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-105",
+   "severity": "MEDIUM",
+   "dimensionId": "G11",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "E259"
+   },
+   "title": "No evidence of independent approval recorded",
+   "detail": "While the schema defines Approvers, Security sign-off, and Privacy sign-off fields (D3-S14-P06 through P08), the artifact shows only the schema definition with no actual approval data populated, making it impossible to verify independent approval has occurred.",
+   "fix": "Populate the Governance and change control section (D3-S14) with actual approver names, sign-off values, and approval date to demonstrate independent approval.",
+   "returnTo": "Validate",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-106",
+   "severity": "MEDIUM",
+   "dimensionId": "G11",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "H13"
+   },
+   "title": "Missing Independent Approval",
+   "detail": "The artifact lacks explicit evidence of independent approval and access-widening sign-off, which is crucial for change control.",
+   "fix": "Add a column to track independent approval and access-widening sign-off for each change.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-107",
+   "severity": "MEDIUM",
+   "dimensionId": "G11",
+   "location": {
+    "sheet": "Schema_L3_SubParameters",
+    "cell": "G133"
+   },
+   "title": "Exit gate result not fully specified",
+   "detail": "The Gate summary composite (D3-S10-P05) includes Gate result (D3-S10-P05-N08) but the schema only shows it as Atomic without specifying the type, format, or allowed values. Without knowing what values constitute pass/fail, the exit gate cannot be reliably executed.",
+   "fix": "Specify the type and allowed values for Gate result (e.g., enum-single with values PASS, FAIL, CONDITIONAL)",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-108",
+   "severity": "MEDIUM",
+   "dimensionId": "G12",
+   "location": {
+    "sheet": "Checks",
+    "cell": "A4"
+   },
+   "title": "No evidence of design-point agreement across independent generation runs",
+   "detail": "The artifact does not provide any evidence of design-point agreement across independent generation runs. This is a gap that could potentially change an outcome.",
+   "fix": "Add a check for design-point agreement across independent generation runs.",
+   "returnTo": "Analyse",
+   "source": "raters",
+   "reportedBy": [
+    "C"
+   ]
+  },
+  {
+   "id": "F-109",
+   "severity": "MEDIUM",
+   "dimensionId": "G12",
+   "location": {
+    "sheet": "Checks",
+    "cell": "A4"
+   },
+   "title": "No evidence of item-level agreement across runs",
+   "detail": "The artifact does not provide any evidence of item-level agreement across runs. This is a gap that could potentially change an outcome.",
+   "fix": "Add a check for item-level agreement across runs.",
+   "returnTo": "Analyse",
+   "source": "raters",
+   "reportedBy": [
+    "C"
+   ]
+  },
+  {
+   "id": "F-110",
+   "severity": "MEDIUM",
+   "dimensionId": "G13",
+   "location": {
+    "sheet": "Persona_Cards",
+    "cell": "A2"
+   },
+   "title": "Frequency and frustrations not in source file",
+   "detail": "The frequency and frustrations for each persona are not in any source file, which could lead to inconsistencies in the data.",
+   "fix": "Add frequency and frustrations to the source file.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-111",
+   "severity": "MEDIUM",
+   "dimensionId": "G13",
+   "location": {
+    "sheet": "Persona_Cards",
+    "cell": "A5"
+   },
+   "title": "Missing Fill guidance",
+   "detail": "The artifact does not provide fill guidance for the persona cards, which could lead to inconsistent or incomplete data entry.",
+   "fix": "Add a column or a separate sheet with detailed fill guidance for each field in the persona cards.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "C"
+   ]
+  },
+  {
+   "id": "F-112",
+   "severity": "MEDIUM",
+   "dimensionId": "G13",
+   "location": {
+    "sheet": "Persona_Cards",
+    "cell": "A5"
+   },
+   "title": "Missing Adoption metrics",
+   "detail": "The artifact does not provide adoption metrics for the personas, which are necessary to measure the success and usage of the personas.",
+   "fix": "Add a column for 'Adoption metrics' in the Persona_Cards sheet and populate it with appropriate metrics.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "C"
+   ]
+  },
+  {
+   "id": "F-113",
+   "severity": "MEDIUM",
+   "dimensionId": "G13",
+   "location": {
+    "sheet": "Persona_Cards",
+    "cell": "M5"
+   },
+   "title": "Incomplete source information for frequency and frustrations",
+   "detail": "Some persona cards have frequency and frustrations marked as 'PROPOSED (not in any source) - team to confirm', which may indicate incomplete or uncertain information.",
+   "fix": "Verify and update the source information for frequency and frustrations to ensure accuracy and completeness.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-114",
+   "severity": "LOW",
+   "dimensionId": "G01",
+   "location": {
+    "sheet": "README",
+    "cell": "A1"
+   },
+   "title": "Inconsistent terminology",
+   "detail": "The document uses different terminology, such as 'Talentra' and 'Taltrix', which could lead to confusion.",
+   "fix": "Standardize the terminology used throughout the document.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-115",
+   "severity": "LOW",
+   "dimensionId": "G02",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "P10"
+   },
+   "title": "Inconsistent formatting for traceability references",
+   "detail": "The formatting for traceability references is inconsistent across the artifact, which could make it harder to read and understand.",
+   "fix": "Standardize the formatting for traceability references throughout the artifact.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-116",
+   "severity": "LOW",
+   "dimensionId": "G02",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "P10"
+   },
+   "title": "Minor inconsistencies in formatting",
+   "detail": "There are minor inconsistencies in formatting throughout the artifact, such as varying indentation and spacing.",
+   "fix": "Standardize formatting throughout the artifact.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-117",
+   "severity": "LOW",
+   "dimensionId": "G02",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "P115"
+   },
+   "title": "Missing docket content noted as UNKNOWN",
+   "detail": "Cell P115 references Docket \u00a78 KPIs but notes the section is absent from the issued docket with UNKNOWN content. This is transparent but represents an incomplete trace to source.",
+   "fix": "Update the source locator once Docket \u00a78 content is available, or document the resolution path.",
+   "returnTo": "Discover",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-118",
+   "severity": "LOW",
+   "dimensionId": "G02",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "P120"
+   },
+   "title": "Minor gaps in requirement tracing",
+   "detail": "Some rules in the 'Docket \u00a75 Rule group' section lack explicit tracing to their sources.",
+   "fix": "Add explicit tracing for the rules in the 'Docket \u00a75 Rule group' section.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-119",
+   "severity": "LOW",
+   "dimensionId": "G02",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "P225"
+   },
+   "title": "Instance-level trace not explicitly shown",
+   "detail": "While field-level source tracing is thorough, the artifact does not demonstrate instance-level requirement traceability linking individual requirement instances to their originating source documents or decisions.",
+   "fix": "Add a column or separate sheet showing traceability from each requirement instance ID (e.g., B1\u2013B82 backlog items) to their specific source requirement in the docket or other origin documents.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-120",
+   "severity": "LOW",
+   "dimensionId": "G02",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "P264"
+   },
+   "title": "Inconsistent assumption annotation across DPDP references",
+   "detail": "P264 references DPDP Act 2023 and DPDP Rules 2025 without the '(ASSUMPTION: applicability not confirmed by counsel)' qualifier that appears on 10 other DPDP references, creating potential inconsistency in how legal compliance is represented.",
+   "fix": "Review all DPDP references for consistent assumption annotation; either add the assumption qualifier to P264 or confirm applicability for all.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-121",
+   "severity": "LOW",
+   "dimensionId": "G02",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "P27"
+   },
+   "title": "Unconfirmed legal applicability assumption",
+   "detail": "Multiple entries cite DPDP Act 2023 and DPDP Rules 2025 with an explicit note that applicability is not confirmed by counsel. While transparency about assumptions is good practice, the artifact records the need for confirmation rather than the confirmation itself.",
+   "fix": "Add a confirmation status field or note when counsel review is completed, or document the sign-off reference.",
+   "returnTo": "Validate",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-122",
+   "severity": "LOW",
+   "dimensionId": "G02",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "P27"
+   },
+   "title": "Unconfirmed legal assumption documented",
+   "detail": "Multiple rows cite DPDP Act 2023 with an explicit note that applicability is an assumption not confirmed by counsel. While transparently documented, this represents an open question rather than a verified docket fact.",
+   "fix": "Obtain counsel confirmation on DPDP Act applicability and update the source locator to reflect confirmed status, or escalate as an open question with risk assessment.",
+   "returnTo": "Validate",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-123",
+   "severity": "LOW",
+   "dimensionId": "G03",
+   "location": {
+    "sheet": "Actor_Register",
+    "cell": "L17"
+   },
+   "title": "Edge actor traceability incomplete",
+   "detail": "Edge actors (EDG-01 through EDG-06) show 'n/a' in the FRs naming this actor column, suggesting no requirements traceability is captured for these actors, which may be appropriate but should be explicitly justified.",
+   "fix": "Either populate FR traceability for edge actors where applicable, or add a column documenting why each edge actor has no direct FR references (e.g., 'Compliance-only actor', 'Non-interactive system').",
+   "returnTo": "Discover",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-124",
+   "severity": "LOW",
+   "dimensionId": "G03",
+   "location": {
+    "sheet": "Actor_Register",
+    "cell": "L17"
+   },
+   "title": "Edge actors lack requirement traceability",
+   "detail": "Edge actors (EDG-01 to EDG-06) have 'n/a' in the FRs naming column while primary actors use COUNTIF formulas to trace requirements. This limits traceability for edge cases.",
+   "fix": "Either add requirement traceability formulas for edge actors or document why 'n/a' is appropriate (e.g., edge actors have no direct functional requirements).",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-125",
+   "severity": "LOW",
+   "dimensionId": "G04",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "A43"
+   },
+   "title": "Minor formatting inconsistency",
+   "detail": "Some cells in the schema design have minor formatting inconsistencies, which may affect readability but do not impact the overall quality of the design.",
+   "fix": "Standardize formatting throughout the schema design.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-126",
+   "severity": "LOW",
+   "dimensionId": "G04",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "M14"
+   },
+   "title": "Minor wording issues in definitions",
+   "detail": "Row 14's Definition starts with lowercase 'the stakeholder group' instead of a proper noun phrase, and row 21's Definition begins with lowercase 'boundary' lacking an article, reducing clarity.",
+   "fix": "Capitalize and add articles to definition text so each begins with a clear noun phrase.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-127",
+   "severity": "LOW",
+   "dimensionId": "G04",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "M220"
+   },
+   "title": "Vague term 'reasonable' in definition",
+   "detail": "M220 uses the vague term 'reasonable' ('Maximum minutes since the person's last multi-factor authentication for a SENSITIVE capability to be allowed'), which is subjective and untestable.",
+   "fix": "Replace 'reasonable' with a specific numeric threshold or reference to a configurable parameter with a defined default.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-128",
+   "severity": "LOW",
+   "dimensionId": "G04",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "M5"
+   },
+   "title": "Inconsistent definition style across deliverables",
+   "detail": "Some definitions use noun phrases (M5: 'Unique ID of this register'), others use full sentences. ISO 11179-4 recommends consistent definitional form across a schema.",
+   "fix": "Standardize all definitions to use consistent noun-phrase style per ISO 11179-4 guidelines.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-129",
+   "severity": "LOW",
+   "dimensionId": "G05",
+   "location": {
+    "sheet": "Hierarchy",
+    "cell": "A4"
+   },
+   "title": "Width and depth constraints not specified",
+   "detail": "The Hierarchy sheet shows L1 through L4 levels but does not explicitly state the maximum width (number of siblings) or depth constraints for the hierarchy tree structure.",
+   "fix": "Add explicit constraints in the Hierarchy sheet header or schema documentation stating the maximum allowed depth (e.g., 'Maximum depth: 4 levels') and any width limits.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-130",
+   "severity": "LOW",
+   "dimensionId": "G05",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "A10"
+   },
+   "title": "Inconsistent formatting",
+   "detail": "The formatting of the schema is inconsistent, with some fields having different formatting than others.",
+   "fix": "Standardize the formatting of the schema.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-131",
+   "severity": "LOW",
+   "dimensionId": "G05",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "O5"
+   },
+   "title": "Leaf atomicity not explicitly declared",
+   "detail": "While the schema defines validation rules for individual parameters, there is no explicit statement that leaf-level parameters are atomic (indivisible). The schema structure implies atomicity through individual field definitions, but this should be explicitly stated as a design principle.",
+   "fix": "Add a schema-level note or a dedicated row stating that all L4 leaf parameters are atomic by definition and may not be decomposed further.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-132",
+   "severity": "LOW",
+   "dimensionId": "G05",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "R10"
+   },
+   "title": "Missing Mutability Declarations",
+   "detail": "Some fields lack mutability declarations, which could lead to unintended changes.",
+   "fix": "Add mutability declarations to all relevant fields.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-133",
+   "severity": "LOW",
+   "dimensionId": "G05",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "R53"
+   },
+   "title": "Some mutability values use descriptive labels instead of standard codes",
+   "detail": "Cells like R53 contain 'Persona ID' and R137 'Role ID' as mutability values instead of standard mutability codes like SYSTEM_DERIVED or UPDATABLE.",
+   "fix": "Replace descriptive labels with standard mutability codes (e.g., SYSTEM_DERIVED for auto-generated IDs).",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-134",
+   "severity": "LOW",
+   "dimensionId": "G06",
+   "location": {
+    "sheet": "Value_Sets",
+    "cell": "A111"
+   },
+   "title": "Unknown handling scope unclear",
+   "detail": "A UNRESOLVED value set exists addressing unknown handling for conditions, but it is unclear whether unknown handling is addressed for all relevant value sets or only for condition evaluation.",
+   "fix": "Document the unknown handling strategy in the value set governance section, clarifying which value sets require unknown handling and how it is implemented.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-135",
+   "severity": "LOW",
+   "dimensionId": "G06",
+   "location": {
+    "sheet": "Value_Sets",
+    "cell": "A14"
+   },
+   "title": "Some value sets have unclear or missing definitions",
+   "detail": "A few value sets, such as 'AT-LIMIT' and 'AT-SEAT-LIMIT', have brief definitions that may not be fully clear. This could lead to misunderstandings or inconsistencies in implementation.",
+   "fix": "Add more detailed definitions for these value sets, or provide additional context to clarify their meanings.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-136",
+   "severity": "LOW",
+   "dimensionId": "G06",
+   "location": {
+    "sheet": "Value_Sets",
+    "cell": "B120"
+   },
+   "title": "Some value sets have no quote in the 'Meaning' column",
+   "detail": "Some value sets in the Value_Sets sheet have no quote in the 'Meaning' column, which could indicate incomplete information.",
+   "fix": "Add quotes to the 'Meaning' column for all value sets.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-137",
+   "severity": "LOW",
+   "dimensionId": "G07",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "O20"
+   },
+   "title": "Minor formatting issues",
+   "detail": "Some cells have minor formatting issues, such as inconsistent spacing or punctuation.",
+   "fix": "Review and correct formatting issues to improve readability.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-138",
+   "severity": "LOW",
+   "dimensionId": "G07",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "O45"
+   },
+   "title": "Null and unknown handling not explicitly addressed",
+   "detail": "While some rules mention 'no null when required (RG5)', there is no systematic treatment of null and unknown handling across all rules. The measure explicitly requires checking null and unknown handling.",
+   "fix": "Add explicit null/unknown handling specifications to each applicable validation rule, or create a dedicated section documenting the default null handling policy.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-139",
+   "severity": "LOW",
+   "dimensionId": "G07",
+   "location": {
+    "sheet": "Schema_L3_SubParameters",
+    "cell": "Q7"
+   },
+   "title": "Missing validation rule text in Schema_L3_SubParameters",
+   "detail": "Rows 7, 10, 58, 63, 82-83, 87, 103-104, 114-115, 121-122, 129-130, 144-145 in Schema_L3_SubParameters have DQ tags and examples but no validation rule text in column Q.",
+   "fix": "Add the validation rule text to each row where Q is empty but U/W/X are populated.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-140",
+   "severity": "LOW",
+   "dimensionId": "G07",
+   "location": {
+    "sheet": "Schema_L3_SubParameters",
+    "cell": "U33"
+   },
+   "title": "Missing DQ dimensions in Schema_L3_SubParameters",
+   "detail": "Multiple rows in Schema_L3_SubParameters lack DQ dimension tags in column U: rows 7, 10, 33-35, 44-45, 58, 62, 82-83, 87, 95-96, 103-104, 112-113, 121-122, 125-126, 129-130, 138.",
+   "fix": "Add appropriate DQ dimension tags to all validation rules in Schema_L3_SubParameters that are currently missing them.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-141",
+   "severity": "LOW",
+   "dimensionId": "G07",
+   "location": {
+    "sheet": "Validation_Rules",
+    "cell": "A14"
+   },
+   "title": "Rule VR-14 has a potential issue",
+   "detail": "The rule VR-14 states that DOWNLOAD \u00d7 CAND_PROFILE should have history [DOWNLOAD_HISTORY, LEDGER_ENTRY], but it does not specify what happens if this condition is not met. This could potentially lead to inconsistencies in the data.",
+   "fix": "Add a clarification to rule VR-14 to specify the consequences of not meeting the history condition.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-142",
+   "severity": "LOW",
+   "dimensionId": "G08",
+   "location": {
+    "sheet": "Permission_Matrix_Proposed",
+    "cell": "A40"
+   },
+   "title": "Inconsistent Number of Rows",
+   "detail": "The Permission_Matrix_Proposed sheet has 32 rows, but the scorecard v3 counts 280 cells, which corresponds to 40 rows.",
+   "fix": "Reconcile the number of rows in the Permission_Matrix_Proposed sheet with the scorecard v3.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-143",
+   "severity": "LOW",
+   "dimensionId": "G08",
+   "location": {
+    "sheet": "Permission_Matrix_Proposed",
+    "cell": "X31"
+   },
+   "title": "Scenario determinism relies on prose rationale",
+   "detail": "Proposed matrix resolves unspecified cells but relies on prose rationales in column X (e.g., 'Read: Admin must see a user to block it') rather than formal decision rules that could be automatically evaluated.",
+   "fix": "Convert prose rationales to formal conditional expressions that can be mapped to enforcement code.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-144",
+   "severity": "LOW",
+   "dimensionId": "G08",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "A1"
+   },
+   "title": "Inconsistent row count in Permission_Matrix and Permission_Matrix_Proposed",
+   "detail": "The Permission_Matrix sheet has 32 rows, while the Permission_Matrix_Proposed sheet has 36 rows. This inconsistency could lead to errors when comparing the two sheets.",
+   "fix": "Ensure that both sheets have the same number of rows.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-145",
+   "severity": "LOW",
+   "dimensionId": "G08",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "H5"
+   },
+   "title": "Unspecified cells in Permission Matrix",
+   "detail": "There are unspecified cells in the Permission Matrix, which could lead to confusion or inconsistencies.",
+   "fix": "Specify the values for the unspecified cells",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-146",
+   "severity": "LOW",
+   "dimensionId": "G08",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "H5"
+   },
+   "title": "Lack of NIST SP 800-192 properties",
+   "detail": "The authorization model does not explicitly mention NIST SP 800-192 properties, which could lead to non-compliance with security standards.",
+   "fix": "Incorporate NIST SP 800-192 properties into the authorization model.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "C"
+   ]
+  },
+  {
+   "id": "F-147",
+   "severity": "LOW",
+   "dimensionId": "G08",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "H5"
+   },
+   "title": "Missing privileged access lifecycle",
+   "detail": "The authorization model lacks information about the privileged access lifecycle, which is important for managing and monitoring privileged accounts.",
+   "fix": "Add information about the privileged access lifecycle to the authorization model.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "C"
+   ]
+  },
+  {
+   "id": "F-148",
+   "severity": "LOW",
+   "dimensionId": "G08",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "T5"
+   },
+   "title": "Negative test derivability not documented",
+   "detail": "The measure requires that negative tests be derivable, but the artifact does not explicitly show how negative test cases (e.g., blocked user attempts access, unauthorized role attempts action) are derived from the permission rules.",
+   "fix": "Add a Negative Tests column or sheet mapping each 'Explicitly Denied' and 'Conditional' rule to specific negative test cases (e.g., 'TST-NEG-001: Candidate attempts to delete own profile without erasure request').",
+   "returnTo": "Validate",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-149",
+   "severity": "LOW",
+   "dimensionId": "G08",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "T5"
+   },
+   "title": "Negative tests not derivable from artifact",
+   "detail": "While verification tests are referenced (e.g., TST-095), the artifact does not include negative test scenarios that verify deny decisions are correctly enforced.",
+   "fix": "Add a Negative_Tests column or sheet listing test cases that verify explicit denials and blocked access scenarios.",
+   "returnTo": "Validate",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-150",
+   "severity": "LOW",
+   "dimensionId": "G09",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "T4"
+   },
+   "title": "Lack of Data Classification Coverage",
+   "detail": "The artifact does not provide explicit data classification coverage, which may lead to data handling and storage issues.",
+   "fix": "Add data classification coverage to the schema parameters to ensure proper data handling and storage.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-151",
+   "severity": "LOW",
+   "dimensionId": "G10",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "Q31"
+   },
+   "title": "Admin permissions lack defined enforcement approach",
+   "detail": "Rows PRM-027 through PRM-031 (Admin, Account Admin, Super Admin, Guest, TPO) have 'TBD' in the Enforcement Approach column, leaving control implementation unspecified for high-privilege roles.",
+   "fix": "Specify the enforcement approach for admin-level permissions (e.g., 'Separate admin schema with audit trigger', 'Role-based access control with MFA requirement').",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-152",
+   "severity": "LOW",
+   "dimensionId": "G10",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "R5"
+   },
+   "title": "Inconsistent audit requirement",
+   "detail": "The audit requirement is specified as 'Profile updates audited if sensitive' in one row, but 'Attempt audited' in another row.",
+   "fix": "Review and standardize the audit requirements to ensure consistency.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-153",
+   "severity": "LOW",
+   "dimensionId": "G10",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "R5"
+   },
+   "title": "Prose-based evidence descriptions",
+   "detail": "Some evidence fields in the role-permission matrix rely on prose descriptions, which can be ambiguous and difficult to enforce. This could lead to inconsistencies in the implementation and enforcement of security controls.",
+   "fix": "Update the role-permission matrix to use more specific and objective evidence descriptions, such as 'Profile updates audited if sensitive fields are modified' instead of 'Profile updates audited if sensitive'.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "C"
+   ]
+  },
+  {
+   "id": "F-154",
+   "severity": "LOW",
+   "dimensionId": "G10",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "R9"
+   },
+   "title": "Inconsistent Audit Requirements",
+   "detail": "The audit requirements for some actions are not consistently specified, which may lead to inconsistencies in the implementation.",
+   "fix": "Review and standardize the audit requirements for all actions.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-155",
+   "severity": "LOW",
+   "dimensionId": "G10",
+   "location": {
+    "sheet": "Permission_Matrix",
+    "cell": "U5"
+   },
+   "title": "Operating-effectiveness evidence not explicit",
+   "detail": "The 'Evidence Class' column (U4) indicates source derivation but does not specify how operating effectiveness will be tested or evidenced over time. The 'Verification Test' column points to test IDs but not to ongoing evidence collection.",
+   "fix": "Add an 'Operating Effectiveness Evidence' column specifying how controls will be monitored for effectiveness (e.g., 'Automated audit log review', 'Quarterly access review').",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-156",
+   "severity": "LOW",
+   "dimensionId": "G11",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "E13"
+   },
+   "title": "Incomplete independent approval",
+   "detail": "The artifact mentions approval, but it is not clear if it is independent.",
+   "fix": "Clarify the approval process to ensure independence",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-157",
+   "severity": "LOW",
+   "dimensionId": "G11",
+   "location": {
+    "sheet": "Schema_L2_Parameters",
+    "cell": "G258"
+   },
+   "title": "Widened items pattern may be too restrictive",
+   "detail": "The Widened items parameter (D3-S14-P05) uses pattern ^[A-Z] {2,4}-\\d{3,4}$ which contains a space before the hyphen pattern, potentially causing validation failures for legitimate IDs like ROLE-01 or CAP-001.",
+   "fix": "Correct the pattern to ^[A-Z]{2,4}-\\d{3,4}$ (remove the space) to match standard ID formats",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "A"
+   ]
+  },
+  {
+   "id": "F-158",
+   "severity": "LOW",
+   "dimensionId": "G12",
+   "location": {
+    "sheet": "Checks",
+    "cell": "A4"
+   },
+   "title": "Inconsistent formatting in Checks sheet",
+   "detail": "The formatting in the Checks sheet is not consistent, with some rows having more columns than others. This could make it harder to read and understand the checks.",
+   "fix": "Standardize the formatting in the Checks sheet to make it easier to read.",
+   "returnTo": "Refine",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  },
+  {
+   "id": "F-159",
+   "severity": "LOW",
+   "dimensionId": "G13",
+   "location": {
+    "sheet": "Persona_Cards",
+    "cell": "G5"
+   },
+   "title": "Lack of clear definitions for some goals and audit hooks",
+   "detail": "Some goals and audit hooks are marked as 'UNSPECIFIED', which may indicate a need for further clarification or definition.",
+   "fix": "Provide clear definitions for all goals and audit hooks to ensure consistency and understanding.",
+   "returnTo": "Define",
+   "source": "raters",
+   "reportedBy": [
+    "B"
+   ]
+  }
+ ]
+}

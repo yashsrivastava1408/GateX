@@ -23,19 +23,19 @@
   top: 44px;
   bottom: 0;
   width: 2px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgb(var(--ink) / 0.08);
   transition: background var(--slow) var(--ease), box-shadow var(--slow) var(--ease);
 }
 .pipe:last-child::before {
   display: none;
 }
 .pipe-done::before {
-  background: linear-gradient(180deg, var(--accent) 0%, rgba(45, 212, 191, 0.4) 100%);
-  box-shadow: 0 0 8px rgba(45, 212, 191, 0.4);
+  background: linear-gradient(180deg, var(--accent) 0%, rgb(var(--accent-rgb) / 0.4) 100%);
+  box-shadow: 0 0 8px rgb(var(--accent-rgb) / 0.4);
 }
 .pipe-active::before {
-  background: linear-gradient(180deg, var(--accent) 0%, rgba(255, 255, 255, 0.1) 100%);
-  box-shadow: 0 0 10px rgba(45, 212, 191, 0.5);
+  background: linear-gradient(180deg, var(--accent) 0%, rgb(var(--ink) / 0.1) 100%);
+  box-shadow: 0 0 10px rgb(var(--accent-rgb) / 0.5);
 }
 .pipe-node {
   display: grid;
@@ -43,28 +43,28 @@
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  border: 1.5px solid rgba(255, 255, 255, 0.15);
-  background: rgba(14, 18, 30, 0.95);
+  border: 1.5px solid rgb(var(--ink) / 0.15);
+  background: rgb(var(--panel) / 0.95);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   color: var(--faint);
   font-size: var(--text-sm);
   font-weight: 700;
   z-index: 2;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 12px rgb(var(--shade) / 0.4);
   transition: background var(--base) var(--ease), border-color var(--base) var(--ease), color var(--base) var(--ease), box-shadow var(--base) var(--ease);
 }
 .pipe-done .pipe-node {
   border-color: var(--accent);
   background: var(--accent);
   color: var(--accent-ink);
-  box-shadow: 0 0 18px -2px rgba(45, 212, 191, 0.6);
+  box-shadow: 0 0 18px -2px rgb(var(--accent-rgb) / 0.6);
 }
 .pipe-active .pipe-node {
   border-color: var(--accent-strong);
   color: var(--accent-strong);
-  background: rgba(45, 212, 191, 0.12);
-  box-shadow: 0 0 0 6px rgba(45, 212, 191, 0.18), 0 0 24px -2px rgba(45, 212, 191, 0.6);
+  background: rgb(var(--accent-rgb) / 0.12);
+  box-shadow: 0 0 0 6px rgb(var(--accent-rgb) / 0.18), 0 0 24px -2px rgb(var(--accent-rgb) / 0.6);
 }
 .pulse {
   width: 12px;
@@ -95,7 +95,7 @@
   padding-top: var(--space-2);
   font-size: var(--text-md);
   font-weight: 650;
-  color: #ffffff;
+  color: var(--strong);
 }
 .pipe-idle .pipe-title {
   color: var(--muted);
@@ -119,22 +119,22 @@
   row-gap: var(--space-3);
   padding: var(--space-4) var(--space-5);
   border-radius: var(--radius-md);
-  background: rgba(14, 18, 30, 0.7);
+  background: rgb(var(--panel) / 0.7);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgb(var(--ink) / 0.08);
+  box-shadow: 0 4px 16px rgb(var(--shade) / 0.3);
   transition: border-color var(--base) var(--ease), box-shadow var(--base) var(--ease), transform var(--base) var(--ease);
   animation: riseFade var(--slow) var(--ease) both;
 }
 .participant:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 8px 24px rgb(var(--shade) / 0.45);
 }
 .participant-running {
-  border-color: rgba(45, 212, 191, 0.4);
-  background: rgba(45, 212, 191, 0.06);
-  box-shadow: 0 0 20px -4px rgba(45, 212, 191, 0.25);
+  border-color: rgb(var(--accent-rgb) / 0.4);
+  background: rgb(var(--accent-rgb) / 0.06);
+  box-shadow: 0 0 20px -4px rgb(var(--accent-rgb) / 0.25);
 }
 .participant-failed {
   border-color: rgba(244, 63, 94, 0.4);
@@ -146,11 +146,11 @@
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background: rgba(45, 212, 191, 0.12);
-  border: 1px solid rgba(45, 212, 191, 0.25);
+  background: rgb(var(--accent-rgb) / 0.12);
+  border: 1px solid rgb(var(--accent-rgb) / 0.25);
   color: var(--accent-strong);
   font-weight: 700;
-  box-shadow: 0 0 10px rgba(45, 212, 191, 0.2);
+  box-shadow: 0 0 10px rgb(var(--accent-rgb) / 0.2);
 }
 .participant-body {
   display: flex;
@@ -178,7 +178,7 @@
   font-weight: 540;
 }
 .participant-ok .participant-status {
-  color: var(--green-bright);
+  color: var(--accent-strong);
 }
 .participant-failed .participant-status {
   color: var(--red-bright);
@@ -186,3 +186,13 @@
 .participant-running .participant-status {
   color: var(--accent-strong);
 }
+
+/* Overall progress above the stages: where we are, how many models are done, how long it has taken. */
+.run-summary { margin-bottom: var(--space-5); }
+.run-summary-row { display: flex; align-items: baseline; gap: var(--space-4); margin-bottom: var(--space-2); font-size: var(--text-sm); color: var(--text-2); }
+.run-summary-stage { font-weight: 600; color: var(--text); }
+.run-summary-models { color: var(--muted); }
+.run-summary-fail { color: var(--red-bright); }
+.run-summary-time { margin-left: auto; color: var(--accent-strong); font-variant-numeric: tabular-nums; }
+.progress { height: 6px; border-radius: 999px; background: rgb(var(--ink) / 0.08); overflow: hidden; }
+.progress-fill { height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), var(--accent-cyan)); box-shadow: 0 0 10px rgb(var(--accent-rgb) / 0.5); transition: width var(--slow) var(--ease); }

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { SCORE_BANDS } from '@ddd/shared';
 import type {
   Decision,
   DimensionTrendRow,
@@ -6,7 +7,6 @@ import type {
   Finding,
   FindingDiff,
   Gate,
-  HumanEvidence,
   Override,
   ProjectHistory,
   ProjectSummary,
@@ -91,6 +91,23 @@ export interface NewRun {
   progress: RunProgress;
 }
 
+/** The scorecard a project is marked against for one uploaded scorecard file. */
+export interface ScorecardPin {
+  sourceName: string;
+  scorecardHash: string;
+  scorecard: Scorecard;
+  /** The iteration that first used it. */
+  iteration: number;
+}
+
+export interface DeletedRun {
+  runId: string;
+  iteration: number;
+  artifactPath: string | null;
+  projectId: string;
+  projectName: string;
+}
+
 export class Store {
   constructor(private readonly db: Db) {}
 
@@ -119,6 +136,33 @@ export class Store {
     });
   }
 
+  /* ------------------------- scorecard pins ------------------------- */
+
+  /** The scorecard a project pinned for this uploaded scorecard file, if any. */
+  async findPin(projectName: string, sourceHash: string): Promise<ScorecardPin | null> {
+    const [row] = await this.db.query<Record<string, unknown>>(
+      `select s.source_name, s.scorecard_hash, s.scorecard, s.pinned_iteration from scorecard_pins s
+       join projects p on p.id = s.project_id where p.name = $1 and s.source_hash = $2`,
+      [projectName, sourceHash],
+    );
+    if (!row) return null;
+    const scorecard = parseJson<Scorecard>(row.scorecard);
+    if (!scorecard) return null;
+    return { sourceName: String(row.source_name), scorecardHash: String(row.scorecard_hash), scorecard, iteration: Number(row.pinned_iteration) };
+  }
+
+  /** Pins a scorecard to a project for one scorecard file. The first pin stands: a second one for the same file is ignored. */
+  async addPin(projectId: string, sourceHash: string, pin: ScorecardPin): Promise<void> {
+    await this.db.tx(async (tx) => {
+      const [known] = await tx.query<{ n: number | string }>('select count(*) as n from scorecard_pins where project_id = $1 and source_hash = $2', [projectId, sourceHash]);
+      if (Number(known?.n ?? 0) > 0) return;
+      await tx.query(
+        'insert into scorecard_pins (project_id, source_hash, source_name, scorecard_hash, scorecard, pinned_iteration) values ($1,$2,$3,$4,$5,$6)',
+        [projectId, sourceHash, pin.sourceName, pin.scorecardHash, json(pin.scorecard), pin.iteration],
+      );
+    });
+  }
+
   async setStage(runId: string, stage: RunStage, progress?: RunProgress): Promise<void> {
     const status: RunStatus = stage === 'queued' ? 'queued' : 'running';
     if (progress) {
@@ -139,6 +183,50 @@ export class Store {
     );
   }
 
+  /** Deletes one run and everything saved for it. A run that is still being evaluated cannot be deleted. */
+  async deleteRun(runId: string): Promise<DeletedRun[]> {
+    const [row] = await this.db.query<{ status: string }>('select status from runs where id = $1', [runId]);
+    if (!row) throw new UserError('That run does not exist.', 404);
+    if (row.status === 'queued' || row.status === 'running') throw new UserError('This evaluation is still running. Delete it once it has finished.', 409);
+    return this.removeRuns('where r.id = $1', [runId]);
+  }
+
+  /** Deletes a project with all of its runs. */
+  async deleteProject(projectId: string): Promise<DeletedRun[]> {
+    const [project] = await this.db.query<{ id: string }>('select id from projects where id = $1', [projectId]);
+    if (!project) throw new UserError('That project does not exist.', 404);
+    const [live] = await this.db.query<{ n: number | string }>(`select count(*) as n from runs where project_id = $1 and status in ('queued', 'running')`, [projectId]);
+    if (Number(live?.n ?? 0) > 0) throw new UserError('This project has an evaluation that is still running. Delete it once it has finished.', 409);
+    return this.removeRuns('where r.project_id = $1', [projectId], projectId);
+  }
+
+  /** Removes the rows, children first. Returns where each run's files were, so the caller can delete them too. */
+  private async removeRuns(where: string, params: unknown[], projectId?: string): Promise<DeletedRun[]> {
+    return this.db.tx(async (tx) => {
+      const runs = await tx.query<DeletedRun>(
+        `select r.id as "runId", r.iteration, r.artifact_path as "artifactPath", p.id as "projectId", p.name as "projectName"
+         from runs r join projects p on p.id = r.project_id ${where}`,
+        params,
+      );
+      for (const { runId } of runs) {
+        // human_evidence only holds rows from older versions, which let a person add scores by hand.
+        for (const table of ['model_calls', 'dimension_scores', 'findings', 'human_evidence', 'overrides']) {
+          await tx.query(`delete from ${table} where run_id = $1`, [runId]);
+        }
+        await tx.query('delete from runs where id = $1', [runId]);
+      }
+      const owner = projectId ?? runs[0]?.projectId;
+      if (owner) {
+        const [left] = await tx.query<{ n: number | string }>('select count(*) as n from runs where project_id = $1', [owner]);
+        if (Number(left?.n ?? 0) === 0) {
+          await tx.query('delete from scorecard_pins where project_id = $1', [owner]);
+          await tx.query('delete from projects where id = $1', [owner]);
+        }
+      }
+      return runs;
+    });
+  }
+
   /** On start-up, a run left "running" by a crashed process can never finish: mark it failed. */
   async failInterrupted(): Promise<number> {
     const rows = await this.db.query<{ id: string }>(`select id from runs where status in ('queued', 'running')`);
@@ -148,7 +236,7 @@ export class Store {
 
   async completeRun(runId: string, output: EvaluationOutput, progress: RunProgress): Promise<void> {
     const { core, calls, runLog } = output;
-    const report = assembleReport(core, [], null);
+    const report = assembleReport(core, null);
     await this.db.tx(async (tx) => {
       await tx.query(
         `update runs set status = 'done', stage = 'done', core = $2, run_log = $3, progress = $4,
@@ -208,36 +296,18 @@ export class Store {
 
   async getRunDetail(runId: string): Promise<RunDetail> {
     const row = await this.row(runId);
-    const evidence = await this.evidence(runId);
     const override = await this.latestOverride(runId);
     const core = parseJson<EvaluationCore>(row.core);
     return {
       ...toSummary(row),
       progress: parseJson<RunProgress>(row.progress),
       error: row.error,
-      report: core ? assembleReport(core, evidence, override) : null,
-      evidence,
+      report: core ? assembleReport(core, override) : null,
       runLog: parseJson<RunLog>(row.run_log),
     };
   }
 
-  /* ------------------------ human input ------------------------ */
-
-  async evidence(runId: string): Promise<HumanEvidence[]> {
-    const rows = await this.db.query<Record<string, unknown>>(
-      'select id, run_id, dimension_id, score, note, by_name, created_at from human_evidence where run_id = $1 order by created_at',
-      [runId],
-    );
-    return rows.map((r) => ({
-      id: String(r.id),
-      runId: String(r.run_id),
-      dimensionId: String(r.dimension_id),
-      score: r.score === null ? null : Number(r.score),
-      note: String(r.note),
-      by: String(r.by_name),
-      createdAt: iso(r.created_at),
-    }));
-  }
+  /* --------------------------- overrides --------------------------- */
 
   async latestOverride(runId: string): Promise<Override | null> {
     const [r] = await this.db.query<Record<string, unknown>>(
@@ -247,17 +317,6 @@ export class Store {
     return r
       ? { id: String(r.id), runId: String(r.run_id), decision: r.decision as Decision, reason: String(r.reason), by: String(r.by_name), createdAt: iso(r.created_at) }
       : null;
-  }
-
-  async addEvidence(runId: string, input: { dimensionId: string; score: number | null; note: string; by: string }): Promise<void> {
-    const detail = await this.requireDone(runId);
-    const dim = detail.report!.notMeasurable.find((n) => n.dimensionId === input.dimensionId);
-    if (!dim) throw new UserError(`${input.dimensionId} is not a human-only item in this report.`);
-    await this.db.query(
-      'insert into human_evidence (id, run_id, dimension_id, score, note, by_name) values ($1,$2,$3,$4,$5,$6)',
-      [randomUUID(), runId, input.dimensionId, input.score, input.note, input.by],
-    );
-    await this.refreshVerdict(runId);
   }
 
   async addOverride(runId: string, input: { decision: Decision; reason: string; by: string }): Promise<void> {
@@ -272,6 +331,25 @@ export class Store {
     const detail = await this.getRunDetail(runId);
     if (detail.status !== 'done' || !detail.report) throw new UserError('This run has no finished report yet.', 409);
     return detail;
+  }
+
+  /**
+   * Brings the saved result of every finished run in line with the rule as it stands now, so a list or a chart never shows an older
+   * rule's answer. Returns how many changed.
+   */
+  async refreshVerdicts(): Promise<number> {
+    const rows = await this.db.query<{ id: string; final_decision: string | null; weighted_score: number | string | null }>(
+      `select id, final_decision, weighted_score from runs where status = 'done'`,
+    );
+    let changed = 0;
+    for (const row of rows) {
+      const detail = await this.getRunDetail(row.id);
+      const verdict = detail.report?.verdict;
+      if (!verdict || (verdict.decision === row.final_decision && Number(row.weighted_score) === verdict.weightedScore)) continue;
+      await this.refreshVerdict(row.id);
+      changed += 1;
+    }
+    return changed;
   }
 
   /** Keeps the columns people query in step with the live verdict. */
@@ -368,7 +446,7 @@ export class Store {
       trend: done.map((r) => ({ runId: r.id, iteration: r.iteration, score: r.weightedScore, decision: r.finalDecision, createdAt: r.createdAt })),
       dimensions,
       findingDiffs,
-      thresholds: scorecard?.thresholds ?? null,
+      thresholds: scorecard ? { ...SCORE_BANDS } : null,
     };
   }
 }

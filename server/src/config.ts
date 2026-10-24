@@ -45,8 +45,14 @@ export const modelsConfigSchema = z.object({
       sectionConcurrency: z.number().int().min(1).max(8).default(1),
       /** Times each rater scores each section; the median is kept. 1 on free tiers; 3 steadies scores when quota allows. */
       repeats: z.number().int().min(1).max(5).default(1),
+      /**
+       * How repeats are spent. "adaptive" (default): each rater scores everything once, then only the questions the examiners
+       * disagree on by more than a point (or gave no usable score for) are scored again, up to `repeats` times in all.
+       * "all": every question is scored `repeats` times.
+       */
+      repeatMode: z.enum(['all', 'adaptive']).default('adaptive'),
     })
-    .default({ temperature: 0, maxOutputTokens: 8192, timeoutMs: 120_000, retries: 3, sectionConcurrency: 1, repeats: 1 }),
+    .default({ temperature: 0, maxOutputTokens: 8192, timeoutMs: 120_000, retries: 3, sectionConcurrency: 1, repeats: 1, repeatMode: 'adaptive' }),
 });
 
 export type ModelsConfig = z.infer<typeof modelsConfigSchema>;
@@ -86,14 +92,16 @@ export function loadModelsConfig(file: string): ModelsConfig {
   return parsed.data;
 }
 
+/** The models file the app will load: the scripted roster in mock mode, else MODELS_CONFIG, else server/config/models.json. */
+export function modelsFileFor(env: NodeJS.ProcessEnv = process.env): string {
+  // Mock mode is "no live APIs, whatever else is set": it always uses the scripted roster.
+  if (env.MOCK_LLM === '1') return path.join(serverDir, 'config', 'models.mock.json');
+  return env.MODELS_CONFIG ? resolveModelsFile(env.MODELS_CONFIG, env) : path.join(serverDir, 'config', 'models.json');
+}
+
 export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const mock = env.MOCK_LLM === '1';
-  // Mock mode is "no live APIs, whatever else is set": it always uses the scripted roster.
-  const modelsFile = mock
-    ? path.join(serverDir, 'config', 'models.mock.json')
-    : env.MODELS_CONFIG
-      ? resolveModelsFile(env.MODELS_CONFIG, env)
-      : path.join(serverDir, 'config', 'models.json');
+  const modelsFile = modelsFileFor(env);
   const databaseUrl = env.DATABASE_URL || undefined;
   const dbMode = env.DB_MODE === 'memory' || !databaseUrl ? 'memory' : 'postgres';
   return {

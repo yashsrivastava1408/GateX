@@ -1,10 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import type {
   DimensionResult,
+  DimensionSpec,
   EvaluationCore,
   ModelRef,
   ParticipantStatus,
   RunLog,
+  ReliabilityTable,
   RunStage,
   Scorecard,
 } from '@ddd/shared';
@@ -19,13 +21,20 @@ import { PROMPT_VERSION } from './prompts/rater.js';
 import { buildConsolidatorUser } from './prompts/consolidator.js';
 import { sha256 } from '../util/hash.js';
 import { UserError } from '../util/errors.js';
-import { buildRaterResultsJson, disputedDimensions, consolidate } from './consolidate.js';
+import { buildRaterResultsJson, disputedDimensions, consolidateInBatches } from './consolidate.js';
 import { defaultReturnTo, finalizeFindings, findingsFromChecks } from './findings.js';
+import { checkFindings, complainsAboutOutsideEvidence } from './findingCheck.js';
+import { checkPresence } from './presence.js';
+import { withAutoReads } from './autoReads.js';
+import { loneFindingReason } from './reliability.js';
+import { capByExactFindings, sweepFindings } from './sweep.js';
+import { collapseCriteria, expandCriteria, findingsToDimensions, retypeOutsideCriteria } from './aggregate.js';
 import { runRater } from './rater.js';
 import type { CallMeta, DraftFinding, RaterOutcome } from './types.js';
-import { medianOutcome } from './repeats.js';
+import { idsToRepeat, medianOutcome, type RepeatStats } from './repeats.js';
 import { mapWithConcurrency } from '../util/concurrency.js';
 import { resolvePageRanges } from '../excel/pageRanges.js';
+import { addRelevantPages } from '../excel/pageSelect.js';
 import { planSections, sheetsForDisagreements } from './sectionPlanner.js';
 import { serializeSheets } from '../excel/serialize.js';
 
@@ -44,6 +53,10 @@ export interface EvaluateArgs {
   sources: string;
   /** Extra instructions from the person submitting the work. Recorded in the report header. */
   instructions?: string;
+  /** Where the scorecard came from (for example an automatic conversion), added to the run notes. */
+  scorecardNotes?: string[];
+  /** What the test library measured about each examiner; a finding only a rarely-right examiner raised is set aside. Optional. */
+  reliability?: ReliabilityTable;
   models: ModelsConfig;
   providers: ProviderFactory;
   env?: NodeJS.ProcessEnv;
@@ -99,11 +112,6 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
   const emit = args.onProgress ?? (() => undefined);
   const instructions = (args.instructions ?? '').trim();
 
-  if (!args.scorecard.frozen) {
-    throw new UserError(
-      'The scorecard is not frozen. A scorecard must be frozen (frozen: true) before anything is scored against it, so the target cannot move.',
-    );
-  }
   const roster = inspectRoster(args.models, args.env);
   assertRosterReady(roster);
 
@@ -112,7 +120,13 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
   const bytes = await readFile(args.workbookPath);
   const artifactHash = sha256(bytes);
   const wb = await WorkbookModel.load(bytes);
-  const scorecard = resolvePageRanges(args.scorecard, wb);
+  const judged = addRelevantPages(resolvePageRanges(args.scorecard, wb), wb);
+  // Every criterion becomes a question of its own for the run; the results are combined back per dimension in step 5.
+  const retyped = retypeOutsideCriteria(judged);
+  const expanded = expandCriteria(retyped.scorecard);
+  // A question that names no sheets would be sent the whole file; on a big file that is more than any model takes, so code picks its sheets.
+  const { scorecard, summary: readsSummary } = withAutoReads(expanded, wb);
+  const readsNotes = readsSummary ? [readsSummary] : [];
   const artifactSheets = scorecard.artifact.sheets.map((s) => s.name);
   const contextSheets = scorecard.artifact.context.map((s) => s.name);
   for (const name of [...artifactSheets, ...contextSheets]) {
@@ -137,6 +151,10 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
     family: roster.consolidator.family,
   };
   const repeats = args.models.settings.repeats;
+  const repeatMode = args.models.settings.repeatMode ?? 'adaptive';
+  let callsMade = 0;
+  const repeatedIds = new Set<string>();
+  const repeatStats: RepeatStats = { mode: repeatMode, repeats, planned: 0, made: 0, saved: 0, repeated: [] };
   const settings = { temperature: args.models.settings.temperature, maxOutputTokens: args.models.settings.maxOutputTokens };
   const returnTo = defaultReturnTo(scorecard.gate);
 
@@ -152,54 +170,79 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
     // The raters work in parallel inside a section; sections run one at a time unless the roster allows more (settings.sectionConcurrency).
     const sections = planSections(scorecard);
     const perRater = roster.raters.map((member) => ({ member, outcomes: [] as RaterOutcome[] }));
+    // Repeats need some randomness to be independent samples, so every scoring call uses it when there are repeats.
+    const runSettings = repeats > 1 ? { ...settings, temperature: Math.max(settings.temperature, REPEAT_TEMPERATURE) } : settings;
+    const adaptive = repeatMode === 'adaptive' && repeats > 1;
+    const scoreOnce = (member: (typeof roster.raters)[number], expected: DimensionSpec[], user: string) => {
+      const candidates = candidatesFor(member);
+      callsMade += 1;
+      return runWithFallback(
+        candidates,
+        (candidate) => {
+          if (candidate !== candidates[0]) {
+            emit({ type: 'participant', id: member.id, status: 'running', provider: candidate.ref.provider, model: candidate.ref.model });
+          }
+          return runRater({
+            model: candidate.ref,
+            provider: args.providers(candidate.ref.provider),
+            user,
+            expected,
+            wb,
+            allowedSheets,
+            defaultReturnTo: returnTo,
+            settings: runSettings,
+            maxInputTokens: candidate.maxInputTokens,
+          });
+        },
+        (o) => ({ ok: o.status === 'ok', error: o.error }),
+      );
+    };
+
     await mapWithConcurrency(sections, args.models.settings.sectionConcurrency, async (section) => {
       const sectionPrompt = buildRaterPromptForSection({ scorecard, section, wb, sources: args.sources, instructions });
       const where = sections.length > 1 ? ` (${section.label})` : '';
 
-      await Promise.all(
-        perRater.map(async ({ member, outcomes: done }) => {
-          const candidates = candidatesFor(member);
+      // Pass 1: each rater scores the whole section, `repeats` times when every question is repeated, else once.
+      const passes = await Promise.all(
+        perRater.map(({ member }) => {
           emit({ type: 'participant', id: member.id, status: 'running', provider: member.provider, model: member.model });
-          // Each rater scores the section `repeats` times and the median is kept. Repeats need some randomness to be independent samples.
-          const runSettings = repeats > 1 ? { ...settings, temperature: Math.max(settings.temperature, REPEAT_TEMPERATURE) } : settings;
-          const attempts = await Promise.all(
-            Array.from({ length: repeats }, () =>
-              runWithFallback(
-                candidates,
-                (candidate) => {
-                  if (candidate !== candidates[0]) {
-                    emit({ type: 'participant', id: member.id, status: 'running', provider: candidate.ref.provider, model: candidate.ref.model });
-                  }
-                  return runRater({
-                    model: candidate.ref,
-                    provider: args.providers(candidate.ref.provider),
-                    user: sectionPrompt.user,
-                    expected: section.dimensions,
-                    wb,
-                    allowedSheets,
-                    defaultReturnTo: returnTo,
-                    settings: runSettings,
-                    maxInputTokens: candidate.maxInputTokens,
-                  });
-                },
-                (o) => ({ ok: o.status === 'ok', error: o.error }),
-              ),
-            ),
-          );
-          const outcome = medianOutcome(attempts.map((a) => a.result));
-          const failures = attempts.flatMap((a) => a.failures);
-          if (failures.length > 0) {
-            if (outcome.status === 'ok') {
-              fallbackNotes.push(`Rater ${member.id}${where}: ${describeFailures(failures)}. ${outcome.model.model} answered instead (same model family).`);
-            } else {
-              outcome.error = describeFailures(failures);
-            }
-          }
-          done.push(outcome);
-          emit({ type: 'participant', id: member.id, status: outcome.status, error: outcome.error, latencyMs: outcome.latencyMs, provider: outcome.model.provider, model: outcome.model.model });
+          return Promise.all(Array.from({ length: adaptive ? 1 : repeats }, () => scoreOnce(member, section.dimensions, sectionPrompt.user)));
         }),
       );
+
+      // Pass 2 (adaptive): only the questions the examiners disagree on, or gave no usable score for, are scored again,
+      // by every rater that answered, with a prompt that holds just those questions. The median is then taken as before.
+      if (adaptive) {
+        const again = idsToRepeat(section.dimensions.map((d) => d.id), passes.map((attempts) => attempts[0]!.result));
+        if (again.length > 0) {
+          again.forEach((id) => repeatedIds.add(id));
+          const subset = section.dimensions.filter((d) => again.includes(d.id));
+          const smaller = buildRaterPromptForSection({ scorecard, section: { ...section, dimensions: subset }, wb, sources: args.sources, instructions });
+          await Promise.all(
+            perRater.map(async ({ member }, i) => {
+              if (passes[i]![0]!.result.status !== 'ok') return;
+              passes[i]!.push(...(await Promise.all(Array.from({ length: repeats - 1 }, () => scoreOnce(member, subset, smaller.user)))));
+            }),
+          );
+        }
+      }
+
+      perRater.forEach(({ member, outcomes: done }, i) => {
+        const attempts = passes[i]!;
+        const outcome = medianOutcome(attempts.map((a) => a.result));
+        const failures = attempts.flatMap((a) => a.failures);
+        if (failures.length > 0) {
+          if (outcome.status === 'ok') {
+            fallbackNotes.push(`Rater ${member.id}${where}: ${describeFailures(failures)}. ${outcome.model.model} answered instead (same model family).`);
+          } else {
+            outcome.error = describeFailures(failures);
+          }
+        }
+        done.push(outcome);
+        emit({ type: 'participant', id: member.id, status: outcome.status, error: outcome.error, latencyMs: outcome.latencyMs, provider: outcome.model.provider, model: outcome.model.model });
+      });
     });
+    repeatStats.planned = sections.length * roster.raters.length * repeats;
     outcomes = perRater.map(({ outcomes: done }) => mergeSectionOutcomes(done));
 
     if (outcomes.every((o) => o.status === 'failed')) {
@@ -208,39 +251,46 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
     }
   }
   const ratingMs = Date.now() - ratingStarted;
+  repeatStats.made = callsMade;
+  repeatStats.saved = Math.max(0, repeatStats.planned - callsMade);
+  repeatStats.repeated = [...repeatedIds];
 
   /* 4. Consolidation. */
   const consolidationStarted = Date.now();
   let consolidatedDims: DimensionResult[] = [];
   let raterFindings: DraftFinding[] = [];
-  let consolidation: Awaited<ReturnType<typeof consolidate>> | null = null;
+  let consolidation: Awaited<ReturnType<typeof consolidateInBatches>> | null = null;
   if (rated.length > 0) {
     emit({ type: 'stage', stage: 'consolidating' });
     emit({ type: 'participant', id: consolidatorRef.id, status: 'running', provider: roster.consolidator.provider, model: roster.consolidator.model });
     const consolidatorCandidates = candidatesFor(roster.consolidator);
     // A sectioned scorecard keeps the consolidator's prompt small too: it only needs the sheets behind the
     // dimensions the raters disagree on. Without `reads` it is sent the whole artifact, as before.
-    const partial = sheetsForDisagreements(planSections(scorecard), disputedDimensions(rated, outcomes));
-    const consolidatorUser = buildConsolidatorUser({
-      scorecard,
-      dimensions: rated,
-      raterResults: buildRaterResultsJson(rated, outcomes),
-      artifactText: partial ? serializeSheets(wb, [...partial.sheets, ...partial.context]) : artifactText,
-      artifactIsPartial: partial !== null,
-      instructions,
-    });
+    const sections = planSections(scorecard);
+    // One prompt per batch of questions: only their results, and for disputes only the sheets behind them.
+    const buildUser = (batch: DimensionSpec[], batchOutcomes: RaterOutcome[]) => {
+      const partial = sheetsForDisagreements(sections, disputedDimensions(batch, batchOutcomes));
+      return buildConsolidatorUser({
+        scorecard,
+        dimensions: batch,
+        raterResults: buildRaterResultsJson(batch, batchOutcomes),
+        artifactText: partial ? serializeSheets(wb, [...partial.sheets, ...partial.context]) : artifactText,
+        artifactIsPartial: partial !== null,
+        instructions,
+      });
+    };
     const { result, failures } = await runWithFallback(
       consolidatorCandidates,
       (candidate) => {
         if (candidate !== consolidatorCandidates[0]) {
           emit({ type: 'participant', id: consolidatorRef.id, status: 'running', provider: candidate.ref.provider, model: candidate.ref.model });
         }
-        return consolidate({
+        return consolidateInBatches({
           model: candidate.ref,
           provider: args.providers(candidate.ref.provider),
           rated,
           outcomes,
-          user: consolidatorUser,
+          buildUser,
           wb,
           allowedSheets,
           defaultReturnTo: returnTo,
@@ -276,26 +326,71 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
   const byId = new Map<string, DimensionResult>();
   for (const { result } of codeOutcomes) byId.set(result.id, result);
   for (const dim of consolidatedDims) byId.set(dim.id, dim);
-  const dimensions = scorecard.dimensions.map((spec): DimensionResult => {
+  const collapsed = collapseCriteria(retyped.scorecard, scorecard.dimensions.map((spec): DimensionResult => {
     return (
       byId.get(spec.id) ?? {
         id: spec.id,
         name: spec.name,
         weight: spec.weight,
         critical: spec.critical,
-        measuredBy: 'human',
+        measuredBy: spec.measuredBy,
         status: 'not_measurable',
         raterScores: {},
         consolidated: null,
         spread: null,
         resolution: 'none',
         flagged: false,
-        rationale: spec.needs ?? 'Only a person can provide this evidence.',
+        rationale: 'Nothing in the file measures this.',
         evidence: [],
       }
     );
-  });
-  const findings = finalizeFindings(scorecard, [...findingsFromChecks(scorecard, codeOutcomes), ...raterFindings]);
+  }));
+  // The examiners tag a finding with the question it answers, which is a criterion id ("AU-01") when the dimension has criteria.
+  const parentOf = new Map(retyped.scorecard.dimensions.flatMap((d) => (d.criteria ?? []).map((c) => [c.id, d.id] as const)));
+  // A row-by-row sweep in code: models skim a long sheet and miss a blank cell or a repeated id; code reads every row.
+  const swept = sweepFindings(scorecard, scorecard.dimensions.filter((d) => d.measuredBy === 'raters'), wb, returnTo);
+  // The score follows the exact evidence: a question the sweep found mistakes under cannot keep a clean score the examiners gave it.
+  const { dimensions, notes: capNotes } = capByExactFindings(collapsed, swept, parentOf);
+  // The examiners' findings are fact-checked against the file and their duplicates merged; code findings are exact and pass as they are.
+  // A question the file cannot measure (an interview, a second run) is left out of the score. A complaint that its evidence is missing is not
+  // a defect in the file, so it must not block green either.
+  const unmeasurable = new Set(dimensions.filter((d) => d.status === 'not_measurable').map((d) => d.id));
+  const outsideCriteria = new Set(retyped.scorecard.dimensions.flatMap((d) => (d.criteria ?? []).filter((c) => c.outside).map((c) => c.id)));
+  const aboutUnmeasurable = (f: DraftFinding) => unmeasurable.has(parentOf.get(f.dimensionId) ?? f.dimensionId) || complainsAboutOutsideEvidence(f, outsideCriteria);
+  const checked = checkFindings(
+    raterFindings.filter((f) => !aboutUnmeasurable(f)),
+    wb,
+    { loneReason: (f) => loneFindingReason(f, roster.raters, args.reliability) },
+  );
+  // "The file has no X" said about X that the file does define: a model finds the row, code proves the quote is really in the cell.
+  if (rated.length > 0) {
+    const presence = await checkPresence({
+      findings: checked.findings,
+      wb,
+      models: candidatesFor(roster.consolidator).map((c) => ({ model: c.ref.model, provider: args.providers(c.ref.provider) })),
+      settings,
+    });
+    checked.findings = presence.findings;
+    checked.dropped.push(...presence.dropped);
+    checked.notes.push(...presence.notes);
+  }
+  for (const f of raterFindings.filter(aboutUnmeasurable)) {
+    checked.dropped.push({
+      dimensionId: f.dimensionId,
+      severity: f.severity,
+      title: f.title,
+      location: f.location,
+      reportedBy: f.reportedBy,
+      reason: unmeasurable.has(parentOf.get(f.dimensionId) ?? f.dimensionId)
+        ? 'The file holds nothing that could measure this question, so it is left out of the score. A missing-evidence complaint about it is not a defect in the file.'
+        : 'This question needs evidence from outside the file, so the scorecard handles missing evidence with its own cap. A missing-evidence complaint about it is not a defect in the file.',
+    });
+  }
+  if (swept.length > 0) checked.notes.push(`A row-by-row sweep in code found ${swept.length} anomal${swept.length === 1 ? 'y' : 'ies'} (empty cells in otherwise full columns, repeated ids, references to ids that do not exist, wrong child counts, filler definitions). They are listed as code findings.`);
+  if (unmeasurable.size > 0 && raterFindings.some(aboutUnmeasurable)) {
+    checked.notes.push(`Findings about questions the file cannot measure (${[...unmeasurable].join(', ')}) were set aside and are listed with the dropped findings.`);
+  }
+  const findings = finalizeFindings(retyped.scorecard, findingsToDimensions(retyped.scorecard, [...findingsFromChecks(scorecard, codeOutcomes), ...swept, ...checked.findings]));
 
   /* 6. Freeze check: the file must be exactly what we hashed at the start. */
   const after = sha256(await readFile(args.workbookPath));
@@ -308,7 +403,7 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
     ...(consolidation ? [{ ...consolidation.call, discarded: 0, discardedDetail: [] }] : []),
   ];
 
-  const notes: string[] = [...fallbackNotes];
+  const notes: string[] = [...(args.scorecardNotes ?? []), ...fallbackNotes, ...retyped.notes, ...readsNotes];
   // The report names the models that actually answered, which differ from the roster when a fallback was used.
   const usedRaters: ModelRef[] = outcomes.length > 0 ? outcomes.map((o) => o.model) : raterRefs;
   const usedConsolidator: ModelRef = consolidation?.call.model ?? consolidatorRef;
@@ -317,9 +412,16 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
     else if (o.discarded.length > 0) notes.push(`Rater ${o.model.id} had ${o.discarded.length} claim(s) discarded for missing or unsupported evidence.`);
   }
   if (consolidation?.consolidatorFailed) {
-    notes.push(`The consolidator failed (${consolidation.call.error}). The lower rater score was used wherever raters differed, and those items are flagged for a person.`);
+    notes.push(`The consolidator failed (${consolidation.call.error}). The lower rater score was used wherever raters differed, and those items are flagged as uncertain.`);
   }
   if (rated.length === 0) notes.push('This scorecard has no rater dimensions, so only code checks were run.');
+  if (repeatStats.mode === 'adaptive' && repeats > 1 && rated.length > 0) {
+    notes.push(
+      repeatStats.repeated.length > 0
+        ? `Adaptive repeats: only the questions the examiners disagreed on were scored again (${repeatStats.repeated.join(', ')}), ${repeatStats.made} rater calls instead of ${repeatStats.planned}.`
+        : `Adaptive repeats: the examiners agreed on every question, so nothing was scored again (${repeatStats.made} rater calls instead of ${repeatStats.planned}).`,
+    );
+  }
 
   const finishedAt = now();
   const core: EvaluationCore = {
@@ -348,7 +450,8 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
     findings,
     strengths: consolidation?.strengths ?? [],
     consolidatorFailed: consolidation?.consolidatorFailed ?? false,
-    notes,
+    notes: [...notes, ...capNotes, ...checked.notes],
+    ...(checked.dropped.length > 0 ? { droppedFindings: checked.dropped } : {}),
   };
 
   const runLog: RunLog = {
@@ -361,6 +464,7 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
     artifactHash,
     scorecardHash: args.scorecardHash,
     timings: { totalMs: finishedAt.getTime() - startedAt.getTime(), checksMs, ratingMs, consolidationMs },
+    ...(rated.length > 0 ? { repeats: repeatStats } : {}),
     participants: calls.map((c) => ({
       id: c.model.id,
       role: c.role,

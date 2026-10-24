@@ -1,22 +1,23 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import type { ReactNode } from 'react';
+import { BRAND } from '@ddd/shared';
 import { api } from '../api';
-import { useResource } from '../hooks';
+import { useResource, useTheme } from '../hooks';
 import { timeAgo } from '../format';
 import { Icon } from './Icons';
 
 function Brand() {
   return (
-    <NavLink to="/" className="brand" aria-label="DDD Evaluator home">
+    <NavLink to="/" className="brand" aria-label="GateX home">
       <span className="brand-mark">
         <Icon name="cpu" size={18} strokeWidth={2.2} />
       </span>
       <span className="brand-text">
         <span className="brand-name-row">
-          <span className="brand-name">DDD Evaluator</span>
-          <span className="brand-badge">AI 3+1</span>
+          <span className="brand-name">{BRAND.name}</span>
+          <span className="brand-badge">AI</span>
         </span>
-        <span className="brand-sub">Level 1 · Multi-agent consensus</span>
+        <span className="brand-sub">{BRAND.tagline}</span>
       </span>
     </NavLink>
   );
@@ -26,22 +27,26 @@ function Sidebar() {
   const { pathname } = useLocation();
   const projects = useResource(api.projects, [pathname]);
   const config = useResource(api.config, []);
+  const [theme, toggleTheme] = useTheme();
 
   return (
     <aside className="sidebar">
       <Brand />
       <nav className="nav" aria-label="Main">
         <NavLink to="/new" className="btn btn-primary nav-cta">
-          <Icon name="plus" /> New evaluation
+          <Icon name="plus" /> New check
         </NavLink>
         <NavLink to="/" end className="nav-link">
           <Icon name="folder" /> Projects
         </NavLink>
         <NavLink to="/import-scorecard" className="nav-link">
-          <Icon name="sheet" /> Import a scorecard
+          <Icon name="sheet" /> Convert a scorecard
+        </NavLink>
+        <NavLink to="/library" className="nav-link">
+          <Icon name="check" /> Test library
         </NavLink>
         <NavLink to="/models" className="nav-link">
-          <Icon name="cpu" /> Evaluator models
+          <Icon name="cpu" /> Examiners
         </NavLink>
       </nav>
 
@@ -55,7 +60,7 @@ function Sidebar() {
               <span className="side-item-meta">{timeAgo(p.latest?.createdAt)}</span>
             </NavLink>
           ))}
-          {projects.data?.length === 0 && <p className="side-empty">Nothing evaluated yet.</p>}
+          {projects.data?.length === 0 && <p className="side-empty">Nothing checked yet.</p>}
         </div>
       </div>
 
@@ -63,10 +68,13 @@ function Sidebar() {
         {config.data && (
           <div className={`mode ${config.data.mock ? 'mode-mock' : config.data.ready ? 'mode-live' : 'mode-warn'}`}>
             <span className="dot" />
-            {config.data.mock ? 'Mock models (demo)' : config.data.ready ? 'Live models ready' : 'Models need setup'}
+            {config.data.mock ? 'Demo mode' : config.data.ready ? 'Examiners ready' : 'Examiners need setup'}
           </div>
         )}
-        <p className="side-note">The agent advises. People make the final call.</p>
+        <button type="button" className="btn btn-ghost btn-sm theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}>
+          <Icon name={theme === 'light' ? 'moon' : 'sun'} size={15} /> {theme === 'light' ? 'Dark theme' : 'Light theme'}
+        </button>
+        <p className="side-note">GateX advises. You make the final call.</p>
       </div>
     </aside>
   );

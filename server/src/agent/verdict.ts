@@ -1,28 +1,29 @@
+import { SCORE_BANDS, bandOf } from '@ddd/shared';
 import type {
   CriticalGate,
   Decision,
   DimensionResult,
   Finding,
-  HumanEvidence,
   Override,
   Scorecard,
   VerdictSection,
 } from '@ddd/shared';
 import { floor1 } from '../util/text.js';
 
-/** A dimension as the verdict sees it, after any score a person supplied. */
+/** A dimension as the verdict sees it. */
 export interface EffectiveDimension {
   id: string;
   name: string;
   weight: number;
   critical: boolean;
-  /** In the weighted score? Human items without a score are not. */
+  /** In the weighted score? A question left out because nothing in the file could measure it is not. */
   counted: boolean;
   /** The 0-5 score used; unscored counted dimensions are 0. */
   score: number | null;
-  /** A person still has to supply evidence before this can be green. */
-  pending: boolean;
-  /** A person supplied a score that failed or passed the critical gate. */
+  /** The examiners found nothing in the file to measure this and the scorecard says to leave such questions out. */
+  skipped: boolean;
+  /** The examiners found nothing to measure and the scorecard says to count such questions as 0. */
+  zeroed: boolean;
   gate: CriticalGate['status'];
   /** Is the score solid enough to force RED alone? Not when one examiner scored it, or the examiners could not agree. */
   reliable: boolean;
@@ -30,45 +31,31 @@ export interface EffectiveDimension {
 
 export const CRITICAL_MINIMUM = 4;
 
-function latestEvidence(evidence: HumanEvidence[]): Map<string, HumanEvidence> {
-  const latest = new Map<string, HumanEvidence>();
-  for (const item of [...evidence].sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
-    latest.set(item.dimensionId, item);
-  }
-  return latest;
-}
+/** Green needs at least this share of the scorecard's weight to have a score. A 100 built on a sliver of it is not a pass. */
+export const MINIMUM_COVERAGE = 0.5;
 
-export function effectiveDimensions(
-  scorecard: Scorecard,
-  dimensions: DimensionResult[],
-  evidence: HumanEvidence[],
-): EffectiveDimension[] {
-  const supplied = latestEvidence(evidence);
+/**
+ * Every question gets a result without waiting for anyone. A question the examiners found nothing in the file to
+ * measure is left out of the score (`unmeasured: skip`, the default) or counted as 0 (`unmeasured: zero`).
+ */
+export function effectiveDimensions(scorecard: Scorecard, dimensions: DimensionResult[]): EffectiveDimension[] {
   const byId = new Map(dimensions.map((d) => [d.id, d]));
+  const zero = scorecard.unmeasured === 'zero';
 
   return scorecard.dimensions.map((spec): EffectiveDimension => {
     const result = byId.get(spec.id);
-    const person = supplied.get(spec.id);
-    const needsPerson = spec.measuredBy === 'human' || result?.status === 'not_measurable';
     const base = { id: spec.id, name: spec.name, weight: spec.weight, critical: spec.critical };
 
-    if (needsPerson) {
-      if (!person) return { ...base, counted: false, score: null, pending: true, gate: 'pending', reliable: true };
-      const scored = person.score !== null;
-      return {
-        ...base,
-        counted: scored,
-        score: person.score,
-        pending: false,
-        gate: !scored || person.score! >= CRITICAL_MINIMUM ? 'passed' : 'failed',
-        reliable: true,
-      };
+    // Older runs may still hold a question once kept for a person; it is treated like any unmeasurable one.
+    if (!result || result.status === 'not_measurable' || spec.measuredBy === 'human') {
+      if (zero) return { ...base, counted: true, score: 0, skipped: false, zeroed: true, gate: 'failed', reliable: true };
+      return { ...base, counted: false, score: null, skipped: true, zeroed: false, gate: 'skipped', reliable: true };
     }
 
     // Code and rater dimensions: an unscored one counts as 0, so a missing score can never help.
-    const score = result?.status === 'scored' ? (result.consolidated ?? 0) : 0;
-    const reliable = result?.resolution !== 'single_rater' && result?.resolution !== 'lower_stands';
-    return { ...base, counted: true, score, pending: false, gate: score >= CRITICAL_MINIMUM ? 'passed' : 'failed', reliable };
+    const score = result.status === 'scored' ? (result.consolidated ?? 0) : 0;
+    const reliable = result.resolution !== 'single_rater' && result.resolution !== 'lower_stands';
+    return { ...base, counted: true, score, skipped: false, zeroed: false, gate: score >= CRITICAL_MINIMUM ? 'passed' : 'failed', reliable };
   });
 }
 
@@ -84,72 +71,75 @@ export interface AgentVerdict {
   decision: Decision;
   criticalGates: CriticalGate[];
   reasons: string[];
+  skipped: string[];
 }
 
-/** HIGH-risk findings "block green" (PDF p.11): they must be fixed before resubmission. */
+/** HIGH-risk findings are listed first as needing a fix before sign-off (ADR-18: they no longer change the colour). */
 export const blockingFindings = (findings: Finding[]): Finding[] => findings.filter((f) => f.severity === 'HIGH');
 
 /**
  * The decision rule from PDF pages 11-12, applied by code and never by a model:
- *   Green  score >= accept, every critical gate passed, all human-only evidence supplied,
- *          and no HIGH-risk finding open
+ *   Green  score >= accept, every critical gate passed, no HIGH-risk finding open, every judged
+ *          score backed by two agreeing examiners, and at least half the weight scored
  *   Amber  score between refine and accept, or any critical gate below 4, or a HIGH finding
  *   Red    score below refine, or a critical gate at or below the scorecard's `red_at_or_below` line (when it sets one)
  */
 export function decide(scorecard: Scorecard, dimensions: EffectiveDimension[], blocking: Finding[] = []): AgentVerdict {
   const score = weightedScore(dimensions);
-  const { accept, refine } = scorecard.thresholds;
+  const { accept, refine } = SCORE_BANDS;
   const gates: CriticalGate[] = dimensions
     .filter((d) => d.critical)
     .map((d) => ({ dimensionId: d.id, name: d.name, score: d.score, status: d.gate }));
   const failed = gates.filter((g) => g.status === 'failed');
-  const pending = dimensions.filter((d) => d.pending);
+  const skipped = dimensions.filter((d) => d.skipped);
+  // A score only one examiner could back, or one the examiners could not agree on, is a single opinion.
+  const unsure = dimensions.filter((d) => d.counted && !d.reliable);
+  const totalWeight = dimensions.reduce((sum, d) => sum + d.weight, 0);
+  const coverage = totalWeight > 0 ? dimensions.filter((d) => d.counted).reduce((sum, d) => sum + d.weight, 0) / totalWeight : 1;
   const shown = floor1(score);
   const reasons: string[] = [];
 
-  const floor = scorecard.redAtOrBelow;
-  const belowLine = floor === undefined ? [] : failed.filter((g) => g.score !== null && g.score <= floor);
-  const solid = new Set(dimensions.filter((d) => d.reliable).map((d) => d.id));
-  const collapsed = belowLine.filter((g) => solid.has(g.dimensionId));
-  const shaky = belowLine.filter((g) => !solid.has(g.dimensionId));
-
-  let decision: Decision;
-  if (score < refine || collapsed.length > 0) {
-    decision = 'red';
-    if (score < refine) reasons.push(`Score ${shown} is below ${refine}.`);
-    for (const gate of collapsed) reasons.push(`Critical gate ${gate.dimensionId} (${gate.name}) scored ${gate.score}, at or below the red line of ${floor}.`);
-  } else if (score >= accept && failed.length === 0 && pending.length === 0 && blocking.length === 0) {
-    decision = 'green';
-    reasons.push(`Score ${shown} is at or above ${accept}, every critical gate passed, no high-risk finding is open, and no human-only evidence is outstanding.`);
-  } else {
-    decision = 'amber';
-    if (score < accept) reasons.push(`Score ${shown} is below ${accept}.`);
-    for (const gate of failed) {
-      reasons.push(`Critical gate ${gate.dimensionId} (${gate.name}) scored ${gate.score ?? 0}, below ${CRITICAL_MINIMUM}.`);
-    }
-    for (const gate of shaky) {
-      reasons.push(`Critical gate ${gate.dimensionId} (${gate.name}) is at the red line of ${floor}, but only one examiner scored it or they could not agree, so it cannot force RED on its own. A person should check it.`);
-    }
-    if (blocking.length > 0) {
-      const shownIds = blocking.slice(0, 5).map((f) => f.id).join(', ');
-      reasons.push(`${blocking.length} high-risk finding${blocking.length === 1 ? '' : 's'} block${blocking.length === 1 ? 's' : ''} green until fixed: ${shownIds}${blocking.length > 5 ? ' and more' : ''}.`);
-    }
-    if (pending.length > 0) {
-      reasons.push(`A person must supply: ${pending.map((d) => `${d.id} (${d.name})`).join(', ')}.`);
-    }
+  // The colour is the score's band and nothing else: below 60 red, 60 to 74 amber, 75 and above green. Everything else is shown as a note.
+  const decision: Decision = bandOf(score);
+  reasons.push(
+    decision === 'green'
+      ? `Score ${shown} is in the green band (${accept} and above).`
+      : decision === 'amber'
+        ? `Score ${shown} is in the amber band (${refine} to ${accept - 1}). Green starts at ${accept}.`
+        : `Score ${shown} is in the red band (below ${refine}). Amber starts at ${refine}.`,
+  );
+  // Things worth attention that do not change the colour.
+  for (const gate of failed) {
+    reasons.push(`Needs attention: critical question ${gate.dimensionId} (${gate.name}) scored ${gate.score ?? 0}, below ${CRITICAL_MINIMUM}.`);
   }
-  return { score, decision, criticalGates: gates, reasons };
+  if (blocking.length > 0) {
+    const shownIds = blocking.slice(0, 5).map((f) => f.id).join(', ');
+    reasons.push(`Needs attention: ${blocking.length} high-risk finding${blocking.length === 1 ? '' : 's'} (${shownIds}${blocking.length > 5 ? ' and more' : ''}) should be fixed before sign-off.`);
+  }
+  if (coverage < MINIMUM_COVERAGE) {
+    reasons.push(`Needs attention: only ${Math.round(coverage * 100)}% of the scorecard could be scored, so the score rests on little.`);
+  }
+  if (unsure.length > 0) {
+    reasons.push(`Needs attention: only one examiner could back the score, or the examiners could not agree, on ${unsure.map((d) => `${d.id} (${d.name})`).join(', ')}. Run it again to firm it up.`);
+  }
+  const zeroed = dimensions.filter((d) => d.zeroed);
+  if (zeroed.length > 0) {
+    reasons.push(`The file holds nothing to measure these, so they count as 0: ${zeroed.map((d) => `${d.id} (${d.name})`).join(', ')}.`);
+  }
+  if (skipped.length > 0) {
+    reasons.push(`The file holds nothing to measure these, so they are left out of the score: ${skipped.map((d) => `${d.id} (${d.name})`).join(', ')}.`);
+  }
+  return { score, decision, criticalGates: gates, reasons, skipped: skipped.map((d) => d.id) };
 }
 
 export function buildVerdictSection(
   scorecard: Scorecard,
   dimensions: DimensionResult[],
-  evidence: HumanEvidence[],
   override: Override | null,
   findings: Finding[] = [],
 ): VerdictSection {
   const blocking = blockingFindings(findings);
-  const verdict = decide(scorecard, effectiveDimensions(scorecard, dimensions, evidence), blocking);
+  const verdict = decide(scorecard, effectiveDimensions(scorecard, dimensions), blocking);
   const reasons = [...verdict.reasons];
   if (override) {
     reasons.push(`A person overrode the verdict to ${override.decision.toUpperCase()}: ${override.reason}`);
@@ -158,9 +148,10 @@ export function buildVerdictSection(
     weightedScore: floor1(verdict.score),
     decision: override?.decision ?? verdict.decision,
     agentDecision: verdict.decision,
-    thresholds: scorecard.thresholds,
+    thresholds: { ...SCORE_BANDS },
     criticalGates: verdict.criticalGates,
     blockingFindings: blocking.map((f) => f.id),
+    skipped: verdict.skipped,
     reasons,
     override,
   };

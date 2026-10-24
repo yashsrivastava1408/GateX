@@ -2,9 +2,9 @@ import type { Scorecard } from '@ddd/shared';
 import { scorecardToWorkbook } from './excel.js';
 
 /**
- * The starter Excel scorecard offered for download. It is valid as it stands (so a person can try it
- * straight away) and shows one dimension of each kind: counted by code, scored by the examiners, and human-only.
- * They edit the sheet names, columns, weights and anchors to fit their own workbook.
+ * The starter Excel scorecard offered for download. It is valid as it stands (so it can be tried
+ * straight away) and shows both kinds of dimension: counted by code, and scored by the examiners.
+ * Edit the sheet names, columns, weights and anchors to fit your own workbook.
  */
 export const TEMPLATE_SCORECARD: Scorecard = {
   id: 'SC-MY-SCORECARD',
@@ -12,8 +12,8 @@ export const TEMPLATE_SCORECARD: Scorecard = {
   version: '1.0',
   gate: 'D1',
   frozen: true,
-  approval: 'Draft: pending approval',
-  thresholds: { accept: 90, refine: 75 },
+  approval: 'Starter template',
+  thresholds: { accept: 75, refine: 60 },
   artifact: { sheets: [{ name: 'Tree', headerRow: 1 }], context: [] },
   dimensions: [
     {
@@ -47,12 +47,20 @@ export const TEMPLATE_SCORECARD: Scorecard = {
       },
     },
     {
-      id: 'H01',
-      name: 'Author understanding',
+      id: 'J02',
+      name: 'Decisions are explained',
       weight: 20,
       critical: true,
-      measuredBy: 'human',
-      needs: 'A scored author interview (0-5) run by the mentor. No edit to the document can prove the author understands it.',
+      measuredBy: 'raters',
+      measure: 'Does the file record why each design decision was made, so the author could defend it?',
+      anchors: {
+        5: 'Every decision names the alternative rejected and why.',
+        4: 'Almost every decision has a reason; one is thin.',
+        3: 'Most decisions have a reason, several do not.',
+        2: 'Only a few decisions are explained.',
+        1: 'Decisions are listed with no reasons.',
+        0: 'No decisions are recorded.',
+      },
     },
   ],
 };

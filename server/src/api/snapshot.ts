@@ -12,9 +12,11 @@ const safe = (text: string) => text.replace(/[^\w.-]+/g, '_');
  * It is written whatever the database mode, so a result is never lost, even on the in-memory demo database.
  * Returns the folder it wrote, or null when the run has no report yet.
  */
+export const snapshotFolder = (dataDir: string, projectName: string, iteration: number) => path.join(dataDir, 'reports', safe(projectName), `iteration-${iteration}`);
+
 export async function saveRunSnapshot(dataDir: string, detail: RunDetail): Promise<string | null> {
   if (!detail.report) return null;
-  const folder = path.join(dataDir, 'reports', safe(detail.projectName), `iteration-${detail.iteration}`);
+  const folder = snapshotFolder(dataDir, detail.projectName, detail.iteration);
   await mkdir(folder, { recursive: true });
   await Promise.all([
     writeFile(path.join(folder, 'report.json'), JSON.stringify(detail.report, null, 2)),

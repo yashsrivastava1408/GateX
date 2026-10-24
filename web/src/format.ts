@@ -1,18 +1,12 @@
-import type { Decision, ParticipantStatus, Severity } from '@ddd/shared';
+import { SEVERITY_LABEL as SHARED_SEVERITY, type Decision, type ParticipantStatus, type Severity } from '@ddd/shared';
 
 export const DECISION_LABEL: Record<Decision, string> = { green: 'Green', amber: 'Amber', red: 'Red' };
 
-export const DECISION_MEANING: Record<Decision, string> = {
-  green: 'Passes. The deliverable moves on once a person confirms.',
-  amber: 'Fix the findings, then resubmit. A person reviews every amber.',
-  red: 'The structure or understanding is wrong. Go back with a mentor.',
-};
-
-export const SEVERITY_LABEL: Record<Severity, string> = { HIGH: 'High risk', MEDIUM: 'Medium risk', LOW: 'Low risk' };
+export const SEVERITY_LABEL: Record<Severity, string> = SHARED_SEVERITY;
 
 export const STATUS_LABEL: Record<ParticipantStatus, string> = {
   waiting: 'Waiting',
-  running: 'Rating',
+  running: 'Marking',
   ok: 'Done',
   failed: 'Failed',
 };

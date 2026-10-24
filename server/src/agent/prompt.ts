@@ -3,6 +3,8 @@ import { serializeSheets } from '../excel/serialize.js';
 import type { WorkbookModel } from '../excel/workbook.js';
 import { buildRaterUser } from './prompts/rater.js';
 import { planSections, type EvalSection } from './sectionPlanner.js';
+import { expandCriteria } from './aggregate.js';
+import { withAutoReads } from './autoReads.js';
 
 export interface RaterPrompt {
   /** The dimensions the raters (not code, not a person) score. */
@@ -60,6 +62,7 @@ export function buildRaterPromptForSection(input: {
     contextText,
     sources: input.sources,
     instructions: input.instructions,
+    workbookSheets: wb.sheetNames(),
   });
   return { rated: section.dimensions, artifactText, user };
 }
@@ -72,7 +75,9 @@ export function buildAllRaterPrompts(input: {
   sources: string;
   instructions?: string;
 }): Array<{ label: string; prompt: RaterPrompt }> {
-  const sections = planSections(input.scorecard);
-  if (sections.length === 0) return [{ label: 'full workbook', prompt: buildRaterPrompt(input) }];
-  return sections.map((section) => ({ label: section.label, prompt: buildRaterPromptForSection({ ...input, section }) }));
+  // Measured on the scorecard as it is run: every criterion a question of its own.
+  const scorecard = withAutoReads(expandCriteria(input.scorecard), input.wb).scorecard;
+  const sections = planSections(scorecard);
+  if (sections.length === 0) return [{ label: 'full workbook', prompt: buildRaterPrompt({ ...input, scorecard }) }];
+  return sections.map((section) => ({ label: section.label, prompt: buildRaterPromptForSection({ ...input, scorecard, section }) }));
 }

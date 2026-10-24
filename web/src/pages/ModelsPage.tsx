@@ -1,61 +1,48 @@
-import type { ConfigResponse } from '@ddd/shared';
+import { examinerLabel, type ConfigResponse } from '@ddd/shared';
 import { api } from '../api';
 import { Chip } from '../components/Chip';
 import { Icon } from '../components/Icons';
 import { Card, ErrorBanner, Loading, PageHeader } from '../components/Layout';
 import { useDocumentTitle, useResource } from '../hooks';
+import { hideModels } from '../present';
 
 type Member = ConfigResponse['raters'][number];
 
-function ModelCard({ member, role }: { member: Member; role: string }) {
+const isReady = (m: Member) => m.keyPresent && m.approved;
+
+function ExaminerCard({ member, role }: { member: Member; role: string }) {
+  const ready = isReady(member);
   return (
-    <div className={`model ${member.keyPresent && member.approved ? '' : 'model-warn'}`}>
+    <div className={`model ${ready ? '' : 'model-warn'}`}>
       <div className="model-top">
-        <span className="model-id">{member.id}</span>
         <span className="model-role">{role}</span>
       </div>
-      <div className="model-name">{member.model}</div>
-      <div className="model-meta">
-        <span>{member.provider}</span>
-        <span className="sep">·</span>
-        <span>family: {member.family}</span>
-      </div>
-      {member.fallbacks.length > 0 && (
-        <div className="model-fallbacks">
-          <span className="model-fallbacks-label">If it fails, tries</span>
-          {member.fallbacks.map((f) => (
-            <span key={`${f.provider}/${f.model}`} className={f.keyPresent && f.approved ? '' : 'down'}>
-              {f.provider}/{f.model}{!f.keyPresent ? ' (no key)' : !f.approved ? ' (not approved)' : ''}
-            </span>
-          ))}
-        </div>
-      )}
+      <div className="model-name">{examinerLabel(member.id)}</div>
       <div className="model-chips">
-        <Chip tone={member.keyPresent ? 'green' : 'red'}>{member.keyPresent ? 'API key set' : 'No API key'}</Chip>
-        <Chip tone={member.approved ? 'green' : 'red'}>{member.approved ? 'Approved' : 'Not approved'}</Chip>
+        <Chip tone={ready ? 'accent' : 'red'}>{ready ? 'Ready' : 'Not ready'}</Chip>
       </div>
     </div>
   );
 }
 
 const RULES = [
-  ['Independence', 'The three raters come from three different model families, so blind spots are not shared. Roster is refused otherwise.'],
-  ['Blind rating', 'Each rater sees only the scorecard, the artifact and the sources. Never another rater, never the author’s self-score.'],
-  ['Evidence', 'Every score and finding must cite a cell that exists. A quote must really appear in that cell. Unsupported claims are discarded.'],
-  ['Lower score stands', 'If raters differ by more than one point and the consolidator cannot resolve it from the artifact, the lower score is kept and a person is asked.'],
-  ['Verdict by rule', 'Green, amber and red come from code applying the PDF’s decision rule. No model writes a verdict.'],
-  ['Read only', 'The workbook is read, hashed before and after, and never written. The evaluator reports; the author fixes.'],
+  ['Three different examiners', 'Each one looks at your work in its own way, so they do not share the same blind spots.'],
+  ['Marked alone', 'Each examiner sees only the scorecard, your file and any background notes you add. Never another examiner’s marks.'],
+  ['Proof for every score', 'Every score and issue points at a real place in your file. If an examiner cannot show where, that point is dropped.'],
+  ['The lower score wins a tie', 'If examiners are more than one point apart and the final reviewer cannot settle it from your file, the lower score is kept and marked uncertain.'],
+  ['The result comes from fixed rules', 'Green, amber and red come from a fixed rule. No examiner decides the result.'],
+  ['Your file is never changed', 'GateX only reads it, and checks afterwards that it is exactly the same. GateX reports; you fix.'],
 ];
 
 export function ModelsPage() {
-  useDocumentTitle('Evaluator models');
+  useDocumentTitle('Examiners');
   const config = useResource(api.config, []);
   const c = config.data;
 
   return (
     <>
-      <PageHeader eyebrow="Configuration" title="AI examiners">
-        The 3 + 1 roster used for every evaluation. Models and keys are set on the server, never in the browser.
+      <PageHeader eyebrow="Your team" title="Examiners">
+        Three examiners and one final reviewer check every file. This page shows whether they are ready.
       </PageHeader>
 
       {config.error && <ErrorBanner message={config.error} onRetry={config.reload} />}
@@ -66,31 +53,31 @@ export function ModelsPage() {
           {c.problems.map((p, i) => (
             <div key={i} className={`banner banner-${p.level === 'error' ? 'red' : 'amber'}`} role={p.level === 'error' ? 'alert' : 'status'}>
               <Icon name="alert" />
-              <span>{p.message}</span>
+              <span>{hideModels(p.message)}</span>
             </div>
           ))}
           {c.ready && c.problems.length === 0 && (
-            <div className="banner banner-green">
+            <div className="banner banner-accent">
               <Icon name="check" />
-              <span>{c.mock ? 'Mock models are active: scripted answers, no live API calls. Good for a demo.' : 'Every model has a key and is approved. The roster is ready.'}</span>
+              <span>{c.mock ? 'Demo mode is on: answers are scripted. Good for a walk-through.' : 'Everyone is ready. You can start a check.'}</span>
             </div>
           )}
 
-          <Card title="Three examiners" aside={<span className="faint">Score independently · different families</span>}>
+          <Card title="Three examiners" aside={<span className="faint">Each marks on its own</span>}>
             <div className="models">
               {c.raters.map((m) => (
-                <ModelCard key={m.id} member={m} role={`Rater ${m.id}`} />
+                <ExaminerCard key={m.id} member={m} role="Marks your work" />
               ))}
             </div>
           </Card>
 
-          <Card title="One final reviewer" aside={<span className="faint">Compares their marks, does not mark again</span>}>
+          <Card title="Final reviewer" aside={<span className="faint">Compares the marks, does not mark again</span>}>
             <div className="models models-one">
-              <ModelCard member={c.consolidator} role="Consolidator" />
+              <ExaminerCard member={c.consolidator} role="Settles any difference" />
             </div>
           </Card>
 
-          <Card title="Safeguards">
+          <Card title="How GateX keeps checks fair">
             <dl className="rules">
               {RULES.map(([term, body]) => (
                 <div key={term} className="rule">
@@ -101,10 +88,35 @@ export function ModelsPage() {
                 </div>
               ))}
             </dl>
-            <p className="note">
-              Prompt version <code>{c.promptVersion}</code>. To change a model, edit <code>server/config/models.json</code> and the keys in <code>.env</code>, then restart the server.
-              Run <code>npm run models:check</code> to list what each provider offers.
-            </p>
+          </Card>
+
+          <Card>
+            <details className="fold">
+              <summary>
+                <span>Technical details</span>
+                <Icon name="chevron" size={16} />
+              </summary>
+              <div className="fold-body">
+                <div className="table-scroll">
+                  <table className="table table-compact">
+                    <thead>
+                      <tr><th>Who</th><th>Access set</th><th>Approved</th><th className="num">Backups</th></tr>
+                    </thead>
+                    <tbody>
+                      {[...c.raters, c.consolidator].map((m) => (
+                        <tr key={m.id}>
+                          <td>{examinerLabel(m.id)}</td>
+                          <td>{m.keyPresent ? 'Yes' : 'No'}</td>
+                          <td>{m.approved ? 'Yes' : 'No'}</td>
+                          <td className="num">{m.fallbacks.length}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="note">An administrator sets up the examiners on the server. Changes need a server restart.</p>
+              </div>
+            </details>
           </Card>
         </>
       )}

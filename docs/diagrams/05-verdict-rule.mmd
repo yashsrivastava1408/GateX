@@ -1,32 +1,18 @@
 flowchart TD
-  S["Weighted score<br/>sum(weight x score) / sum(weights counted) x 100<br/>unscored dimensions count as 0<br/>human-only items count only once a person scores them"]
-  QR{"scorecard has a red line and a<br/>must-pass score at or below it,<br/>agreed by 2+ examiners?"}
-  Q1{"score below<br/>refine (75)?"}
-  RED["RED<br/>the structure or understanding is wrong"]
-  Q2{"score at or above<br/>accept (90)?"}
-  Q3{"every critical<br/>dimension scored 4 or more?"}
-  QH{"no HIGH-risk finding<br/>left open?"}
-  Q4{"all human-only evidence<br/>supplied by a person?"}
-  GRN["GREEN"]
-  AMB["AMBER<br/>reasons listed: score, failed gates, shaky red-line<br/>scores (a person checks), high-risk findings,<br/>missing evidence"]
-  OVR["A person may override up or down<br/>a written reason is required<br/>the agent's own verdict stays on record"]
+  S["Weighted score out of 100<br/>each question counts by its weight<br/>a question with no mark counts as 0<br/>nothing in the file to measure: left out (or 0 if the scorecard says so)"]
+  Q1{"score below 60?"}
+  RED["RED<br/>below 60"]
+  Q2{"score below 75?"}
+  AMB["AMBER<br/>60 to 74"]
+  GRN["GREEN<br/>75 to 100"]
+  N["Needs attention (listed first, colour unchanged):<br/>must-pass questions below 4, Must fix issues,<br/>marks only one Examiner backed, little of the scorecard marked"]
 
-  S --> QR
-  QR -- yes --> RED
-  QR -- no --> Q1
+  S --> Q1
   Q1 -- yes --> RED
   Q1 -- no --> Q2
-  Q2 -- no --> AMB
-  Q2 -- yes --> Q3
-  Q3 -- no --> AMB
-  Q3 -- yes --> QH
-  QH -- no --> AMB
-  QH -- yes --> Q4
-  Q4 -- no --> AMB
-  Q4 -- yes --> GRN
-  RED -.-> OVR
-  AMB -.-> OVR
-  GRN -.-> OVR
+  Q2 -- yes --> AMB
+  Q2 -- no --> GRN
+  S -.-> N
 
   classDef good fill:#0f2218,stroke:#3ecf8e,color:#ececf0
   classDef warn fill:#262010,stroke:#f5b13d,color:#ececf0
@@ -36,5 +22,5 @@ flowchart TD
   class GRN good
   class AMB warn
   class RED bad
-  class QR,Q1,Q2,Q3,QH,Q4 gate
-  class S,OVR agent
+  class Q1,Q2 gate
+  class S,N agent

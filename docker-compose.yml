@@ -4,9 +4,14 @@
 #   MOCK_LLM=1 docker compose up      scripted demo models, no keys and no cost
 #   docker compose down               stop (your data stays in the ddd_pgdata volume)
 #
+# On a server, with HTTPS (set POSTGRES_PASSWORD and DOMAIN in .env first, see docs/operations.md):
+#
+#   docker compose --profile https up -d --build
+#
 # Models and keys come from .env (GROQ_API_KEY, GEMINI_API_KEY, AWS_BEARER_TOKEN_BEDROCK, MODELS_CONFIG, ...).
 # Only the database alone:  docker compose up -d db   (then npm run start on your machine).
 # Look at the data with any Postgres client (DBeaver, TablePlus, pgAdmin, psql) on localhost:5432.
+# The app and the database listen on this machine only, so they are never open to the internet; Caddy is the only way in.
 services:
   app:
     build: .
@@ -20,12 +25,12 @@ services:
         required: false
     environment:
       # These win over .env, so the app talks to the database container, not to localhost.
-      DATABASE_URL: postgres://ddd:ddd@db:5432/ddd
+      DATABASE_URL: postgres://ddd:${POSTGRES_PASSWORD:-ddd}@db:5432/ddd
       DB_MODE: postgres
       PORT: "4000"
       MOCK_LLM: ${MOCK_LLM:-}
     ports:
-      - "4000:4000"
+      - "127.0.0.1:4000:4000"
     volumes:
       - ./data:/app/data   # uploaded files and reports stay on your machine
 
@@ -36,10 +41,10 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ddd
-      POSTGRES_PASSWORD: ddd
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ddd}
       POSTGRES_DB: ddd
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - ddd_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -48,5 +53,23 @@ services:
       timeout: 3s
       retries: 10
 
+  # HTTPS in front of the app. Only started with: docker compose --profile https up -d
+  caddy:
+    image: caddy:2-alpine
+    container_name: ddd-caddy
+    profiles: ["https"]
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      DOMAIN: ${DOMAIN:-:80}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+
 volumes:
   ddd_pgdata:
+  caddy_data:

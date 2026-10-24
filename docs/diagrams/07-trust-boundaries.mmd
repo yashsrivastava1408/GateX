@@ -1,27 +1,27 @@
 flowchart LR
-  subgraph UNTRUSTED["Untrusted: the browser and uploaded files"]
+  subgraph UNTRUSTED["Treated with care: the browser and uploaded files"]
     direction TB
-    UP["Uploaded workbook<br/>and scorecard"]
+    UP["Uploaded file<br/>and scorecard"]
   end
 
   subgraph TRUSTED["Trusted: the server process"]
     direction TB
-    V1["<b>Input checks</b><br/>.xlsx only, 25 MB cap<br/>scorecard checked against a strict schema"]
-    RD["<b>Workbook reader</b><br/>parses the file as data<br/>never runs macros or formulas"]
-    HASH["<b>Freeze</b><br/>hash before and after<br/>the file is only ever read"]
+    V1["<b>Input checks</b><br/>allowed file types, 25 MB cap<br/>scorecard checked against a strict format"]
+    RD["<b>File reader</b><br/>reads the file as data<br/>never runs macros or formulas"]
+    HASH["<b>Freeze</b><br/>fingerprint before and after<br/>the file is only ever read"]
     KEYS["<b>API keys</b><br/>server environment only<br/>never sent to the browser or logged"]
-    GATE["<b>Roster gate</b><br/>approved models only<br/>3 distinct families"]
-    EVID["<b>Evidence gate</b><br/>a claim must cite a real cell,<br/>so text hidden in a file cannot<br/>invent findings"]
+    GATE["<b>Roster gate</b><br/>approved models only<br/>3 different families"]
+    EVID["<b>Evidence gate</b><br/>a claim must point at a real cell,<br/>so text hidden in a file cannot<br/>invent issues"]
   end
 
-  subgraph EXTERNAL["External: model providers"]
+  subgraph EXTERNAL["Outside: model services"]
     direction TB
-    MM["Approved models<br/>3 raters + 1 consolidator"]
+    MM["Approved models<br/>Examiners 1-3 + Final reviewer"]
   end
 
   subgraph DATA["Data at rest"]
     direction TB
-    FSTORE[["Upload folder<br/>copies of workbooks"]]
+    FSTORE[["Upload folder<br/>copies of your files"]]
     PG[("Postgres<br/>prompts, replies, scores")]
   end
 

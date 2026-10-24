@@ -1,6 +1,6 @@
 # D4 · Output scorecard for Step 04 (NFR Discovery): the NFR register against the Talentra schema.
 #
-# DRAFT FOR APPROVAL. Same format as the schema scorecard, but judging a D3 output document.
+# Sample scorecard, used as it is. Same format as the schema scorecard, but judging a D3 output document.
 # Code checks test the register against the schema's allowed-value lists and the playbook's
 # "every NFR has a number and a test method"; raters judge the content.
 
@@ -18,7 +18,7 @@ scorecard:
   judges: D3 output document · Step 04
   step: "04"
   frozen: true
-  approval: "Draft by the assistant, pending mentor approval"
+  approval: "Sample scorecard for the Talentra workbook, used as it is"
   thresholds: { accept: 90, refine: 75 }
 
   artifact:
@@ -139,7 +139,7 @@ scorecard:
         0: The register ignores the playbook list.
       return_to: Generate
 
-    # ---------------------------------------------------------------- only a person can
+    # ------------------------------------- written for a person; the examiners score what the file records about it
     - id: H01
       name: Lead sign-off
       weight: 10

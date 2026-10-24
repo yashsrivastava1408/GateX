@@ -1,0 +1,59 @@
+{
+  "approved": [
+    "bedrock:zai.glm-5",
+    "bedrock:us.meta.llama3-3-70b-instruct-v1:0",
+    "bedrock:mistral.mistral-large-2402-v1:0",
+    "bedrock:us.amazon.nova-pro-v1:0",
+    "bedrock:us.mistral.pixtral-large-2502-v1:0"
+  ],
+  "providers": {
+    "bedrock": {
+      "type": "bedrock",
+      "region": "us-east-1",
+      "keyEnv": "AWS_BEARER_TOKEN_BEDROCK"
+    }
+  },
+  "raters": [
+    {
+      "id": "A",
+      "provider": "bedrock",
+      "model": "zai.glm-5",
+      "family": "zhipu"
+    },
+    {
+      "id": "B",
+      "provider": "bedrock",
+      "model": "us.meta.llama3-3-70b-instruct-v1:0",
+      "family": "meta",
+      "maxInputTokens": 118000
+    },
+    {
+      "id": "C",
+      "provider": "bedrock",
+      "model": "mistral.mistral-large-2402-v1:0",
+      "family": "mistral",
+      "maxInputTokens": 24000,
+      "fallbacks": [
+        {
+          "provider": "bedrock",
+          "model": "us.mistral.pixtral-large-2502-v1:0",
+          "maxInputTokens": 120000
+        }
+      ]
+    }
+  ],
+  "consolidator": {
+    "id": "K",
+    "provider": "bedrock",
+    "model": "us.amazon.nova-pro-v1:0",
+    "family": "amazon"
+  },
+  "settings": {
+    "temperature": 0,
+    "maxOutputTokens": 8192,
+    "timeoutMs": 120000,
+    "retries": 5,
+    "sectionConcurrency": 2,
+    "repeats": 3
+  }
+}

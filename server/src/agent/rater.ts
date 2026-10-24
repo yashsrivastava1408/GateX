@@ -30,6 +30,23 @@ export interface RunRaterArgs {
  */
 export const estimateTokens = (text: string): number => Math.ceil(text.length / 2.7);
 
+/** A reply this short cannot hold the JSON for even a few questions, so a model with less room than this is not asked at all. */
+const MIN_OUTPUT_TOKENS = 2048;
+/** The estimate runs low (see above), so the prompt is counted ten percent heavier when working out what room is left for the answer. */
+const ESTIMATE_MARGIN = 1.1;
+
+/**
+ * Models with a small window share it between the prompt and the answer: Qwen3-32B's 32,768 tokens were over by one when a 24,577-token
+ * prompt asked for 8,192 back. `limit` is the model's window (its maxInputTokens in the config). Returns how many tokens the answer may use,
+ * at most `wanted`, or null when too little room is left for a usable answer.
+ */
+export function outputBudget(limit: number | undefined, estimatedInput: number, wanted: number): number | null {
+  if (!limit) return wanted;
+  const room = Math.floor(limit - estimatedInput * ESTIMATE_MARGIN);
+  if (room < MIN_OUTPUT_TOKENS) return null;
+  return Math.min(wanted, room);
+}
+
 type RawReply = ReturnType<typeof raterReplySchema.parse>;
 
 function parseReply(raw: string): RawReply {
@@ -46,7 +63,8 @@ function parseReply(raw: string): RawReply {
  */
 export async function runRater(args: RunRaterArgs): Promise<RaterOutcome> {
   const estimated = estimateTokens(RATER_SYSTEM) + estimateTokens(args.user);
-  if (args.maxInputTokens && estimated > args.maxInputTokens) {
+  const outputTokens = outputBudget(args.maxInputTokens, estimated, args.settings.maxOutputTokens);
+  if (args.maxInputTokens && (estimated > args.maxInputTokens || outputTokens === null)) {
     return {
       model: args.model,
       role: 'rater',
@@ -58,7 +76,7 @@ export async function runRater(args: RunRaterArgs): Promise<RaterOutcome> {
       latencyMs: 0,
       inputTokens: null,
       outputTokens: null,
-      error: `The prompt is about ${estimated} tokens, over the ${args.maxInputTokens} limit set for ${args.model.model}. Add a "columns" list to the scorecard's sheets so raters see only what they need, or raise maxInputTokens.`,
+      error: `The prompt is about ${estimated} tokens, over the ${args.maxInputTokens} limit set for ${args.model.model}. ${estimated > args.maxInputTokens ? '' : 'That leaves too little room in its window for an answer. '}Add a "columns" list to the scorecard's sheets so raters see only what they need, or raise maxInputTokens.`,
       dimensions: [],
       findings: [],
       strengths: [],
@@ -70,8 +88,10 @@ export async function runRater(args: RunRaterArgs): Promise<RaterOutcome> {
     model: args.model.model,
     system: RATER_SYSTEM,
     user: args.user,
-    settings: args.settings,
+    settings: { ...args.settings, maxOutputTokens: outputTokens ?? args.settings.maxOutputTokens },
     parse: parseReply,
+    // Examiners write long JSON and now and then break it; one more ask (with a nudge to be brief) costs less than losing the examiner.
+    attempts: 3,
   });
 
   const outcome: RaterOutcome = {

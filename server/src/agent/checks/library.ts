@@ -22,9 +22,20 @@ const whereSchema = z
   .optional();
 type Where = z.infer<typeof whereSchema>;
 
+/** A row whose first filled cell is a total label ("COUNT", "Total"): it summarises the rows above it and is not one of them. */
+const SUMMARY_LABEL = /^(?:counts?|totals?|sum|subtotal|grand total|average|avg|summary)\s*:?$/i;
+
+export function isSummaryRow(table: Table, row: TableRow): boolean {
+  const first = table.headers.map((h) => row.values.get(h.title) ?? '').find((v) => v.trim() !== '');
+  return first !== undefined && SUMMARY_LABEL.test(first.trim());
+}
+
 function load(ctx: CheckContext, sheet: string): Table {
   const header = ctx.headerRows.get(sheet.toLowerCase()) ?? 1;
-  return ctx.wb.table(sheet, header);
+  const table = ctx.wb.table(sheet, header);
+  // The count of rows is not a row to be counted: leave summary rows out of every check.
+  const rows = table.rows.filter((row) => !isSummaryRow(table, row));
+  return rows.length === table.rows.length ? table : { ...table, rows };
 }
 
 function need(table: Table, column: string): void {
