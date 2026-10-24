@@ -281,6 +281,27 @@ const ABOUT_THE_PROMPT = /\bnot\s+(?:visible|shown)\s+in\s+the\s+(?:provided|giv
 
 export const complainsAboutThePrompt = (f: Pick<DraftFinding, 'title' | 'detail'>) => ABOUT_THE_PROMPT.test(`${f.title}. ${f.detail}`);
 
+/* ------------------- asking the file for work done outside it ------------------- */
+
+/**
+ * "No evidence of two independent runs", "no author interview results", "no reviewer spot-checks": these name a step that people or other
+ * runs carry out beside the file, so no file can show it. The scorecard already handles such a question with its own cap, and the same
+ * complaint must not also count as a defect of the file. Read from the labelled runs: 11 findings of this kind were wrong and none was real
+ * or partly right. A workbook that has a sheet for such work (runs, interviews, agreement, spot-checks) is left to the examiners.
+ */
+const OUTSIDE_WORK =
+  /\b(?:independent(?:ly)?\s+(?:build\s+|generation\s+)?(?:runs?|derivations?|fills?)|second\s+(?:independent\s+)?(?:runs?|derivations?|analyst|fill)|blind\s+(?:second\s+)?(?:derivations?|runs?)|run\s+B\b|two\s+(?:independent\s+)?runs|author\s+(?:interview|answers?|understanding)|reviewer\s+spot-?checks?)\b/i;
+const OUTSIDE_WORK_SHEET = /run|interview|agreement|spot|blind|derivation/i;
+
+export const asksFileForOutsideWork = (f: Pick<DraftFinding, 'title' | 'detail'>, sheetNames: readonly string[] = []) =>
+  claimsAbsence(f) && OUTSIDE_WORK.test(`${f.title}. ${f.detail}`) && !sheetNames.some((n) => OUTSIDE_WORK_SHEET.test(n));
+
+/* ------------------- a finding that says the work is fine ------------------- */
+
+/** "Which appears consistent. However, this should be verified", "TH-008 (SPOOFING) is present ... despite its presence": the finding itself reports no defect. */
+const SAYS_ITS_FINE = /\b(?:appears?|seems?)\s+(?:to be\s+)?(?:consistent|correct|fine|complete|well[- ]defined)\b|\bdespite\s+(?:its|their)\s+presence\b/i;
+export const saysTheWorkIsFine = (f: Pick<DraftFinding, 'title' | 'detail'>) => SAYS_ITS_FINE.test(`${f.title}. ${f.detail}`);
+
 /* ------------------- asking a schema for filled data ------------------- */
 
 /**
@@ -370,6 +391,12 @@ export function checkFinding(f: DraftFinding, wb: WorkbookModel, profile = profi
   if (f.source !== 'raters') return { keep: true, finding: f, narrowed: false };
   if (schemaDesign && asksSchemaForFilledData(f)) {
     return { keep: false, reason: 'It asks a schema for filled example rows. A schema defines the fields; the rows are filled in when it is used.' };
+  }
+  if (asksFileForOutsideWork(f, wb.sheetNames())) {
+    return { keep: false, reason: 'It asks the file for proof of work done outside it (independent runs, an author interview, reviewer spot-checks). A file cannot show that; the scorecard handles it with its own cap.' };
+  }
+  if (saysTheWorkIsFine(f)) {
+    return { keep: false, reason: 'The finding itself says the thing appears consistent or is present, so it reports no defect.' };
   }
   if (complainsAboutThePrompt(f)) {
     return { keep: false, reason: 'It says something was not provided or not visible to the examiner. That describes what the examiner was shown, not a defect in the file.' };

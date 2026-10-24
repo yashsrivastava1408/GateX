@@ -90,8 +90,11 @@ export async function runRater(args: RunRaterArgs): Promise<RaterOutcome> {
     user: args.user,
     settings: { ...args.settings, maxOutputTokens: outputTokens ?? args.settings.maxOutputTokens },
     parse: parseReply,
-    // Examiners write long JSON and now and then break it; one more ask (with a nudge to be brief) costs less than losing the examiner.
+    // Examiners write long JSON and now and then break it. A reply that is not JSON is asked again once with strict JSON-only rules; if that
+    // is broken too, this model is given up on for the section and the next one in line (its fallback) takes it. A reply that is JSON in the
+    // wrong shape gets the extra ask (with a nudge to be brief).
     attempts: 3,
+    syntaxRetries: 1,
   });
 
   const outcome: RaterOutcome = {

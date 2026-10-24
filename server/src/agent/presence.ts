@@ -38,12 +38,12 @@ const MIN_QUOTE = 8;
  * Sheets that talk about the work (decisions taken, corrections made, comparisons with the source, open questions, gaps) rather than define
  * it. "A JSON Schema will be generated" in a decision log is not a JSON Schema, so such a sheet never proves that something is present.
  */
-const DISCUSSION_SHEET = /decision|log\b|_log|comparison|question|gap|interpretation|conflict|corrections?|pdf_vs|checks?$/i;
+export const DISCUSSION_SHEET = /decision|log\b|_log|comparison|question|gap|interpretation|conflict|corrections?|pdf_vs|checks?$/i;
 
 /** A cell that says the thing is a placeholder, proposed, unspecified or still to add is the gap itself, never proof that it is there. */
-const PLACEHOLDER_CELL = /\b(?:proposed|unspecified|tbd|todo|to add|to be filled|not in any (?:source|file)|team to confirm)\b/i;
+export const PLACEHOLDER_CELL = /\b(?:proposed|unspecified|tbd|todo|to add|to be filled|not in any (?:source|file)|team to confirm)\b/i;
 
-const norm = (s: string) => s.toLowerCase().replace(/[\s"'“”‘’`]+/g, ' ').trim();
+export const norm = (s: string) => s.toLowerCase().replace(/[\s"'“”‘’`]+/g, ' ').trim();
 
 export interface RowDoc {
   sheet: string;
@@ -55,7 +55,9 @@ export interface RowDoc {
 const stemSet = (text: string) => new Set(keyStems(text));
 
 /** Every non-empty row of the file, with the stems it holds. Built once per check. */
-export function indexRows(wb: WorkbookModel): RowDoc[] {
+export function indexRows(wb: WorkbookModel, limits: { cellChars?: number; rowChars?: number } = {}): RowDoc[] {
+  const cellChars = limits.cellChars ?? CELL_CHARS;
+  const rowChars = limits.rowChars ?? ROW_CHARS;
   const docs: RowDoc[] = [];
   for (const sheet of wb.sheetNames()) {
     if (DISCUSSION_SHEET.test(sheet)) continue;
@@ -64,11 +66,11 @@ export function indexRows(wb: WorkbookModel): RowDoc[] {
       const t = text.trim();
       if (!t) continue;
       const list = byRow.get(row) ?? [];
-      list.push(`${columnLetters(col)}${row}=${JSON.stringify(t.length > CELL_CHARS ? `${t.slice(0, CELL_CHARS)}…` : t)}`);
+      list.push(`${columnLetters(col)}${row}=${JSON.stringify(t.length > cellChars ? `${t.slice(0, cellChars)}…` : t)}`);
       byRow.set(row, list);
     }
     for (const [row, cells] of byRow) {
-      const text = cells.join(' ').slice(0, ROW_CHARS);
+      const text = cells.join(' ').slice(0, rowChars);
       const full = [...(wb.cells(sheet).filter(([r]) => r === row).map(([, , tx]) => tx))].join(' ');
       docs.push({ sheet, row, text, stems: stemSet(full) });
     }
