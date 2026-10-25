@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { LIcon } from './icons';
 import { scrollToId, scrollToY } from './hooks';
@@ -21,8 +21,13 @@ export function Wordmark({ size = 30 }: { size?: number }) {
 export function Nav() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
+  const bar = useRef<HTMLSpanElement | null>(null);
   useEffect(() => {
-    const on = () => setScrolled(window.scrollY > 24);
+    const on = () => {
+      setScrolled(window.scrollY > 24);
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      bar.current?.style.setProperty('--p', max > 0 ? Math.min(1, window.scrollY / max).toFixed(4) : '0');
+    };
     on();
     window.addEventListener('scroll', on, { passive: true });
     return () => window.removeEventListener('scroll', on);
@@ -56,6 +61,7 @@ export function Nav() {
           <LIcon name={open ? 'close' : 'menu'} size={24} />
         </button>
       </div>
+      <span className="lp-progress" ref={bar} aria-hidden="true" />
       <div className="lp-mobile-menu" aria-hidden={!open}>
         {LINKS.map(([label, id]) => (
           <button key={id} type="button" onClick={() => go(id)} tabIndex={open ? 0 : -1}>

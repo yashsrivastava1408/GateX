@@ -4,6 +4,9 @@ All notable changes to GateX (earlier entries call it the DDD Evaluator). Format
 
 ## [Unreleased]
 
+### Changed: livelier landing page (25 Oct 2026)
+- The landing page headline reveals word by word, the hero drifts softly with the pointer over a fine grain, a slow strip shows what GateX looks at, the step arrows draw themselves, cards get a glowing edge on hover, the main buttons lean toward the pointer, the nav blurs with a scroll bar, and a new "Confirmed / Worth a look" panel shows the two issue lists. No new libraries; reduced motion shows the finished page; code text now uses the one page font.
+
 ### Changed: steadier scores from run to run (25 Oct 2026)
 Cause (data/final-check/DRIFT.md): the same file scored 77.2 to 86.6 across five runs; half the swing came from the Final reviewer picking differently between near-identical
 Examiner marks, half from one Examiner's stray mark. Run twice stays optional.

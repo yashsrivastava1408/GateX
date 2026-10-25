@@ -121,3 +121,36 @@ export function scrollToId(id: string, offset = 72) {
   const node = document.getElementById(id);
   if (node) scrollToY(node.getBoundingClientRect().top + window.scrollY - offset);
 }
+
+/**
+ * Makes the big primary buttons lean a few pixels toward the pointer (event delegation on one root, so no per-button listeners).
+ * Mouse only; skipped for touch and reduced motion.
+ */
+export function useMagnetic<T extends HTMLElement>(): RefObject<T | null> {
+  const ref = useRef<T | null>(null);
+  const reduced = usePrefersReducedMotion();
+  useEffect(() => {
+    const root = ref.current;
+    if (!root || reduced || window.matchMedia('(pointer: coarse)').matches) return;
+    const target = (e: Event) => (e.target instanceof Element ? (e.target.closest('.lp-btn-primary.lp-btn-lg') as HTMLElement | null) : null);
+    const move = (e: PointerEvent) => {
+      const el = target(e);
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      el.style.setProperty('--mxp', `${((e.clientX - r.left - r.width / 2) * 0.12).toFixed(1)}px`);
+      el.style.setProperty('--myp', `${((e.clientY - r.top - r.height / 2) * 0.2).toFixed(1)}px`);
+    };
+    const leave = (e: PointerEvent) => {
+      const el = target(e);
+      el?.style.setProperty('--mxp', '0px');
+      el?.style.setProperty('--myp', '0px');
+    };
+    root.addEventListener('pointermove', move);
+    root.addEventListener('pointerout', leave);
+    return () => {
+      root.removeEventListener('pointermove', move);
+      root.removeEventListener('pointerout', leave);
+    };
+  }, [reduced]);
+  return ref;
+}

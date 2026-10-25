@@ -4,7 +4,7 @@ import { LIcon } from './icons';
 import { Gauge } from './Gauge';
 import { GateArt, Mountains } from './Scenery';
 import { Starfield } from './Starfield';
-import { scrollToId, usePrefersReducedMotion } from './hooks';
+import { scrollToId, usePointerParallax, usePrefersReducedMotion } from './hooks';
 
 const SPARKS = Array.from({ length: 8 }, (_, i) => ({ x: (i * 53 + 11) % 100, y: (i * 37 + 7) % 90, d: (i % 5) * 0.9, s: 2 + (i % 3) }));
 
@@ -92,18 +92,29 @@ function Scene() {
   );
 }
 
+const HEADLINE: Array<{ w: string; grad?: boolean }> = [
+  { w: 'Know' }, { w: 'if' }, { w: 'it\u2019s' }, { w: 'ready' },
+  { w: 'to', grad: true }, { w: 'pass', grad: true }, { w: 'the', grad: true }, { w: 'gate.', grad: true },
+];
+
 export function Hero() {
+  const parallax = usePointerParallax<HTMLElement>();
   return (
-    <section className="lp-hero" id="top">
+    <section className="lp-hero" id="top" ref={parallax}>
       <Starfield />
+      <div className="lp-grain" aria-hidden="true" />
       <div className="lp-orb orb-a" />
       <div className="lp-orb orb-b" />
       <Mountains className="hero-mountains" />
       <div className="lp-wrap hero-grid">
         <div className="lp-hero-copy">
           <p className="lp-eyebrow rise" style={{ '--d': '60ms' } as CSSProperties}>Checks your work against a scorecard.</p>
-          <h1 className="rise" style={{ '--d': '160ms' } as CSSProperties}>
-            Know if it&rsquo;s ready <span className="grad">to pass the gate.</span>
+          <h1 className="headline">
+            {HEADLINE.map((h, i) => (
+              <span key={i} className={`hw ${h.grad ? 'grad' : ''} ${i === 4 ? 'br' : ''}`} style={{ '--w': i } as CSSProperties}>
+                {h.w}{' '}
+              </span>
+            ))}
           </h1>
           <p className="lede rise" style={{ '--d': '300ms' } as CSSProperties}>
             Upload your file and scorecard. Three AI Examiners check it, a Final reviewer settles differences, and you get a clear result with exact proof and a path to green.

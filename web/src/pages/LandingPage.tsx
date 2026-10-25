@@ -4,6 +4,8 @@ import { Hero } from '../landing/Hero';
 import { FixFirst, ReportShowcase } from '../landing/Report';
 import { HowItWorks, ResultExplained, TrustStrip } from '../landing/Process';
 import { AnyScorecard, Iterate, PathToGreen, Proof } from '../landing/Lower';
+import { Marquee, Tiers } from '../landing/Extras';
+import { useMagnetic } from '../landing/hooks';
 import { Faq, FinalCta, Footer } from '../landing/Closing';
 import '../styles/landing.css';
 
@@ -16,12 +18,14 @@ export function LandingPage() {
       document.title = previous;
     };
   }, []);
+  const root = useMagnetic<HTMLDivElement>();
   return (
-    <div className="lp">
+    <div className="lp" ref={root}>
       <Nav />
       <main>
         <Hero />
         <TrustStrip />
+        <Marquee />
         <HowItWorks />
         <ResultExplained />
         <ReportShowcase />
@@ -29,6 +33,7 @@ export function LandingPage() {
         <PathToGreen />
         <AnyScorecard />
         <Proof />
+        <Tiers />
         <Iterate />
         <Faq />
         <FinalCta />

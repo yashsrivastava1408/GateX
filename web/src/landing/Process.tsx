@@ -68,7 +68,7 @@ export function HowItWorks() {
               </Reveal>
               {i < STEPS.length - 1 && (
                 <Reveal delay={i * 130 + 260} className="step-arrow" aria-hidden="true">
-                  <svg viewBox="0 0 48 12" width="48" height="12"><path d="M0 6h42" /><path d="M37 1l6 5-6 5" /></svg>
+                  <svg viewBox="0 0 48 12" width="48" height="12"><path d="M0 6h42" pathLength={1} /><path d="M37 1l6 5-6 5" pathLength={1} /></svg>
                 </Reveal>
               )}
             </div>
