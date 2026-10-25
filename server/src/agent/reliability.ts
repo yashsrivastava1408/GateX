@@ -26,3 +26,17 @@ export function loneFindingReason(f: Pick<DraftFinding, 'source' | 'reportedBy'>
   if (!examiner || !solo || solo.n < minSamples || solo.useful / solo.n >= table.thresholds.dropBelow) return null;
   return `Only examiner ${examiner.id} (${examiner.family}) reported it. Across ${solo.n} findings that ${examiner.family} alone reported and that were checked against the real files, ${solo.useful} were useful (${Math.round((solo.useful / solo.n) * 100)}%), so a lone finding from it is set aside. A second examiner agreeing would have kept it.`;
 }
+
+export const TRUST_AT_LEAST = 0.5;
+
+/**
+ * The other side of the same table: a finding that one examiner raised alone stays on the main (Confirmed) list when that examiner's model family
+ * has been useful on at least half of its lone findings, over enough checked findings. A family with too few checked findings is not trusted, so a
+ * new roster starts with every lone finding under "Worth a look" until the test library has measured it.
+ */
+export function loneFindingTrusted(f: Pick<DraftFinding, 'source' | 'reportedBy'>, examiners: Examiner[], table?: ReliabilityTable): boolean {
+  if (!table || f.source !== 'raters' || f.reportedBy.length !== 1) return false;
+  const examiner = examiners.find((e) => e.id === f.reportedBy[0]);
+  const solo = examiner ? table.families[examiner.family]?.solo : undefined;
+  return Boolean(solo && solo.n >= table.thresholds.minSamples && solo.useful / solo.n >= (table.thresholds.trustAtLeast ?? TRUST_AT_LEAST));
+}

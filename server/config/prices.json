@@ -1,0 +1,5 @@
+{
+  "_help": "Optional. Price per one million tokens, by model id, in the currency below. A model with no entry is shown with its tokens only. Example: \"us.amazon.nova-pro-v1:0\": { \"input\": 0.8, \"output\": 3.2 }. Fill in the prices from your own provider's price list.",
+  "currency": "USD",
+  "perMillionTokens": {}
+}

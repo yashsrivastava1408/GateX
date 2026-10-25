@@ -33,6 +33,7 @@
     "replay": "npm run replay -w server --",
     "wrongs": "npm run wrongs -w server --",
     "replay:all": "npm run replay:all -w server --",
+    "tiers:measure": "npm run tiers:measure -w server --",
     "replay:blind": "npm run replay:blind -w server --",
     "spotcheck:make": "npm run spotcheck:make -w server --",
     "spotcheck:read": "npm run spotcheck:read -w server --",
@@ -44,6 +45,7 @@
     "verify:report": "npm run verify:report -w server --",
     "verify:eval": "npm run verify:eval -w server --",
     "dump": "npm run dump -w server --",
+    "doctor": "npm run doctor -w server --",
     "smoke": "node scripts/smokeTest.mjs"
   }
 }

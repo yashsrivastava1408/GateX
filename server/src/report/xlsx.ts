@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs';
 import { BRAND, bandOf, type Decision, type Report, type Severity } from '@ddd/shared';
-import { BAND_WORD, buildView, formatNumber } from './view.js';
+import { BAND_WORD, LOOK_NOTE, LOOK_TITLE, buildView, formatNumber } from './view.js';
 
 const NAVY = 'FF0F1A30';
 const solid = (argb: string): ExcelJS.Fill => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } });
@@ -56,6 +56,13 @@ export async function renderXlsx(input: Report): Promise<Buffer> {
   s.addRow(['Should fix', v.bySeverity.MEDIUM.length, '']).getCell(2).fill = solid(SEV_SOFT.MEDIUM);
   s.addRow(['Nice to fix', v.bySeverity.LOW.length, '']).getCell(2).fill = solid(SEV_SOFT.LOW);
   s.addRow(['Key checks passed', `${v.keyChecks.passed} of ${v.keyChecks.total}`, 'A key check must score 4 or more']);
+  if (v.lookIssues.length > 0) s.addRow([LOOK_TITLE, v.lookIssues.length, 'Single-examiner suggestions, listed on their own sheet and not counted above']);
+  if (v.cost) {
+    s.addRow([]);
+    s.addRow(['What this check used']).font = { bold: true };
+    s.addRow(['Total', v.cost.sentence, '']);
+    for (const l of v.cost.lines) s.addRow([l.label, `${l.tokensIn.toLocaleString('en-US')} tokens in, ${l.tokensOut.toLocaleString('en-US')} out`, l.price]);
+  }
   s.addRow(['Areas scoring 4 or more', `${v.areasAtFour.count} of ${v.areasAtFour.of}`, 'The pass mark is 4 out of 5']);
 
   const a = sheet(workbook, 'Areas', [
@@ -102,6 +109,19 @@ export async function renderXlsx(input: Report): Promise<Buffer> {
 
   const n = sheet(workbook, 'Not checked', [{ header: 'Area', width: 46 }, { header: 'Key check', width: 11 }, { header: 'Why', width: 80 }, { header: 'In the score', width: 28 }]);
   for (const item of v.leftOut) n.addRow([item.name, item.critical ? 'Yes' : '', item.reason, item.treatment]);
+
+  if (v.lookIssues.length > 0) {
+    // A separate, last-but-one sheet: single-examiner judgement calls are never mixed into the Issues sheet or its counts.
+    const l = sheet(workbook, LOOK_TITLE, [
+      { header: 'Item', width: 10 }, { header: 'Priority the examiner gave', width: 16 }, { header: 'Area', width: 38 }, { header: 'Where in the file', width: 30 },
+      { header: 'What the examiner said', width: 55 }, { header: 'More detail', width: 60 }, { header: 'What they suggest', width: 60 },
+    ]);
+    l.getRow(1).getCell(1).note = LOOK_NOTE;
+    for (const item of v.lookIssues) l.addRow([item.label, item.severityWord, item.area, item.where, item.title, item.detail, item.fix]);
+    l.addRow([]);
+    l.addRow(['', LOOK_NOTE]);
+    l.properties.tabColor = { argb: 'FF9AA4B5' };
+  }
 
   for (const ws of workbook.worksheets) {
     ws.eachRow((row) => row.eachCell((c) => { c.alignment = { vertical: 'top', wrapText: true }; }));

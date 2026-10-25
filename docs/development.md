@@ -205,6 +205,10 @@ The test library (`/library` in the dashboard) is how you tell better from worse
    and up to 15 findings each to label real / partly / wrong / vague. `npm run calibration:read -- --file <filled form csv>` prints the mean absolute difference between the tool's criterion scores and the person's,
    the share within 1 point, the bias (tool higher or lower), and how often the finding labels match ours. Code: `server/scripts/calibration.ts`, `server/scripts/calibrationLib.ts`, `server/tests/calibration.test.ts`. No model is called.
 
+8a. `npm run tiers:measure` replays the filter on every labelled run, applies the Confirmed / Worth a look rule and prints useful, wrong and vague shares in each tier, how many real and partly-right issues
+   fall in Worth a look, and the same for three alternative rules (add `-- --consensus` to use the consensus labels on the 40 sheet rows, `-- --singles` to list the one-examiner issues). Tests: `server/tests/tiers.test.ts`.
+   Prices for the cost line: `server/config/prices.json`.
+
 8. `npm run reliability` re-measures how often each model family's issues were right and saves `data/library/reliability.json`, which
    every later run reads (an issue only a rarely-right Examiner raised is set aside). Re-run it after adding verdicts.
 

@@ -1,4 +1,4 @@
-import { examinerLabel, type RunDetail } from '@ddd/shared';
+import { costCell, costSentence, examinerLabel, type RunDetail } from '@ddd/shared';
 import { useState } from 'react';
 import { Chip } from '../../components/Chip';
 import { CopyButton } from '../../components/CopyButton';
@@ -80,6 +80,8 @@ export function RunDetails({ run }: { run: RunDetail }) {
         </p>
       )}
 
+      {run.report!.cost && <RunCostTable cost={run.report!.cost} />}
+
       {run.report!.notes.length > 0 && (
         <div className="run-notes">
           <h3>Notes from this check</h3>
@@ -91,6 +93,33 @@ export function RunDetails({ run }: { run: RunDetail }) {
         </div>
       )}
     </>
+  );
+}
+
+function RunCostTable({ cost }: { cost: NonNullable<RunDetail['report']>['cost'] & object }) {
+  return (
+    <div className="run-cost">
+      <h3>What this check used</h3>
+      <p className="note">{costSentence(cost)}</p>
+      <div className="table-scroll subtle">
+        <table className="table table-compact">
+          <thead>
+            <tr><th>Who</th><th className="num">Calls</th><th className="num">Tokens in</th><th className="num">Tokens out</th>{cost.totalCost !== null && <th className="num">Cost</th>}</tr>
+          </thead>
+          <tbody>
+            {cost.lines.map((l, i) => (
+              <tr key={i}>
+                <td>{l.label}</td>
+                <td className="num">{l.calls}</td>
+                <td className="num mono">{l.inputTokens.toLocaleString('en-US')}</td>
+                <td className="num mono">{l.outputTokens.toLocaleString('en-US')}</td>
+                {cost.totalCost !== null && <td className="num mono">{costCell(l, cost.currency) || '—'}</td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 

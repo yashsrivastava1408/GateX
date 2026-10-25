@@ -1,5 +1,5 @@
 import { UNSTABLE_GAP, bandOf } from '@ddd/shared';
-import type { EvaluationCore, TwoRuns } from '@ddd/shared';
+import type { EvaluationCore, TwoRuns, UsageLine } from '@ddd/shared';
 import { floor1 } from '../util/text.js';
 import { evaluate, type EvaluateArgs, type EvaluationOutput } from './orchestrator.js';
 import { buildVerdictSection } from './verdict.js';
@@ -41,6 +41,18 @@ function mergeCalls(a: EvaluationOutput['calls'], b: EvaluationOutput['calls']):
   return [...byId.values()];
 }
 
+/** Both runs' token use added together (the cost of a run-twice check is both runs). */
+function mergeUsage(a: UsageLine[], b: UsageLine[]): UsageLine[] {
+  const byKey = new Map<string, UsageLine>();
+  for (const u of [...a, ...b]) {
+    const key = `${u.id}|${u.model}`;
+    const mine = byKey.get(key);
+    if (mine) byKey.set(key, { ...mine, calls: mine.calls + u.calls, inputTokens: mine.inputTokens + u.inputTokens, outputTokens: mine.outputTokens + u.outputTokens });
+    else byKey.set(key, { ...u });
+  }
+  return [...byKey.values()];
+}
+
 /**
  * "Run twice": two full evaluations with the same examiners, one after the other. The run closer to the average
  * supplies the details (areas, issues, path to green); the report's score and colour come from the average, and
@@ -58,6 +70,7 @@ export async function evaluateTwice(args: EvaluateArgs): Promise<EvaluationOutpu
     header: { ...base.core.header, startedAt: first.core.header.startedAt, finishedAt: second.core.header.finishedAt },
     notes: [note, ...base.core.notes],
     twoRuns: result,
+    ...(first.core.usage || second.core.usage ? { usage: mergeUsage(first.core.usage ?? [], second.core.usage ?? []) } : {}),
   };
   const calls = mergeCalls(first.calls, second.calls);
   const participants = calls.map((c) => ({

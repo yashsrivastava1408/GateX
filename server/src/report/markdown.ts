@@ -1,5 +1,5 @@
 import { BRAND, type Report } from '@ddd/shared';
-import { BAND_WORD, buildView, formatNumber } from './view.js';
+import { BAND_WORD, LOOK_NOTE, LOOK_TITLE, buildView, formatNumber } from './view.js';
 
 const cell = (text: string | number | null | undefined) => String(text ?? '-').replace(/\|/g, '\\|').replace(/\n/g, ' ');
 const score = (value: number | null) => (value === null ? '-' : formatNumber(value));
@@ -26,7 +26,7 @@ export function renderMarkdown(input: Report): string {
   );
 
   out.push('## What to fix first', '');
-  if (v.issues.length === 0) out.push('Nothing to fix. No issues were raised.', '');
+  if (v.issues.length === 0) out.push(v.lookIssues.length > 0 ? 'Nothing confirmed to fix. See "Worth a look" below for single-examiner suggestions.' : 'Nothing to fix. No issues were raised.', '');
   for (const sev of ['HIGH', 'MEDIUM', 'LOW'] as const) {
     const items = v.bySeverity[sev];
     if (items.length === 0) continue;
@@ -70,6 +70,24 @@ export function renderMarkdown(input: Report): string {
   out.push('## Not checked from the file', '');
   if (v.leftOut.length === 0) out.push('Nothing was left out. Every area could be checked from the file.', '');
   else out.push(...v.leftOut.map((n) => `- **${n.name}**${n.critical ? ' (key check)' : ''}: ${n.reason} ${n.treatment}.`), '');
+
+  if (v.lookIssues.length > 0) {
+    // Apart from the issues, last in the list: single-examiner judgement calls, never counted in the numbers above.
+    out.push(`## ${LOOK_TITLE} (${v.lookIssues.length})`, '', `_${LOOK_NOTE}_`, '', '<details>', `<summary>Show the ${v.lookIssues.length} item${v.lookIssues.length === 1 ? '' : 's'}</summary>`, '');
+    for (const i of v.lookIssues) {
+      out.push(`**${i.label}** - ${i.title}`, `- Area: ${i.area}`);
+      if (i.where) out.push(`- Where: ${i.where}`);
+      if (i.detail) out.push(`- What the examiner said: ${i.detail}`);
+      out.push(`- What they suggest: ${i.fix}`, '');
+    }
+    out.push('</details>', '');
+  }
+  if (v.cost) {
+    out.push('## What this check used', '', v.cost.sentence, '');
+    out.push(`| Who | Calls | Tokens in | Tokens out |${v.cost.hasPrices ? ' Cost |' : ''}`, `|---|---|---|---|${v.cost.hasPrices ? '---|' : ''}`);
+    for (const l of v.cost.lines) out.push(`| ${cell(l.label)} | ${l.calls} | ${l.tokensIn.toLocaleString('en-US')} | ${l.tokensOut.toLocaleString('en-US')} |${v.cost.hasPrices ? ` ${l.price || '-'} |` : ''}`);
+    out.push('');
+  }
 
   out.push('## About this check', '', `- File: ${v.fileName}`, `- Scorecard: ${v.scorecard}`, `- Checked on: ${v.finishedLong}`, `- Marked by: ${v.examinerCount} examiners (${v.examiners.join(', ')}) and a Final reviewer`, '');
   return out.join('\n');

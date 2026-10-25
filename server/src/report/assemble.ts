@@ -1,4 +1,5 @@
-import type { AgreementRow, EvaluationCore, NotMeasurableItem, Override, Report, Resolution } from '@ddd/shared';
+import { confirmedFirst, tierFindings, tierFor, type AgreementRow, type EvaluationCore, type Finding, type NotMeasurableItem, type Override, type Report, type Resolution } from '@ddd/shared';
+import { buildCost, type PriceTable } from './cost.js';
 import { buildPathToGreen, buildVerdictSection } from '../agent/index.js';
 
 const RESOLUTION_NOTE: Record<Resolution, string> = {
@@ -14,7 +15,11 @@ const RESOLUTION_NOTE: Record<Resolution, string> = {
  * Builds the eight-section report (PDF page 11). The evaluation itself never changes; the verdict and the
  * path to green are recomputed from it, so an optional override shows up straight away.
  */
-export function assembleReport(core: EvaluationCore, override: Override | null): Report {
+export function assembleReport(core: EvaluationCore, override: Override | null, prices?: PriceTable): Report {
+  // Findings saved before tiers existed get theirs here from the same rule. Confirmed findings come first and are the only ones the headline counts.
+  const all: Finding[] = confirmedFirst(core.findings.some((f) => !f.tier) ? tierFindings(core.findings) : core.findings);
+  const confirmed = all.filter((f) => tierFor(f) === 'confirmed');
+  const cost = buildCost(core.usage, prices);
   const agreement: AgreementRow[] = core.dimensions
     .filter((dim) => dim.measuredBy === 'raters')
     .map((dim) => ({
@@ -39,7 +44,7 @@ export function assembleReport(core: EvaluationCore, override: Override | null):
       treatment,
     }));
 
-  const verdict = buildVerdictSection(core.scorecard, core.dimensions, override, core.findings, core.twoRuns);
+  const verdict = buildVerdictSection(core.scorecard, core.dimensions, override, confirmed, core.twoRuns);
   // A score from two examiners is not a score from three: say so next to the colour, not only in the run notes.
   const lost = core.notes.map((n) => /^Rater (\w+) \(.*\) failed and was left out/.exec(n)?.[1]).filter((id): id is string => Boolean(id));
   if (lost.length > 0) {
@@ -50,11 +55,13 @@ export function assembleReport(core: EvaluationCore, override: Override | null):
     verdict,
     dimensions: core.dimensions,
     strengths: core.strengths,
-    findings: core.findings,
+    findings: all,
+    tiers: { confirmed: confirmed.length, worthALook: all.length - confirmed.length },
     agreement,
     notMeasurable,
-    pathToGreen: buildPathToGreen(core.scorecard, core.dimensions, core.findings),
+    pathToGreen: buildPathToGreen(core.scorecard, core.dimensions, confirmed),
     notes: core.notes,
+    ...(cost ? { cost } : {}),
     ...(core.twoRuns ? { twoRuns: core.twoRuns } : {}),
     ...(core.droppedFindings && core.droppedFindings.length > 0 ? { droppedFindings: core.droppedFindings } : {}),
   };

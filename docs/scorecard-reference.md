@@ -168,8 +168,11 @@ text) is converted by one model call, checked by code and used straight away. No
 
 The file to check can be an `.xlsx`, a `.csv` (read as one sheet, `Sheet1`) or a `.pdf`. A PDF is read as text: each page is a sheet (`Page 1`,
 `Page 2`, ...) and each line is a cell in column A, so evidence is cited as `Page 3!A12`. A PDF scorecard gives each question a page range in
-`reads` (`reads: ["Page 7-9"]`); see `samples/talentra/talentra-output-schema-pdf.yaml`. Questions marked by the Examiners apply to a PDF, and
-the counted checks that read Excel columns apply to Excel files. Check prompt sizes first, with no model calls:
+`reads` (`reads: ["Page 7-9"]`); see `samples/talentra/talentra-output-schema-pdf.yaml`. Questions marked by the Examiners apply to a PDF. The counted
+checks (empty cells in a full column, repeated ids, dangling references, id pattern, child counts, parent width, allowed values) also run over the **tables** of a
+PDF: the reader rebuilds each table row (a wrapped cell becomes one cell, a table that runs over several pages with the same header is one table) and the row
+sweep and the exact ceilings read those rows; findings cite the page and line (`Page 41!A12`). They stay silent unless the table is plainly laid out: its
+header must be plain words and repeat on two or more pages, and a merged cell, a heading band or a cut row is never read as an empty cell. Check prompt sizes first, with no model calls:
 `npm run prompt:size -- file.pdf scorecard.yaml`.
 
 ## Which sheets GateX reads

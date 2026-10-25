@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { TIER_RULE, tierFindings } from '@ddd/shared';
 import type {
   DimensionResult,
   DimensionSpec,
@@ -28,7 +29,8 @@ import { checkClaims } from './claimCheck.js';
 import { checkPresence } from './presence.js';
 import { verifyFindings, type VerifyStats } from './verifyFindings.js';
 import { withAutoReads } from './autoReads.js';
-import { loneFindingReason } from './reliability.js';
+import { usageOf } from './usage.js';
+import { loneFindingReason, loneFindingTrusted } from './reliability.js';
 import { capByExactFindings, sweepFindings } from './sweep.js';
 import { applyAnchorFloors } from './anchorFloor.js';
 import { applyExactCeilings, exactCeilingsFor } from './exactScore.js';
@@ -381,6 +383,7 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
   checked.dropped.push(...claims.dropped);
   checked.notes.push(...claims.notes);
   // "The file has no X" said about X that the file does define: a model finds the row, code proves the quote is really in the cell.
+  let presenceTokens: { model?: string; inputTokens: number; outputTokens: number } | undefined;
   if (rated.length > 0) {
     const presence = await checkPresence({
       findings: checked.findings,
@@ -388,6 +391,7 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
       models: candidatesFor(roster.consolidator).map((c) => ({ model: c.ref.model, provider: args.providers(c.ref.provider) })),
       settings,
     });
+    presenceTokens = { model: presence.model, inputTokens: presence.inputTokens, outputTokens: presence.outputTokens };
     checked.findings = presence.findings;
     checked.dropped.push(...presence.dropped);
     checked.notes.push(...presence.notes);
@@ -423,7 +427,13 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
   if (unmeasurable.size > 0 && raterFindings.some(aboutUnmeasurable)) {
     checked.notes.push(`Findings about questions the file cannot measure (${[...unmeasurable].join(', ')}) were set aside and are listed with the dropped findings.`);
   }
-  const findings = finalizeFindings(retyped.scorecard, findingsToDimensions(retyped.scorecard, [...findingsFromChecks(scorecard, codeOutcomes), ...swept, ...checked.findings]));
+  // Two tiers, by code: Confirmed (found by code, raised by two or more examiners, proved by a cell, or raised alone by an examiner with a good checked record)
+  // and Worth a look (everything else). The headline uses Confirmed only; the score and the colour do not depend on the tier.
+  const findings = tierFindings(
+    finalizeFindings(retyped.scorecard, findingsToDimensions(retyped.scorecard, [...findingsFromChecks(scorecard, codeOutcomes), ...swept, ...checked.findings])),
+    TIER_RULE,
+    (f) => loneFindingTrusted(f, roster.raters, args.reliability),
+  );
 
   /* 6. Freeze check: the file must be exactly what we hashed at the start. */
   const after = sha256(await readFile(args.workbookPath));
@@ -485,6 +495,7 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
     consolidatorFailed: consolidation?.consolidatorFailed ?? false,
     notes: [...notes, ...floored.notes, ...exact.notes, ...capNotes, ...checked.notes],
     ...(checked.dropped.length > 0 ? { droppedFindings: checked.dropped } : {}),
+    usage: usageOf(calls, verification, usedConsolidator, presenceTokens),
   };
 
   const runLog: RunLog = {

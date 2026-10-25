@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { issueNumbers, type RunDetail } from '@ddd/shared';
+import { issueNumbers, tierFor, type RunDetail } from '@ddd/shared';
 import { Icon } from '../../components/Icons';
 import { Card } from '../../components/Layout';
 import { presentRun } from '../../present';
@@ -13,6 +13,9 @@ import { RunDetails } from './RunDetails';
 import { ScoresTable } from './ScoresTable';
 import { StrengthsList } from './StrengthsList';
 import { VerdictHero } from './VerdictHero';
+
+const LOOK_NOTE =
+  'These came from one examiner only and the computer check could not prove them. They are judgement calls: some are useful, but more of them are wrong or too vague to act on. They do not change the score, the colour, the counts above or the path to green.';
 
 const TAB_IDS = ['scores', 'fix', 'agreement', 'input', 'path', 'strengths', 'tech'];
 
@@ -28,11 +31,14 @@ export function ReportView({ run: saved }: { run: RunDetail }) {
   const unmeasured = report.notMeasurable.length;
   const flagged = report.agreement.filter((a) => a.flagged).length;
   const blocking = report.verdict.blockingFindings.length;
-  const [tab, setTab] = useHashTab(TAB_IDS, report.findings.length > 0 ? 'fix' : 'scores');
+  // Confirmed findings drive the headline and the counts; single-examiner judgement calls sit apart under "Worth a look".
+  const confirmed = report.findings.filter((f) => tierFor(f) === 'confirmed');
+  const lookAt = report.findings.filter((f) => tierFor(f) !== 'confirmed');
+  const [tab, setTab] = useHashTab(TAB_IDS, confirmed.length > 0 ? 'fix' : 'scores');
 
   const tabs: TabSpec[] = [
     { id: 'scores', label: 'Scores', count: report.dimensions.length },
-    { id: 'fix', label: 'What to fix', count: report.findings.length || undefined, tone: blocking > 0 ? 'red' : 'accent' },
+    { id: 'fix', label: 'What to fix', count: confirmed.length || undefined, tone: blocking > 0 ? 'red' : 'accent' },
     { id: 'agreement', label: 'Examiner agreement', count: flagged || undefined, tone: 'amber' },
     { id: 'input', label: 'Not in the file', count: unmeasured || undefined },
     { id: 'path', label: 'Path to green' },
@@ -71,7 +77,16 @@ export function ReportView({ run: saved }: { run: RunDetail }) {
         )}
         {tab === 'fix' && (
           <Card title="What to fix" aside={<span className="faint">Most serious first</span>}>
-            <FindingsList findings={report.findings} issues={issues} names={Object.fromEntries(report.dimensions.map((d) => [d.id, d.name]))} />
+            <FindingsList findings={confirmed} issues={issues} names={Object.fromEntries(report.dimensions.map((d) => [d.id, d.name]))} />
+            {lookAt.length > 0 && (
+              <details className="look-at">
+                <summary>
+                  <strong>Worth a look</strong> <span className="faint">({lookAt.length}) · not counted above</span>
+                </summary>
+                <p className="field-hint">{LOOK_NOTE}</p>
+                <FindingsList findings={lookAt} issues={issues} secondary names={Object.fromEntries(report.dimensions.map((d) => [d.id, d.name]))} />
+              </details>
+            )}
           </Card>
         )}
         {tab === 'agreement' && (

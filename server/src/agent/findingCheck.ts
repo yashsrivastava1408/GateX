@@ -448,11 +448,13 @@ export function checkFinding(f: DraftFinding, wb: WorkbookModel, profile = profi
     if (empty.length === 0) {
       return { keep: false, reason: `Every cell it names is filled (${filled.join('; ')}).` };
     }
+    // The cells it names were read and are empty: the claim is proved by the file itself, which the report tiers as confirmed.
+    const proof = `Code read the cells the finding names and they are empty: ${empty.join('; ')}.`;
     if (filled.length > 0) {
       const detail = `${f.detail} [Fact check: confirmed empty in ${empty.join('; ')}. Filled, so taken out of the claim: ${filled.join('; ')}.]`;
-      return { keep: true, finding: { ...f, detail }, narrowed: true };
+      return { keep: true, finding: { ...f, detail, proof }, narrowed: true };
     }
-    return { keep: true, finding: f, narrowed: false };
+    return { keep: true, finding: { ...f, proof }, narrowed: false };
   }
 
   // 2. Named things: does a nearly full column on the cited sheet hold them? Only for a claim about everything ("no fields
@@ -550,6 +552,7 @@ export function mergeDuplicates(findings: DraftFinding[], profile: WorkbookProfi
       ...best,
       detail: others.length > 0 ? `${best.detail} [Also reported as: ${others.map((t) => `"${t}"`).join('; ')}.]` : best.detail,
       reportedBy: [...new Set(members.flatMap((m) => m.reportedBy))].sort(),
+      ...(members.find((m) => m.proof)?.proof ? { proof: members.find((m) => m.proof)!.proof } : {}),
     });
   }
   return { findings: out, merged: findings.length - out.length };

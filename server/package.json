@@ -31,7 +31,9 @@
     "presence:eval": "tsx scripts/presenceEval.ts",
     "verify:report": "tsx scripts/verifyReport.ts",
     "verify:eval": "tsx scripts/verifyEval.ts",
-    "dump": "tsx scripts/dumpWorkbook.ts"
+    "dump": "tsx scripts/dumpWorkbook.ts",
+    "doctor": "tsx scripts/doctor.ts",
+    "tiers:measure": "tsx scripts/tierMeasure.ts"
   },
   "dependencies": {
     "@ddd/shared": "^1.0.0",

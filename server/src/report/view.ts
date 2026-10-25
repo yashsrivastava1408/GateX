@@ -1,4 +1,5 @@
-import { bandOf, examinerLabel, issueNumbers, presentReport, severityLabel, type Decision, type Report, type Severity } from '@ddd/shared';
+import { bandOf, examinerLabel, issueNumbers, presentReport, severityLabel, tierFor, type Decision, type Report, type Severity } from '@ddd/shared';
+import { costCell, costSentence } from './cost.js';
 
 /**
  * One plain-language view of a report, shared by the PDF, Markdown and Excel downloads so they say the same things in the same words.
@@ -10,7 +11,7 @@ export const HEADLINE: Record<Decision, string> = { green: 'Looks good', amber: 
 export const BAND_WORD: Record<Decision, string> = { green: 'GREEN', amber: 'AMBER', red: 'RED' };
 
 export interface ViewArea { name: string; score: number | null; critical: boolean; passed: boolean | null; band: Decision | null; status: string }
-export interface ViewIssue { label: string; number: number; severity: Severity; severityWord: string; area: string; where: string; title: string; detail: string; fix: string }
+export interface ViewIssue { tier: 'confirmed' | 'worth_a_look'; why: string; label: string; number: number; severity: Severity; severityWord: string; area: string; where: string; title: string; detail: string; fix: string }
 export interface ViewExaminerRow { area: string; scores: Array<{ label: string; score: number | null }>; note: string; disagreed: boolean }
 export interface ViewStep { order: number; area: string; from: number; to: number; gain: number; fixes: string[] }
 export interface ViewStrength { area: string; text: string; where: string }
@@ -30,7 +31,14 @@ export interface ReportView {
   thresholds: { accept: number; refine: number };
   meaning: string[];
   areas: ViewArea[];
+  /** The Confirmed findings: the headline, the counts and the path to green use these only. */
   issues: ViewIssue[];
+  /** Single-examiner judgement calls that passed the filters, shown apart from the issues. */
+  lookIssues: ViewIssue[];
+  /** One plain sentence that tells a reader what the "Worth a look" list is. */
+  lookNote: string;
+  /** The run's tokens (and price, when the price table has one), in plain words. Absent when the run recorded no usage. */
+  cost?: { sentence: string; hasPrices: boolean; lines: Array<{ label: string; calls: number; tokensIn: number; tokensOut: number; price: string }> };
   bySeverity: Record<Severity, ViewIssue[]>;
   issuesByArea: Array<{ area: string; count: number }>;
   keyChecks: { passed: number; total: number };
@@ -52,6 +60,11 @@ export function formatDate(iso: string, withTime = false): string {
   const date = `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
   return withTime ? `${date}, ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')} UTC` : date;
 }
+
+/** What the "Worth a look" list is, in the words every report uses. */
+export const LOOK_NOTE =
+  'These came from one examiner only and the computer check could not prove them. They are judgement calls: some are useful, but more of them are wrong or too vague to act on. They do not change the score, the colour, the counts above or the path to green.';
+export const LOOK_TITLE = 'Worth a look';
 
 const num = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
@@ -116,9 +129,11 @@ export function buildView(source: Report): ReportView {
     status: d.status,
   }));
 
-  const list: ViewIssue[] = report.findings.map((f, i) => ({
-    label: `Issue ${i + 1}`,
-    number: i + 1,
+  const toIssue = (f: Report['findings'][number], n: number): ViewIssue => ({
+    tier: tierFor(f),
+    why: f.tierReason ?? '',
+    label: issues.get(f.id) ?? `Issue ${n}`,
+    number: n,
     severity: f.severity,
     severityWord: severityLabel(f.severity),
     area: areaName.get(f.dimensionId) ?? 'General',
@@ -126,7 +141,11 @@ export function buildView(source: Report): ReportView {
     title: scrub(f.title),
     detail: scrub(f.detail),
     fix: scrub(f.fix),
-  }));
+  });
+  const confirmedFindings = report.findings.filter((f) => tierFor(f) === 'confirmed');
+  const lookFindings = report.findings.filter((f) => tierFor(f) !== 'confirmed');
+  const list: ViewIssue[] = confirmedFindings.map((f, i) => toIssue(f, i + 1));
+  const lookIssues: ViewIssue[] = lookFindings.map((f, i) => toIssue(f, i + 1));
   const bySeverity: Record<Severity, ViewIssue[]> = { HIGH: [], MEDIUM: [], LOW: [] };
   for (const i of list) bySeverity[i.severity].push(i);
 
@@ -177,6 +196,17 @@ export function buildView(source: Report): ReportView {
     meaning,
     areas,
     issues: list,
+    lookIssues,
+    lookNote: LOOK_NOTE,
+    ...(report.cost
+      ? {
+          cost: {
+            sentence: costSentence(report.cost),
+            hasPrices: report.cost.totalCost !== null,
+            lines: report.cost.lines.map((l) => ({ label: l.label, calls: l.calls, tokensIn: l.inputTokens, tokensOut: l.outputTokens, price: costCell(l, report.cost!.currency) })),
+          },
+        }
+      : {}),
     bySeverity,
     issuesByArea,
     keyChecks: { passed: gates.filter((g) => g.status === 'passed').length, total: gates.length },

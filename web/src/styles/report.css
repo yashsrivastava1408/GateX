@@ -726,3 +726,11 @@
 .finding-also ul { margin: 0; padding-left: var(--space-5); display: flex; flex-direction: column; gap: 2px; }
 
 .issue-no { font-weight: 600; white-space: nowrap; }
+
+/* Single-examiner suggestions: apart from the issues, closed by default, quieter than them. */
+.look-at { margin-top: var(--space-6, 24px); border-top: 1px solid var(--border); padding-top: var(--space-4, 16px); }
+.look-at > summary { cursor: pointer; list-style: none; padding: 8px 0; }
+.look-at > summary::-webkit-details-marker { display: none; }
+.look-at[open] > summary { margin-bottom: 4px; }
+.finding-secondary { opacity: 0.85; }
+.run-cost { margin-top: var(--space-6, 24px); }

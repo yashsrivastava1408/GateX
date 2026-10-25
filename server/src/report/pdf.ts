@@ -1,6 +1,6 @@
 import PDFDocument from 'pdfkit';
 import { BRAND, bandOf, type Decision, type Report, type Severity } from '@ddd/shared';
-import { buildView, formatNumber, BAND_WORD, type ViewIssue } from './view.js';
+import { buildView, formatNumber, BAND_WORD, LOOK_TITLE, type ViewIssue } from './view.js';
 
 // GateX palette. Green, amber and red are used only for verdict bands, scores and issue priority.
 const NAVY = '#0f1a30';
@@ -211,6 +211,11 @@ export function renderPdf(input: Report): Promise<Buffer> {
     t.draw(x, y);
   });
   y += 80;
+  if (v.lookIssues.length > 0) {
+    y += 8;
+    write(`${v.lookIssues.length} more suggestion${v.lookIssues.length === 1 ? '' : 's'} from a single examiner ${v.lookIssues.length === 1 ? 'is' : 'are'} listed under "${LOOK_TITLE}" near the end. They are not counted above.`, MX, y, { size: 9, color: MUTED, width: CW });
+    y += 14;
+  }
 
   /* ----------------------------- how each area scored ----------------------------- */
   newPage();
@@ -476,6 +481,35 @@ export function renderPdf(input: Report): Promise<Buffer> {
     }
   }
 
+  /* ----------------------------- worth a look (secondary, never counted above) ----------------------------- */
+  if (v.lookIssues.length > 0) {
+    newPage();
+    section(`${LOOK_TITLE} (${v.lookIssues.length})`, v.lookNote, 90);
+    const pad = 10;
+    const inner = CW - pad * 2 - 4;
+    for (const i of v.lookIssues) {
+      const hTitle = measure(i.title, 10, inner, true);
+      const hDetail = i.detail ? measure(i.detail, 9, inner) : 0;
+      const hFix = measure(`Suggested: ${i.fix}`, 9, inner);
+      const total = pad + 14 + hTitle + 3 + (i.where ? 12 : 0) + (hDetail ? hDetail + 4 : 0) + hFix + pad;
+      ensure(total + 8);
+      doc.roundedRect(MX, y, CW, total, 6).fill(PANEL);
+      doc.roundedRect(MX, y, 4, total, 2).fill('#9aa4b5');
+      let ty = y + pad;
+      const tx = MX + pad + 4;
+      const w1 = pill(i.label, tx, ty - 2, '#7a8699', { size: 8, h: 14 });
+      write(oneLine(`${i.area}  |  ${i.severityWord} (the examiner's view)`, 9, inner - w1 - 10), tx + w1 + 8, ty, { size: 9, color: MUTED, width: inner - w1 - 8 });
+      ty += 16;
+      write(i.title, tx, ty, { size: 10, bold: true, color: NAVY, width: inner });
+      ty += hTitle + 3;
+      if (i.where) { write(`Where: ${i.where}`, tx, ty, { size: 8.5, color: MUTED, width: inner }); ty += 12; }
+      if (hDetail) { write(i.detail, tx, ty, { size: 9, color: INK, width: inner }); ty += hDetail + 4; }
+      write(`Suggested: ${i.fix}`, tx, ty, { size: 9, color: MUTED, width: inner });
+      y += total + 8;
+    }
+    y += 6;
+  }
+
   /* ----------------------------- about this check ----------------------------- */
   y += 10;
   section('About this check', undefined, 190);
@@ -485,6 +519,7 @@ export function renderPdf(input: Report): Promise<Buffer> {
     ['Checked on', v.finishedLong],
     ['Check number', String(v.checkNumber)],
     ['Who marked it', `${v.examinerCount} examiners (${v.examiners.join(', ')}) and a Final reviewer`],
+    ...(v.cost ? [['What it used', `${v.cost.sentence}\n${v.cost.lines.map((l) => `${l.label}: ${l.tokensIn.toLocaleString('en-US')} in, ${l.tokensOut.toLocaleString('en-US')} out${l.price ? ` (${l.price})` : ''}`).join('\n')}`] as [string, string]] : []),
   ];
   for (const [k, val] of about) {
     const h = measure(val, 11, CW - 130, false, 2);

@@ -3,7 +3,7 @@ import type { Report } from '@ddd/shared';
 import { hideModels, tidy } from './present';
 
 const report = {
-  findings: [{ id: 'F-01' }, { id: 'F-02' }],
+  findings: [{ id: 'F-01', source: 'code', reportedBy: ['code'] }, { id: 'F-02', source: 'code', reportedBy: ['code'] }],
   dimensions: [{ id: 'G09', name: 'Privacy', criteria: [{ id: 'G09-C01', name: 'Consent' }] }],
 } as unknown as Report;
 

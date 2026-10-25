@@ -232,7 +232,15 @@ export interface Finding {
   returnTo: ReturnTo;
   source: 'code' | 'raters';
   reportedBy: string[];
+  /** Set by code when it read the file and the claim holds (for example the cells the finding names are empty). */
+  proof?: string;
+  /** Confirmed findings drive the headline; worth_a_look ones are single-examiner judgement calls. Absent in reports saved before tiers. */
+  tier?: FindingTier;
+  /** One plain sentence on why the finding has its tier. */
+  tierReason?: string;
 }
+
+export type FindingTier = 'confirmed' | 'worth_a_look';
 
 /** An examiner finding the fact check removed because the file plainly contradicts it. Kept, with the reason, for the record. */
 export interface DroppedFinding {
@@ -351,6 +359,8 @@ export interface EvaluationCore {
   droppedFindings?: DroppedFinding[];
   /** Present only when the check was run twice. */
   twoRuns?: TwoRuns;
+  /** Tokens used per model in this run (the cost table is built from it). */
+  usage?: UsageLine[];
 }
 
 /** The eight-section report (PDF page 11), assembled from the core (and an optional override). */
@@ -368,6 +378,44 @@ export interface Report {
   droppedFindings?: DroppedFinding[];
   /** Present only when the check was run twice: both scores, the average (which sets the colour) and the gap. */
   twoRuns?: TwoRuns;
+  /** How many findings are Confirmed (they drive the headline) and how many are Worth a look. Absent in reports built before tiers. */
+  tiers?: { confirmed: number; worthALook: number };
+  /** What the run cost: tokens per model, with a price when the price table has one. Absent when the run recorded no usage. */
+  cost?: RunCost;
+}
+
+/** One line of the cost table: the tokens one model used in a run, and its price when known. */
+export interface CostLine {
+  /** Plain label for people: "Examiner 1", "Final reviewer", "Fact checks". */
+  label: string;
+  /** The model that answered. Hidden in downloads and the dashboard, which show the label. */
+  model: string;
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
+  /** Null when the price table has no entry for this model. */
+  cost: number | null;
+}
+
+export interface RunCost {
+  lines: CostLine[];
+  inputTokens: number;
+  outputTokens: number;
+  /** Sum of the priced lines; null when no line has a price. */
+  totalCost: number | null;
+  currency: string | null;
+  /** True when every line has a price, so totalCost is the whole cost. */
+  complete: boolean;
+}
+
+/** What one model used in a run (input to the cost table). */
+export interface UsageLine {
+  /** examiner id (A, B, C), "K" for the final reviewer, or "checks" for the fact-check calls. */
+  id: string;
+  model: string;
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
 }
 
 /* -------------------------------- API -------------------------------- */
@@ -589,7 +637,7 @@ export interface FamilyReliability {
  */
 export interface ReliabilityTable {
   computedAt: string;
-  thresholds: { minSamples: number; dropBelow: number };
+  thresholds: { minSamples: number; dropBelow: number; /** A lone examiner at or above this share of useful findings stays Confirmed (default 0.5). */ trustAtLeast?: number };
   /** Keyed by model family (for example "meta"), not by model name, so a fallback model counts as the same examiner. */
   families: Record<string, FamilyReliability>;
 }

@@ -60,6 +60,7 @@ server/src/agent/
 ├── verifyFindings.ts   step 6: the second look: a separate model reads each Examiner issue against the file; set aside only on a cell and words that code finds in the file
 ├── reliability.ts      step 6: the lone-examiner rule, from what the test library measured
 ├── sweep.ts            step 2/6: the row-by-row sweep in code (empty cells, repeated ids, dangling references, ids cited but defined nowhere, wrong counts, filler)
+├── pdfSweep.ts         step 2/5/6: the same row checks over the tables of a PDF (rows rebuilt from the page, wrapped cells joined, one table across pages)
 ├── sweepDeep.ts        step 5: more exact counts used only for scores (id pattern, cross-sheet references, orphan rows, slipped values, parent width, repeated reasons)
 ├── exactScore.ts       step 5: counted criteria scored by an exact count (a ceiling the Examiners cannot raise)
 ├── anchorFloor.ts      step 5: a score below the lowest rung the scorecard's own scale describes is raised to it (when the cited cells are there)
@@ -206,12 +207,43 @@ evaluation. Both runs' tokens and timings are added together in the run log.
   until the next colour is reached. Each step shows its gain (`4 → 5, +2.6`) and the HIGH issues to fix first.
 - **A plain report.** The PDF (with charts), Excel and Markdown reports are built from the core by `report/assemble.ts`.
 
+**Two tiers: Confirmed and Worth a look** (`shared/src/tiers.ts`, applied in `orchestrator.ts`, read again in `report/assemble.ts`). Examiner judgement calls are wrong
+or too vague about a third to a half of the time, and a quote check cannot disprove a judgement. So the report separates what is dependable from what is a lead, by a fixed rule on fields
+already on the issue (no model decides it):
+- **Confirmed**: found by code (sweep, exact count, tally), or raised by 2 or more different examiners, or proved by code reading the cells it names (`proof`, set in `findingCheck.ts`), or
+  raised by one examiner whose model family has been useful on at least half of its lone issues over 20 or more checked issues (`loneFindingTrusted` in `reliability.ts`, from `data/library/reliability.json`).
+- **Worth a look**: every other issue, that is a single examiner's judgement call that passed the filters. A family with too few checked issues is not trusted, so a new roster starts with its lone issues here.
+The headline uses Confirmed only: the "Needs attention" must-fix note, `blockingFindings`, the path to green, the key numbers, the issue list and the issue numbers. Worth a look is shown apart and last
+(dashboard: a closed section under the issue list; PDF: its own section near the end; Excel: a "Worth a look" sheet; Markdown: a collapsed block), numbered "Look 1, 2...", in plain words with no model names.
+**Scores and colours do not depend on the tier** (the colour is the score's band). Each issue carries `tier` and `tierReason`; reports saved before tiers get a tier from the same rule when they are opened (without the
+lone-examiner trust, which needs the roster).
+Measured offline with `npm run tiers:measure` (13 labelled runs, 171 issues kept by the filter, our labels): all kept 43% useful, 21% wrong, 33% vague. Confirmed (122): 58% useful, 16% wrong, 23% vague. Worth a look (49):
+6% useful, 31% wrong, 57% vague. Confirmed keeps 23 of 23 real and 71 of 74 real-or-partly issues (96%); 3 partly-right issues sit in Worth a look. With the consensus labels (`--consensus`): all kept 40% useful, 24% wrong;
+Confirmed 55% useful, 20% wrong, keeps 18 of 18 real and 67 of 68 real-or-partly. Wrong share falls only a little because two examiners often agree on the same mistake; most of the gain is fewer vague issues on the headline.
+A single HIGH issue from one examiner is 45% wrong, so severity is deliberately not a reason to confirm. Small sample, labels by an agent, not a human.
+
+**What a run cost** (`report/cost.ts`, `agent/usage.ts`). The run records tokens in and out per model (each examiner, the final reviewer, the fact-check calls). The report shows one line and a small table by "Examiner 1 / Final reviewer / Fact checks".
+Prices are optional, in `server/config/prices.json` (`perMillionTokens` by model id; `PRICES_CONFIG` points elsewhere). A model with no price shows tokens only, and the total says when only some models have a price.
+
 **The row-by-row sweep** (`sweep.ts`). Models read a whole sheet and skim it; code reads every row. Whatever the scorecard asks, code finds what
 is off by the file's own pattern: an empty cell in a column that is otherwise full, a repeated id, a reference to an id that does not exist, a
 child count that does not match the rows, a definition made of filler, an id cited in text that is defined nowhere (`D3-S14-P15` among
 `D3-S14-P01..P09`), a cell empty on a row of a kind that always has it, a value in a Required column that is not a way of saying required or
 optional, and a tally the file states about a sheet that is a little off ("278 parameters" for 276 rows, LOW). Each is an exact code issue at one
 cell, attached to the scorecard question with the most words in common, and the cleaning steps below never touch it.
+
+**PDF tables** (`pdfSweep.ts`, fed by `excel/pdfTables.ts`). A PDF page is one column of text lines, so the sweep used to skip it; now the tables of a PDF are
+swept like sheets. The reader lays each table out on its own header (the columns are where the header's words start, so a word repeated inside a wide cell
+is not a column), joins a cell that wraps over several lines into one cell, puts a dash-wrapped id back together (`F-` / `S21-` / `01`), and keeps the
+rows with the line they sit on. Pages whose header is the same table (the docket repeats `ID | Field | What to write | ...` on every page) become ONE table, a
+row that breaks across a page (its first column empty) is joined to the row it continues, and then the same checks run on it: empty cells in a full column,
+repeated ids, dangling references, child counts, filler, a Required column with odd values, and (for exact scores) the id pattern, parent width, slipped
+values, copied reasons. Findings point at the page and line where the row sits (`Page 41!A12`). Strict on purpose, because a PDF has no cell borders: a
+table is swept only when its header is plain words (several different short cells, no digits, none cut mid-word) and repeats on two pages or more (a data
+row misread as a header never does); a row is left out when a cell runs under its empty neighbour (a merged cell), when only one or two of five or more cells
+are filled (a heading band), or when it is cut where the text does not allow; a table where more than one row in ten is such a fragment (text centred in tall
+cells) says nothing; pages with no header are not read at all. Every sheet rule keeps its own "the column plainly follows the pattern" test on top. For the
+id pattern, ids of a second family (`F-RB-01..12` beside `F-S21-04`) are not slips: only an id shape seen once or twice counts.
 
 The sweep also keeps the score honest (`capByExactFindings`): a question the sweep found mistakes under keeps a mark of at most 4 (one or two
 mistakes), 3 (three to five) or 2 (six or more), whatever the Examiners gave it. The cap is named in the question's rationale and in the run notes.

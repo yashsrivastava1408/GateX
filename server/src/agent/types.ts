@@ -70,4 +70,6 @@ export interface DraftFinding {
   returnTo: ReturnTo;
   location: CellRef | null;
   reportedBy: string[];
+  /** Set by code when it read the file and the claim holds (for example the cells the finding names are empty). Not set for a judgement. */
+  proof?: string;
 }

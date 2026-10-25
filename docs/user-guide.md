@@ -44,6 +44,12 @@ You can watch each step as it runs.
 - **The path to green** shows the smallest set of fixes that lifts the score to the next colour, and how many points each one adds.
 - **Charts** in the PDF show the score, how each question did and how the Examiners compared.
 
+**Worth a look is a second, quieter list.** The main list holds issues GateX can stand behind: found by an exact check of the file, or raised by two or more Examiners, or
+proved by the cells they name. Suggestions that only one Examiner made, and that the computer check could not prove, are kept apart under **Worth a look** (closed by default in the dashboard, on its own sheet in Excel, in its own
+section in the PDF). Some are useful, but more of them are wrong or too vague, so they are not counted in the numbers, the must-fix note or the path to green. They never change the score or the colour.
+
+**What the check used.** The report ends with a line such as "This check used 1,730,000 tokens in and 89,000 out", with a cost when a price list is set up (`server/config/prices.json`).
+
 **Issues marked "code" are the most dependable.** They come from an exact check of every row: a blank cell in a column that is otherwise full,
 a repeated id, a reference to something that does not exist, a child count that does not match the rows, a definition made of filler. Each one
 points at exactly the cells that need the fix.

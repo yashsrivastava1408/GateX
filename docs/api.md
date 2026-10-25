@@ -107,6 +107,10 @@ eight sections; when `failed`, `error` says why.
 }
 ```
 
+`report.findings` lists Confirmed issues first, then "Worth a look" ones. Each finding has optional `tier` (`confirmed` or `worth_a_look`), `tierReason` and `proof`; `report.tiers`
+is `{ confirmed, worthALook }`. `verdict.blockingFindings`, the "Needs attention" must-fix note and `pathToGreen` count Confirmed issues only. Older saved runs get a tier when read. `report.cost` (optional) holds
+`lines` (label, model, calls, inputTokens, outputTokens, cost or null), the totals, `currency` and `complete` (every model priced). All of these fields are optional, so older clients keep working.
+
 `agentDecision` is what GateX concluded. `finalDecision` is the same unless an override was recorded.
 
 ### `GET /api/scorecard-template.xlsx`

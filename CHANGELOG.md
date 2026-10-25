@@ -4,6 +4,46 @@ All notable changes to GateX (earlier entries call it the DDD Evaluator). Format
 
 ## [Unreleased]
 
+### Added: the row sweep and exact scores now run over the tables of a PDF (24 Oct 2026)
+- **PDF tables are first-class for the sweep** (`server/src/agent/pdfSweep.ts`, `excel/pdfTables.ts`, `pdfReader.ts`). A PDF page used to be one column of text, so none of the
+  row checks ran on it and every criterion that reads a PDF table was judged by the examiners alone. Now the reader also returns each table as columns and rows: laid out on its own
+  header (not on column starts guessed from the text), a wrapped cell joined into one cell, an id broken at its dash (`F-` / `S21-` / `01`) put back together, a second block of rows
+  on the same page found by its repeated header, and each row kept with the line it sits on. Tables with the same header on several pages are one table; a row broken across a page
+  is joined. The same checks as for a sheet then run: empty cell in a full column, repeated id, dangling reference, child count, filler, odd Required value, conditional gap, and for
+  exact scores the id pattern, parent width, slipped values, copied reasons. Findings cite `Page N!A<line>`.
+- **Strict safety.** A table is swept only when its header is plain words (distinct, short, no digits, none cut mid-word) and repeats on two pages or more; a merged cell, a heading band and
+  a cut row are left out, never read as empty; a table where more than one row in ten is a fragment says nothing; pages without a header are not read. Ids of a second family
+  (`F-RB-01..12` beside `F-S21-04`) are not counted as pattern breaks in a PDF (only a shape seen once or twice is). A real 170-page schema PDF (`talentra-step2-output-schema-v3_2-final.pdf`)
+  gave one false hit in the first version (a data row read as a header on a page with no header); it is the reason for the header and two-page rules, and it now gives none.
+- **New:** `exactCoverage()` in `exactScore.ts` and a "counted on real rows" column in `npm run exact:measure`: how many of the criteria that ask for a count were actually counted on rows of the
+  file (before this change a criterion could be worded as a count and still have nothing counted behind it).
+- **Measured offline** (`npm run exact:measure`, no model). Criteria worded as an exact count are unchanged (docket 8 of 34, step5 5 of 9); the number counted on real rows is what moved:
+
+  | Pair | Exact by wording | Counted on real rows before -> after |
+  |---|---|---|
+  | docket | 8 of 34 (24%) | 0 -> 7 of 8 (444 field rows read; the 8th, parent width, has no Parent column in the PDF) |
+  | step5 | 5 of 9 (56%) | 1 -> 4 of 5 (68 field rows; parent width is again about a column the PDF lacks) |
+  | every xlsx / csv pair, raw-step1-5 | unchanged | unchanged (the raw-step PDFs hold only small count tables, below the 12-row minimum) |
+
+  No hit on the real docket or step 5 PDF: an independent PyMuPDF check of the docket (476 field rows) found no empty cell either, so those files are clean for these checks.
+  On copies with planted mistakes (`data/planted/docket-pdf-planted.pdf`, 11 mistakes: 9 blanked cells, a repeated id, a short id; `data/planted/step5-pdf-planted.pdf`, 5 blanked cells) every
+  mistake is found at the right page and line, with no other hit. Tests: `tests/pdfSweep.test.ts` (13, real PDFs made with pdfkit: wrapped cells, three pages, merged cell, heading band,
+  header-less page, row broken across a page, fragments), `tests/pdfTables.test.ts` (5 more).
+
+### Added: Confirmed / Worth a look tiers and a cost line (24 Oct 2026)
+- Issues now have a tier, decided by code: **Confirmed** (found by code, or 2+ examiners, or proved by the cells it names, or one examiner with a good checked record) and **Worth a look** (other single-examiner judgement calls).
+  The headline (needs-attention must-fix note, path to green, key numbers, issue list, issue numbers) uses Confirmed only; Worth a look is shown apart and last in the dashboard (closed), PDF, Excel (own sheet) and Markdown (collapsed), in plain words. Scores and colours are unchanged.
+  New optional fields `tier`, `tierReason`, `proof` on findings and `tiers` on the report (`shared/src/tiers.ts`, `agent/reliability.ts` `loneFindingTrusted`, `findingCheck.ts` sets `proof`).
+- Measured offline (`npm run tiers:measure`, 171 kept issues, our labels): Confirmed 58% useful / 16% wrong against 43% / 21% for all kept; Confirmed keeps 23 of 23 real issues and 96% of real-or-partly. Wrong share falls only a little; vague falls most. Details in docs/agent.md.
+- Per-run cost line: tokens in/out per model (`core.usage`, `report.cost`) in the dashboard's technical details, Markdown, Excel summary and PDF, with prices from the optional `server/config/prices.json` (tokens only when a model has no price).
+- Tests: `server/tests/tiers.test.ts` (18).
+
+### Added: `npm run doctor`, run-failure note, tidy-up (24 Oct 2026)
+- `npm run doctor` (`server/src/util/doctor.ts`, `server/scripts/doctor.ts`): plain-words OK / CHECK / NEEDS FIX list for Node version, `.env` (names only), models file, provider keys, database, data folder. Tests: `tests/doctor.test.ts` (4).
+- `docs/operations.md`: how a half-finished run is recorded today (failed, finished marks not kept) and a recommended design for resuming. Not built, to leave the orchestrator alone.
+- `docs/security.md`: notes that access control is not enabled and how to add it with Caddy.
+- Old logs and run scripts moved to `data/archive/`; `docs/images/05-verdict-rule.svg` re-rendered (GREEN drawn light green).
+
 ### Added: the anchor floor, and more criteria scored by an exact count (24 Oct 2026)
 - **Anchor floor** (`server/src/agent/anchorFloor.ts`, applied in `orchestrator.ts` just before the exact ceilings). When a scored criterion is below the lowest rung that the
   scorecard's own scale describes, it is raised to that rung. Real case: G07-C05 "Machine-readable specification" in `data/inputs/step2-v32` ("5 a machine-readable schema matches the

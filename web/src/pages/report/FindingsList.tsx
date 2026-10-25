@@ -6,7 +6,7 @@ import { EmptyState } from '../../components/Layout';
 import { plural } from '../../copy';
 import { mergeFindings } from '../../mergeFindings';
 
-export function FindingsList({ findings, issues, names = {} }: { findings: Finding[]; issues?: Map<string, string>; names?: Record<string, string> }) {
+export function FindingsList({ findings, issues, names = {}, secondary = false }: { findings: Finding[]; issues?: Map<string, string>; names?: Record<string, string>; secondary?: boolean }) {
   const numbers = useMemo(() => issues ?? issueNumbers({ findings }), [issues, findings]);
   const [severity, setSeverity] = useState<Severity | 'ALL'>('ALL');
   const [dimension, setDimension] = useState('ALL');
@@ -59,11 +59,11 @@ export function FindingsList({ findings, issues, names = {} }: { findings: Findi
 
       <ul className="findings">
         {shown.map((g) => { const f = g.main; return (
-          <li key={`${f.id}-${expanded}`} className={`finding finding-${f.severity.toLowerCase()}`}>
+          <li key={`${f.id}-${expanded}`} className={`finding finding-${f.severity.toLowerCase()}${secondary ? ' finding-secondary' : ''}`}>
             <details open={expanded}>
               <summary className="finding-head">
                 <SeverityChip severity={f.severity} />
-                {f.severity === 'HIGH' && <span className="blocks">Fix this first</span>}
+                {f.severity === 'HIGH' && !secondary && <span className="blocks">Fix this first</span>}
                 <span className="faint issue-no">{numbers.get(f.id)}</span>
                 <h3>{f.title}</h3>
                 {f.location && <CellChip sheet={f.location.sheet} cell={f.location.cell} />}
@@ -77,7 +77,7 @@ export function FindingsList({ findings, issues, names = {} }: { findings: Findi
                 </div>
                 <div className="finding-foot">
                   <span>About <strong>{names[f.dimensionId] ?? 'this area'}</strong></span>
-                                    <span>{f.source === 'code' ? 'Found by the computer' : `Raised by ${g.reportedBy.join(', ')}`}</span>
+                                    <span>{f.source === 'code' ? 'Found by the computer' : `Raised by ${g.reportedBy.join(', ')}`}{f.tierReason ? ` · ${f.tierReason}` : ''}</span>
                 </div>
                 {g.also.length > 0 && (
                   <div className="finding-also">

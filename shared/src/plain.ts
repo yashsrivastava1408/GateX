@@ -1,4 +1,5 @@
 import type { Report, RunDetail, Severity } from './types.js';
+import { tierFor } from './tiers.js';
 
 /** The product's name and the one line under it, used by the dashboard, the downloads and the docs. */
 export const BRAND = { name: 'GateX', tagline: 'Checks your work against a scorecard' } as const;
@@ -58,7 +59,9 @@ export const simplifyRun = (run: RunDetail): RunDetail => (run.report ? { ...run
  * stay in the data; downloads and the page show these.
  */
 export function issueNumbers(report: Pick<Report, 'findings'>): Map<string, string> {
-  return new Map(report.findings.map((f, i) => [f.id, `Issue ${i + 1}`] as const));
+  let issue = 0;
+  let look = 0;
+  return new Map(report.findings.map((f) => [f.id, tierFor(f) === 'confirmed' ? `Issue ${++issue}` : `Look ${++look}`] as const));
 }
 
 /**
@@ -68,7 +71,7 @@ export function issueNumbers(report: Pick<Report, 'findings'>): Map<string, stri
 export function presentReport(report: Report): Report {
   const plain = simplifyReport(report);
   const issues = issueNumbers(report);
-  const lower = (label: string) => label.replace(/^Issue/, 'issue');
+  const lower = (label: string) => label.replace(/^Issue/, 'issue').replace(/^Look/, 'worth-a-look item');
   const sayIssues = (text: string) => {
     let out = text;
     for (const [id, label] of [...issues].sort((a, b) => b[0].length - a[0].length)) out = out.split(id).join(lower(label));
@@ -84,6 +87,7 @@ export function presentReport(report: Report): Report {
     },
     verdict: { ...plain.verdict, reasons: plain.verdict.reasons.map(sayIssues) },
     findings: plain.findings.map((f) => ({ ...f, reportedBy: f.reportedBy.map(examinerLabel) })),
+    ...(plain.cost ? { cost: { ...plain.cost, lines: plain.cost.lines.map((l) => ({ ...l, model: l.label })) } } : {}),
     pathToGreen: { ...plain.pathToGreen, note: sayIssues(plain.pathToGreen.note) },
     notes: plain.notes.map((n) => n.replace(/\b(?:bedrock|groq|gemini)\/[\w.:-]+/gi, 'an AI model')),
     droppedFindings: plain.droppedFindings?.map((d) => ({ ...d, reportedBy: d.reportedBy.map(examinerLabel) })),
