@@ -79,11 +79,19 @@ const OBLIGATION_COLUMN = /^(?:required|mandatory|optional)\??$|^m\/o\/c$/i;
 const OBLIGATION_VALUE = /^(?:required|optional|conditional|conditionally required|mandatory|recommended|yes|no|true|false|y|n|m|o|c|m\/o\/c|n\/a|not applicable|tbd|(?:required|conditional|optional)\b.*)$/i;
 const address = (col: ColumnProfile, row: number): CellRef & { cell: string } => ({ sheet: '', cell: `${col.letter}${row}` });
 
+/** A label that starts a total row and is short: "TOTAL L4 LEAVES", "Total", "Count of rows", "Grand total". A long cell that merely begins with the word is a decision, not a total ("Total evaluation order: identity gate, restriction, DENY ..."). */
+const TOTAL_ROW_LABEL = /^(?:totals?|counts?|sub-?total|grand total)\b/i;
+const isTotalLabel = (text: string) => text.length <= 30 && text.split(/\s+/).length <= 4 && TOTAL_ROW_LABEL.test(text);
+
 export function dataRowsOf(wb: WorkbookModel, sheet: SheetProfile): number[] {
   const rows = new Set<number>();
   for (const [r] of wb.cells(sheet.name)) if (r > sheet.headerRow) rows.add(r);
-  const firstCol = sheet.columns.find((c) => c.title);
-  return [...rows].sort((a, b) => a - b).filter((r) => !firstCol || !SUMMARY_LABEL.test(norm(wb.cellText(sheet.name, `${firstCol.letter}${r}`) ?? '')));
+  const firstCols = sheet.columns.filter((c) => c.title).slice(0, 3);
+  const firstCol = firstCols[0];
+  // A total row is not an entry of the register. Its label is usually in the first column, but a summary sheet that numbers its rows in column A puts it in column B
+  // ("TOTAL L4 LEAVES" under rows 1 to 8), where the empty A cell was reported as a missing number.
+  const isTotal = (r: number) => firstCols.some((c) => isTotalLabel(norm(wb.cellText(sheet.name, `${c.letter}${r}`) ?? '')));
+  return [...rows].sort((a, b) => a - b).filter((r) => (!firstCol || !SUMMARY_LABEL.test(norm(wb.cellText(sheet.name, `${firstCol.letter}${r}`) ?? ''))) && !isTotal(r));
 }
 
 // Nearly unique is enough: the whole point is to find the few that repeat.

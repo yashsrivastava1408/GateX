@@ -3,6 +3,7 @@ import type { WorkbookModel } from '../excel/workbook.js';
 import { profileWorkbook } from '../excel/profile.js';
 import { emptyStats, sweepAll, type SweepFinding, type SweepStats } from './sweep.js';
 import { pdfOwnChecks, sweepPdfDeep } from './pdfSweep.js';
+import { checkNamedItems, scoreForItems } from './namedItems.js';
 import { statedChildLimit, statedIdPattern, sweepDeep, sweepIdFormats, sweepWidth } from './sweepDeep.js';
 
 /**
@@ -26,7 +27,7 @@ import { statedChildLimit, statedIdPattern, sweepDeep, sweepIdFormats, sweepWidt
  * A criterion is made exact only when its own words name the count (see FAMILIES). Anything else stays a judgement.
  */
 
-export type ExactFamilyId = 'empty' | 'duplicate' | 'idformat' | 'width' | 'restate' | 'reference' | 'children' | 'allowed' | 'tally';
+export type ExactFamilyId = 'items' | 'empty' | 'duplicate' | 'idformat' | 'width' | 'restate' | 'reference' | 'children' | 'allowed' | 'tally';
 
 interface Family {
   id: ExactFamilyId;
@@ -188,7 +189,21 @@ function countFile(wb: WorkbookModel, noPdf = false) {
 /** Runs the full count over the file and returns the ceilings. Cheap: one pass over the cells. */
 export function exactCeilingsFor(questions: DimensionSpec[], wb: WorkbookModel): Map<string, ExactCeiling> {
   const { stats, found, own } = countFile(wb);
-  return exactCeilings(questions, found, stats, own);
+  const out = exactCeilings(questions, found, stats, own);
+  // Items a question names ("status, migration, extensibility, owner") that the sheets it reads have no column for.
+  for (const q of questions) {
+    if (q.measuredBy !== 'raters') continue;
+    const named = checkNamedItems(q, wb);
+    if (!named || named.missing.length === 0) continue;
+    const ceiling = scoreForItems(named.present.length, named.items.length);
+    const prior = out.get(q.id);
+    if (prior && prior.ceiling <= ceiling) continue;
+    out.set(q.id, {
+      family: 'items', ceiling, mistakes: named.missing.length, looked: named.items.length,
+      summary: `${named.missing.length} of the ${named.items.length} items it names have no column in ${named.sheets.join(', ')} (${named.missing.join(', ')})`,
+    });
+  }
+  return out;
 }
 
 /**

@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { Gate, ParticipantProgress, RunProgress, RunStatus } from '@ddd/shared';
 import type { AppConfig } from '../config.js';
 import type { DeletedRun, RunJob, Store } from '../db/store.js';
-import { evaluate, evaluateTwice, preflight, type ProgressEvent } from '../agent/index.js';
+import { checkScorecardFit, evaluate, evaluateTwice, fitNote, preflight, type ProgressEvent, type ScorecardFit } from '../agent/index.js';
 import { serializeSheets } from '../excel/serialize.js';
 import { resolvePageRanges } from '../excel/pageRanges.js';
 import { addRelevantPages } from '../excel/pageSelect.js';
@@ -68,8 +68,21 @@ export class EvaluationService {
   }
 
   /** Shows how a scorecard in another layout is converted. The same conversion is used when work is submitted with it. */
-  async importScorecard(input: ImportInput): Promise<ImportResult & { cached: boolean }> {
-    return this.scorecards.preview(input.source, input.document);
+  async importScorecard(input: ImportInput): Promise<ImportResult & { cached: boolean; fit: (ScorecardFit & { note: string }) | null }> {
+    const result = await this.scorecards.preview(input.source, input.document);
+    // With the file the scorecard will judge, say now whether the scorecard asks about things that kind of file cannot hold (see agent/fit.ts).
+    let fit: (ScorecardFit & { note: string }) | null = null;
+    if (input.document) {
+      const questions = result.questions.flatMap((q) =>
+        q.criteria && q.criteria.length > 0 ? q.criteria.map((c) => ({ id: c.id, name: c.name, by: c.by })) : [{ id: q.id, name: q.name, by: q.by }],
+      );
+      const found = checkScorecardFit(
+        questions.map((q) => ({ id: q.id, name: q.name, weight: 1, critical: false, measuredBy: q.by === 'code' ? ('code' as const) : ('raters' as const) })),
+        await WorkbookModel.load(input.document.bytes),
+      );
+      if (found) fit = { ...found, note: fitNote(found) };
+    }
+    return { ...result, fit };
   }
 
   checkScorecard(yamlText: string) {

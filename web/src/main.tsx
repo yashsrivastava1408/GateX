@@ -12,6 +12,7 @@ import './styles/charts.css';
 import './styles/pipeline.css';
 import './styles/pages.css';
 import './styles/report.css';
+import './styles/accuracy.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -4,6 +4,7 @@ import { ScoreRing, ThresholdBar } from '../../components/Charts';
 import { Hint } from '../../components/Hint';
 import { Icon } from '../../components/Icons';
 import { TERMS, VERDICT, friendlyReason } from '../../copy';
+import { formatScore } from '../../format';
 
 /** The result, decided by the fixed rule. Nothing here waits for, or asks for, a person. */
 export function VerdictHero({ run }: { run: RunDetail }) {
@@ -20,6 +21,7 @@ export function VerdictHero({ run }: { run: RunDetail }) {
           <div className="hero-top">
             <DecisionChip decision={verdict.decision} size="lg" />
             {override && <Chip tone="amber">Changed by {override.by}</Chip>}
+            {verdict.scoreRange && <Chip tone="amber">{`Close to the line · about ${formatScore(verdict.scoreRange.low)} to ${formatScore(verdict.scoreRange.high)}`}</Chip>}
           </div>
           <h2 id="hero-title" className="hero-title">{copy.headline}</h2>
           <p className="hero-line">{copy.body}</p>

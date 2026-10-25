@@ -64,6 +64,11 @@ server/src/agent/
 ├── pdfSweep.ts         step 2/5/6: the same row checks over the tables of a PDF (rows rebuilt from the page, wrapped cells joined, one table across pages)
 ├── sweepDeep.ts        step 5: more exact counts used only for scores (id pattern, cross-sheet references, orphan rows, slipped values, parent width, repeated reasons)
 ├── exactScore.ts       step 5: counted criteria scored by an exact count (a ceiling the Examiners cannot raise)
+├── namedItems.ts       step 5: items a question names ("status, migration, extensibility, owner") that the sheets it reads have no column for cap its mark
+├── criticalProof.ts    step 5: a 4 or 5 on a must-pass question needs a cited cell that is quoted, or it is set to 3
+├── tierSupport.ts      step 6: an issue about a question the final mark gave 5 is Worth a look, not Confirmed
+├── fit.ts              step 1: a plain note when the scorecard asks about the tables or SQL of a built database and the file has next to none
+├── stability.ts        reads saved reports of one file and says how much the result moves between runs (`npm run stability`)
 ├── anchorFloor.ts      step 5: a score below the lowest rung the scorecard's own scale describes is raised to it (when the cited cells are there)
 ├── tallies.ts          step 2/6: recounts the figures a file states about itself ("68 fields", "283 of 426 (66%)", "COUNT ... 50 L4 leaves")
 ├── pathToGreen.ts      step 6: smallest set of fixes that lifts the colour
@@ -99,6 +104,11 @@ Fixes the inputs so the target stays put (PDF p.13).
 3. Reads the file **once**, takes its SHA-256, and parses it from those bytes.
 4. Checks that every sheet the scorecard names exists, and builds the set of sheets an Examiner may cite.
 5. At the very end it reads the file again and compares the hash, which proves the file stayed the same.
+6. Checks whether the scorecard **fits** the file (`fit.ts`), before anyone is asked. One mismatch is checked: questions about the tables, indexes or SQL of a
+   built database put to a file that mentions such things twice or less in all its cells. The run gets a plain "Scorecard fit" note; nothing is blocked and no score changes.
+   Real case: the Step 3 feature list against a scorecard written for a built database (RED 50.9; the same file against its own scorecard, GREEN 100). It fires on 4 of 25 questions of
+   that pairing and on nothing in the 11 other cached pairs. A word-overlap check between every question and the file was tried and rejected: it flagged 5 of the 6 questions of the *correct* pairing.
+   The scorecard preview (`POST /api/scorecards/import` with the file the scorecard will judge) returns the same check as `fit`.
 
 ### Step 2 · Count in code  (`checks/`)
 
@@ -110,6 +120,21 @@ and `text_ids_valid` (they count lines of text, so they work on a PDF).
 
 Why code for these: code is exact, free and repeatable, so counted questions get the same score every time. This is the one place the build
 goes beyond the PDF's wording (see [decisions.md](decisions.md#adr-3-code-scores-the-countable-dimensions)).
+
+**Items a question names** (`namedItems.ts`). A counted question such as "Governance items present: status, migration, extensibility, owner × 116 sets" lists what must exist.
+The Examiners see the columns that are there (Extensibility, Owner) and mark it 5; code reads the header row of every sheet the question reads and caps the mark by the share of named
+items that have a column (all 5; 3 of 4 gives 3; 2 of 4 gives 2; 1 of 4 gives 1). An item counts as present when any header holds its five-letter stem, so a differently worded column never causes a cap, and the question must
+name its sheets. Real case: the human assessment of the Step 2 workbook scored this question 2 (232 of 464 items present) and every live run scored it 5; the cap gives 2, and it fires on no other
+question in the 13 cached scorecards. Against the human criterion marks of the 7 saved Step 2 runs the share within 1 point goes 91.2% to 93.3% and the summed absolute error per run 26.0 to 23.0
+(the human marks were already used to tune this pair, so it is not independent evidence).
+
+**A high mark on a must-pass question needs a quoted cell** (`criticalProof.ts`). A mark of 4 or 5 on a critical question must cite at least one cell that holds quoted words (8 or more characters, or a short cell quoted whole); a cell address alone shows where an
+Examiner looked, not that the cell says it. Otherwise the mark is set to 3 and the report says why. With the current prompts every high mark on a critical question already carries a quote in the 37 saved reports, so it changes nothing today: it guards against a prompt or model change that stops quoting.
+
+**The false-green guard** (`npm run generosity`, `src/planted/generosity.ts`, `tests/generosity.test.ts`). Examiners that are perfectly generous (a clean 5 for every question, citing real cells, scripted) can only be stopped by the checks done in code.
+For three real pairs, a clean file and a copy with mistakes planted in it are scored this way, with no model call and no cost: the Step 4 register (8 planted mistakes), the docket PDF (11) and the Step 5 PDF (5).
+Measured 25 Oct 2026: the planted copy scores 13.6, 9.7 and 17.2 points below the clean file (which scores 100 with no code finding at all). The guard fails if a gap falls below 12, 8.5 or 15, or if a clean file loses anything;
+`npm run release:check` runs it. A change that makes the evaluator more generous (a weaker cap, a sweep that finds less, a ceiling that stops firing) fails it.
 
 A check that has nothing to read (for example a missing column) marks its question **unscored**, which counts as 0, and a HIGH issue says
 why, so a missing mark never helps the score.
@@ -213,13 +238,18 @@ optional override (API only, with a written reason) is shown next to GateX's own
 
 #### Close to a colour line: a second look  (`orchestrator.ts`, `verdict.ts`)
 
-When the score is within **4 points of 75 or of 60** (`CLOSE_TO_LINE`), another run could land on the other side of the line. GateX then looks again, by
+When the score is within **5 points of 75 or of 60** (`CLOSE_TO_LINE`), another run could land on the other side of the line. GateX then looks again, by
 code, at the questions the Examiners still differ on by 2 or more (the 8 with the most weight at stake at most): each Examiner marks just those questions
 `repeats - 1` more times, the median is taken over all their answers and the Final reviewer reviews just those questions again. The report then says, in plain words and
 next to the score, that the result is **close to the line**, what was looked at again (the score before and after), and the **range**: where the score would land if
 every question still in dispute went the lowest way, and the highest way. The colour is still the score's band and nothing else. The setting `closeLook` (on by
 default) can turn the extra calls off, and a Quick check never makes them; the plain-words note stays either way. A run-twice result skips it (its average and gap already say how wide the result is).
 The run log records the questions and the number of calls (`secondLook`).
+
+**The range** (`scoreRange` on the verdict, `scoreRangeOf()` in `verdict.ts`). Whenever the score is within 5 points of a line, the verdict carries `scoreRange { low, high, line, basis }` and says it in plain words next to the score
+("Close to the line: the score is 76.0 and green starts at 75 ... Read this result as about 73.8 to 78.2, not as one exact number"), in the dashboard (a chip beside the colour), the PDF, Excel and Markdown. The span is the score plus or minus 2.2 points
+(`SCORE_NOISE`: one standard deviation of the same file's score from run to run on the current build, from `data/final-check/DRIFT.md` and `data/noise/simulate.ts`), widened to the second look's span when that is wider, or to the two scores of a run-twice
+result. It is there even for a Quick check, which makes no second look. The colour is never changed by it.
 
 #### Optional: run twice  (`twoRuns.ts`)
 
@@ -246,6 +276,12 @@ already on the issue (no model decides it):
 - **Confirmed**: found by code (sweep, exact count, tally), or raised by 2 or more different examiners, or proved by code reading the cells it names (`proof`, set in `findingCheck.ts`), or
   raised by one examiner whose model family has been useful on at least half of its lone issues over 20 or more checked issues (`loneFindingTrusted` in `reliability.ts`, from `data/library/reliability.json`).
 - **Worth a look**: every other issue, that is a single examiner's judgement call that passed the filters. A family with too few checked issues is not trusted, so a new roster starts with its lone issues here.
+**An issue about a question the final mark gave 5 is Worth a look** (`tierSupport.ts`), whatever the number of examiners and the severity, unless code found it or proved it. The report cannot both mark a question 5 (its own anchor: "fully specified, no outcome-changing gap")
+and head its list with a must-fix issue about the same question. Step 3 on the correct scorecard did exactly that twice: three examiners (two of whom had marked the question 5) raised "hierarchy depth issues" as a HIGH issue, which headed the report; checked cell by cell it was wrong both times.
+Measured on the labelled issues (`npm run tiers:measure -- --full-mark`; labels are ours, not a person's): of the 46 examiner issues about a question the final mark gave 5 (first 171 labelled issues), none was real, 12 partly right, 12 wrong, 22 vague. With the rule, on all 175 labelled issues, Confirmed (the rule the app uses, with the trusted lone examiner, leave-one-run-out) goes from 126 issues,
+56.3% useful and 18.3% wrong, to 99 issues, 61.6% useful and 14.1% wrong, and keeps 23 of 23 real issues (10 partly-right ones move to Worth a look; nothing is dropped). The wrong share is still above the 10% target.
+A generic "does the cited cell support the claim" check was tried and rejected: word overlap between the claim and its cell kept the useful issues and the wrong ones alike (a "missing X" claim cites a cell that, by nature, does not hold X), and issues whose claim named an id or level absent from the cited cell were useful 9 times out of 9.
+
 The headline uses Confirmed only: the "Needs attention" must-fix note, `blockingFindings`, the path to green, the key numbers, the issue list and the issue numbers. Worth a look is shown apart and last
 (dashboard: a closed section under the issue list; PDF: its own section near the end; Excel: a "Worth a look" sheet; Markdown: a collapsed block), numbered "Look 1, 2...", in plain words with no model names.
 **Scores and colours do not depend on the tier** (the colour is the score's band). Each issue carries `tier` and `tierReason`; reports saved before tiers get a tier from the same rule when they are opened (without the

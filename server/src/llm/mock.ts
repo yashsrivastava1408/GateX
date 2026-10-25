@@ -6,7 +6,7 @@ import { LlmError, type LlmProvider, type LlmRequest, type LlmResponse } from '.
  * exactly as it would against a live model. The model name picks the behaviour:
  *
  *   raters:         mock-strict (3) · mock-mid (4) · mock-lenient (5) · mock-low (1)
- *                   mock-alarmist (scores 5 but raises a HIGH finding) · mock-garbage (not JSON) ·
+ *                   mock-alarmist (scores 5 but raises a HIGH finding) · mock-alarmist-4 (scores 4 and raises a HIGH finding) · mock-garbage (not JSON) ·
  *                   mock-nocite (no evidence) · mock-abstain · mock-down
  *   consolidators:  mock-consolidator · mock-consolidator-unresolved · mock-consolidator-greedy · mock-consolidator-down
  */
@@ -24,6 +24,7 @@ const FIXED_SCORES: Record<string, number> = {
   'mock-low': 1,
   'mock-nocite': 4,
   'mock-alarmist': 5,
+  'mock-alarmist-4': 4,
 };
 
 function section(prompt: string, tag: string): string {
@@ -139,7 +140,7 @@ export class MockProvider implements LlmProvider {
         evidence: request.model === 'mock-nocite' || !cell ? [] : [cell],
       };
     });
-    const alarmist = request.model === 'mock-alarmist';
+    const alarmist = request.model === 'mock-alarmist' || request.model === 'mock-alarmist-4';
     const findings = scorecard.dimensions
       .filter((_, index) => anchor && (alarmist ? index === 0 : (FIXED_SCORES[request.model] ?? 4) < 5))
       .map((dim) => ({

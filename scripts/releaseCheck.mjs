@@ -5,7 +5,7 @@
  *   npm run release:check            typecheck, tests, docs, and the finding filter replayed on every labelled run
  *   npm run release:check -- --live  also runs the "file already has it" check with a live model on the labelled findings (costs cents)
  *
- * Passing means: the code type-checks; every test passes (including the planted-defect test: the code sweep must find all eight planted
+ * Passing means: the code type-checks; the generosity guard holds (a file with planted mistakes loses points even when every examiner is perfectly generous); every test passes (including the planted-defect test: the code sweep must find all eight planted
  * defects and nothing in the clean register); the docs are consistent; and for every run in data/library, replaying the filter drops no finding
  * that was labelled real or partly right. With --live, the model-backed check must not drop a labelled real gap.
  */
@@ -31,6 +31,8 @@ function step(name, cmd, args, { cwd = root, must } = {}) {
 step('typecheck', 'npm', ['run', 'typecheck', '--silent']);
 step('tests (server and web)', 'npm', ['test', '--silent']);
 step('docs', 'npm', ['run', 'docs:check', '--silent']);
+// The false-green guard: perfectly generous examiners must still lose points on files with planted mistakes (no model, no cost).
+step('generosity guard', 'npm', ['run', 'generosity', '--silent']);
 
 // The finding filter, replayed with no model on every labelled run: nothing real or partly right may be dropped.
 const libDir = path.join(root, 'data', 'library');

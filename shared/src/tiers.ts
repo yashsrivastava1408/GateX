@@ -27,10 +27,15 @@ export function tierOf(
   rule: TierRule = TIER_RULE,
   /** True when the one examiner who raised it has a checked track record on lone findings good enough to trust (see agent/reliability.ts). */
   trustedLone = false,
+  /** True when the question this finding is about was marked 5 in the end: the examiners' own result says the file meets it (see agent/tierSupport.ts). */
+  markedFull = false,
 ): { tier: FindingTier; reason: string } {
   if (f.source === 'code') return { tier: 'confirmed', reason: 'Found by a computer check of the file.' };
   if (f.proof) return { tier: 'confirmed', reason: f.proof };
   const n = examinerCount(f);
+  if (markedFull) {
+    return { tier: 'worth_a_look', reason: 'It is about a question the examiners finally marked 5 (nothing missing), so their own result says the file meets it. Read it, but check it before relying on it.' };
+  }
   if (n >= rule.minExaminers) return { tier: 'confirmed', reason: `Raised independently by ${n} examiners.` };
   if (trustedLone) return { tier: 'confirmed', reason: 'Raised by one examiner whose single-handed findings have mostly held up when checked against the real files.' };
   if (rule.stayConfirmed.includes(f.severity)) return { tier: 'confirmed', reason: 'Raised by one examiner, but it is high risk, so it stays on the main list.' };
@@ -43,9 +48,14 @@ export const tierFor = (f: Parameters<typeof tierOf>[0], rule: TierRule = TIER_R
 export const isConfirmed = (f: Parameters<typeof tierOf>[0]): boolean => tierFor(f) === 'confirmed';
 
 /** Findings with their tier set; the order is unchanged. Pass `trustedLone` to keep a lone examiner's finding Confirmed (see agent/reliability.ts). */
-export function tierFindings(findings: Finding[], rule: TierRule = TIER_RULE, trustedLone: (f: Finding) => boolean = () => false): Finding[] {
+export function tierFindings(
+  findings: Finding[],
+  rule: TierRule = TIER_RULE,
+  trustedLone: (f: Finding) => boolean = () => false,
+  markedFull: (f: Finding) => boolean = () => false,
+): Finding[] {
   return findings.map((f) => {
-    const { tier, reason } = tierOf({ ...f, tier: undefined }, rule, trustedLone(f));
+    const { tier, reason } = tierOf({ ...f, tier: undefined }, rule, trustedLone(f), markedFull(f));
     return { ...f, tier, tierReason: reason };
   });
 }

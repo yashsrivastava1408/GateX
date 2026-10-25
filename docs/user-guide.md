@@ -68,6 +68,15 @@ take a quick look at the cell it points to. The report also lists the issues Gat
 Fix the issues, then add the file again under the **same project name**. The project page shows every round and how the score moved, which
 issues were fixed, which are still open and which are new. Keep going until the colour is green.
 
+## Help prove GateX is right
+
+GateX is only as useful as it is accurate, and only a person can say whether it is. Two small things help, and neither changes your result:
+
+- **Compare with a person.** At the bottom of a finished check, give your own 0 to 5 mark for each area, without looking at GateX's, then save. The two are shown side by side with the gap.
+- **Mark an issue.** Open an issue and choose **Right**, **Wrong** or **Unclear**. Add your name once; it is remembered in your browser.
+
+The **Accuracy** page adds these up against the targets from the Roadmap. Until enough people have marked enough different files, it says "Not enough data yet" instead of passing or failing. Numbers marked **AI stand-in** were made by an AI and are not a human check.
+
 ## Good to know
 
 - The score is a quick, consistent review that guides your work. You decide which issues to fix.

@@ -1,4 +1,4 @@
-import { SCORE_BANDS, bandOf } from '@ddd/shared';
+import { CLOSE_TO_LINE, SCORE_BANDS, SCORE_NOISE, bandOf } from '@ddd/shared';
 import type {
   CloseLook,
   CriticalGate,
@@ -7,6 +7,7 @@ import type {
   Finding,
   Override,
   Scorecard,
+  ScoreRange,
   TwoRuns,
   VerdictSection,
 } from '@ddd/shared';
@@ -150,9 +151,12 @@ export function buildVerdictSection(
     verdict.score = twoRuns.average;
     verdict.decision = bandOf(twoRuns.average);
     reasons.splice(0, 1, ...twoRunsReasons(twoRuns));
-  } else if (closeLook) {
+  }
+  // Near a colour line the score is a span, not a number: the second look's span when it ran, widened to the run-to-run noise.
+  const range = scoreRangeOf(verdict.score, closeLook, twoRuns);
+  if (range && !twoRuns) {
     // Next to the score line, in words; the colour above it is still the score's band and nothing else.
-    reasons.splice(1, 0, ...closeLookReasons(closeLook));
+    reasons.splice(1, 0, ...(closeLook ? closeLookReasons(closeLook, range) : closeToLineReasons(verdict.score, range)));
   }
   if (override) {
     reasons.push(`A person overrode the verdict to ${override.decision.toUpperCase()}: ${override.reason}`);
@@ -166,6 +170,7 @@ export function buildVerdictSection(
     blockingFindings: blocking.map((f) => f.id),
     skipped: verdict.skipped,
     reasons,
+    ...(range ? { scoreRange: range } : {}),
     override,
   };
 }
@@ -174,7 +179,41 @@ const pts = (n: number) => floor1(n).toFixed(1);
 const colourWord = { green: 'green', amber: 'amber', red: 'red' } as const;
 
 /** The plain-words line for a score close to a colour line: what was looked at again and how wide the result is. */
-export function closeLookReasons(c: CloseLook): string[] {
+/** The nearest colour line (75 or 60) to a score. */
+export const nearestLine = (score: number): number => [SCORE_BANDS.accept, SCORE_BANDS.refine].reduce((best, line) => (Math.abs(score - line) < Math.abs(score - best) ? line : best));
+
+const one = (n: number) => Math.round(n * 10) / 10;
+
+/**
+ * The span to read a score near a colour line as. It is the score plus or minus the run-to-run noise (SCORE_NOISE), widened to the span of the second look
+ * (every question still in dispute going the lowest and the highest way) or, for two runs, to the two scores. Undefined when the score is not near a line.
+ * Pure: the same inputs always give the same span, and the colour is never changed by it.
+ */
+export function scoreRangeOf(score: number, closeLook?: CloseLook, twoRuns?: TwoRuns): ScoreRange | undefined {
+  const line = nearestLine(score);
+  if (Math.abs(score - line) > CLOSE_TO_LINE) return undefined;
+  let low = score - SCORE_NOISE;
+  let high = score + SCORE_NOISE;
+  let basis = `the same file has moved by about ${SCORE_NOISE} points from one run to the next`;
+  if (twoRuns) {
+    low = Math.min(...twoRuns.scores);
+    high = Math.max(...twoRuns.scores);
+    basis = 'the two runs of this check';
+  } else if (closeLook && (closeLook.low < low || closeLook.high > high)) {
+    low = Math.min(low, closeLook.low);
+    high = Math.max(high, closeLook.high);
+    basis = 'the questions the examiners still disagree on, taken the lowest and the highest way';
+  }
+  return { low: one(Math.max(0, low)), high: one(Math.min(100, high)), line, basis };
+}
+
+/** The plain-words line for a score close to a line when no second look was made (a quick check, or nothing in dispute). */
+export function closeToLineReasons(score: number, range: ScoreRange): string[] {
+  const side = range.line === SCORE_BANDS.accept ? `green starts at ${range.line}` : `amber starts at ${range.line}`;
+  return [`Close to the line: the score is ${pts(score)} and ${side}, so another run could land on the other side. Read this result as about ${pts(range.low)} to ${pts(range.high)}, not as one exact number (${range.basis}). The colour comes from the score alone.`];
+}
+
+export function closeLookReasons(c: CloseLook, range?: ScoreRange): string[] {
   const side = c.line === SCORE_BANDS.accept ? `green starts at ${c.line}` : `amber starts at ${c.line}`;
   const asked =
     c.questions.length > 0
@@ -184,7 +223,7 @@ export function closeLookReasons(c: CloseLook): string[] {
     c.stillDisputed.length > 0
       ? ` ${c.stillDisputed.length} question${c.stillDisputed.length === 1 ? ' is' : 's are'} still in dispute: if they all went the lowest way the score would be ${pts(c.low)}, the highest way ${pts(c.high)}.`
       : ' No question is still in dispute.';
-  return [`Close to the line: the score is ${pts(c.final)} and ${side}, so another run could land on the other side.${asked}${left} Read this result as about ${pts(c.low)} to ${pts(c.high)}, not as one exact number. The colour comes from the score alone.`];
+  return [`Close to the line: the score is ${pts(c.final)} and ${side}, so another run could land on the other side.${asked}${left} Read this result as about ${pts(range?.low ?? c.low)} to ${pts(range?.high ?? c.high)}, not as one exact number. The colour comes from the score alone.`];
 }
 
 /** The plain-words lines for a two-run result: how the average was reached, and the unstable note when it applies. */

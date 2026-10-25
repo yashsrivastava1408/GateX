@@ -45,6 +45,9 @@ function Sidebar() {
         <NavLink to="/import-scorecard" className="nav-link">
           <Icon name="sheet" /> Convert a scorecard
         </NavLink>
+        <NavLink to="/accuracy" className="nav-link">
+          <Icon name="scale" /> Accuracy
+        </NavLink>
         <NavLink to="/library" className="nav-link">
           <Icon name="check" /> Test library
         </NavLink>

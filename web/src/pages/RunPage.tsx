@@ -15,6 +15,7 @@ import { summaryText } from '../reportSummary';
 import { useDocumentTitle, useResource } from '../hooks';
 import { LINE } from '../copy';
 import { isActive, pendingChip } from '../runStatus';
+import { HumanReview } from '../components/HumanReview';
 import { ReportView } from './report/ReportView';
 
 const isLive = (run: RunDetail) => isActive(run.status);
@@ -159,6 +160,8 @@ export function RunPage() {
       {r.status === 'done' && r.report && (
         <ReportView run={r} />
       )}
+
+      {r.status === 'done' && r.report && <HumanReview run={r} />}
     </>
   );
 }

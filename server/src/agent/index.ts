@@ -9,6 +9,8 @@
  *   buildPathToGreen()    the smallest set of fixes that would change the verdict
  *   preflight()           before running: can enough raters take the prompt? (measures the real prompt)
  *   PROMPT_VERSION        version of the rater and consolidator prompts
+ *   checkScorecardFit()   does the scorecard ask about things this kind of file cannot hold? (a note, never a block)
+ *   analyseStability()    how much the same file's result moves between runs (reads saved reports)
  *
  * Start reading at orchestrator.ts; docs/agent.md walks through it.
  */
@@ -20,3 +22,7 @@ export { preflight, MIN_RATERS } from './preflight.js';
 export type { PreflightResult, RaterLimit } from './preflight.js';
 export { PROMPT_VERSION } from './prompts/rater.js';
 export { evaluateTwice, summariseTwoRuns } from './twoRuns.js';
+export { checkScorecardFit, fitNote } from './fit.js';
+export type { ScorecardFit } from './fit.js';
+export { analyseStability, describeStability } from './stability.js';
+export type { Stability, RunSummary as StabilityRun } from './stability.js';

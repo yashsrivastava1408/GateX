@@ -151,12 +151,23 @@ describe('planted defects must never come out green (false greens are the most e
 });
 
 describe('high-risk findings from the raters', () => {
-  it('keep a perfect-scoring evaluation green but list the high-risk findings to fix', async () => {
+  it('on a question marked 5 in the end are listed, but as Worth a look: the examiners\' own marks say the file meets it, so they do not head the report', async () => {
     const run = await runEvaluation({ workbook: TALENTRA_XLSX, models: mockModels(['mock-alarmist', 'mock-alarmist', 'mock-alarmist']) });
     const report = assembleReport(run.core, null);
     expect(report.verdict.weightedScore).toBeGreaterThan(95);
-    expect(report.findings.some((f) => f.severity === 'HIGH' && f.source === 'raters')).toBe(true);
+    const high = report.findings.filter((f) => f.severity === 'HIGH' && f.source === 'raters');
+    expect(high.length).toBeGreaterThan(0);
+    expect(high.every((f) => f.tier === 'worth_a_look' && /marked 5/.test(f.tierReason ?? ''))).toBe(true);
     expect(report.verdict.decision).toBe('green');
+    expect(report.verdict.blockingFindings).toEqual([]);
+    expect(report.verdict.reasons.join(' ')).not.toMatch(/high-risk finding/);
+  });
+
+  it('on a question marked below 5 stay Confirmed, keep a perfect-looking evaluation green, and are listed to fix', async () => {
+    const run = await runEvaluation({ workbook: TALENTRA_XLSX, models: mockModels(['mock-alarmist-4', 'mock-alarmist-4', 'mock-alarmist-4']) });
+    const report = assembleReport(run.core, null);
+    expect(report.findings.some((f) => f.severity === 'HIGH' && f.source === 'raters' && f.tier === 'confirmed')).toBe(true);
+    expect(report.verdict.decision).toBe(bandOf(report.verdict.weightedScore));
     expect(report.verdict.blockingFindings.length).toBeGreaterThan(0);
     expect(report.pathToGreen.blockingFindingIds).toEqual(report.verdict.blockingFindings);
   });

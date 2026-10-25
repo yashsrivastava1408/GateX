@@ -118,6 +118,8 @@ and how many planted mistakes GateX finds.
 | Cost and time per check | Tokens and timings in `runs.run_log` |
 | How often each family's issues were right | `npm run reliability`, saved to `data/library/reliability.json` |
 | Planted mistakes found | `npm run planted`, shown on the Test library page |
+| Score within 1 point, same colour, false green, false red, same colour when run again, wrong issues, each against the Roadmap's target | The **Accuracy** page (`/accuracy`, `GET /api/accuracy`, `npm run accuracy`): people's marks and ticks kept apart from AI stand-ins, with the sample size and "not enough data" instead of a verdict on a thin sample |
+| Shadow mode: a person scores alongside GateX | "Compare with a person" on every finished check (`POST /api/runs/:id/human-review`), stored in `human_reviews`; the gap per question is shown side by side |
 
 ## Build plan: the components (p.16)
 

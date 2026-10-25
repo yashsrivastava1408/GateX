@@ -19,6 +19,8 @@
     "exact:measure": "tsx scripts/exactMeasure.ts",
     "reliability": "tsx scripts/measureReliability.ts",
     "planted": "tsx scripts/plantedTest.ts",
+    "generosity": "tsx scripts/generosity.ts",
+    "stability": "tsx scripts/stability.ts",
     "replay": "tsx scripts/replay.ts",
     "wrongs": "tsx scripts/wrongs.ts",
     "replay:all": "tsx scripts/replayAll.ts",
@@ -33,6 +35,7 @@
     "verify:eval": "tsx scripts/verifyEval.ts",
     "dump": "tsx scripts/dumpWorkbook.ts",
     "doctor": "tsx scripts/doctor.ts",
+    "accuracy": "tsx scripts/accuracy.ts",
     "tiers:measure": "tsx scripts/tierMeasure.ts"
   },
   "dependencies": {

@@ -4,3 +4,4 @@ export * from './plain.js';
 export * from './tiers.js';
 export * from './cost.js';
 export * from './board.js';
+export * from './accuracy.js';

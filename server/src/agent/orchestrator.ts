@@ -35,9 +35,12 @@ import { loneFindingReason, loneFindingTrusted } from './reliability.js';
 import { capByExactFindings, sweepFindings } from './sweep.js';
 import { applyAnchorFloors } from './anchorFloor.js';
 import { applyExactCeilings, exactCeilingsFor } from './exactScore.js';
+import { applyCriticalProof } from './criticalProof.js';
+import { checkScorecardFit, fitNote } from './fit.js';
+import { aboutAFullMarkQuestion } from './tierSupport.js';
 import { collapseCriteria, expandCriteria, findingsToDimensions, retypeOutsideCriteria } from './aggregate.js';
 import { runRater } from './rater.js';
-import { effectiveDimensions, weightedScore } from './verdict.js';
+import { effectiveDimensions, nearestLine, weightedScore } from './verdict.js';
 import type { CallMeta, DraftFinding, RaterOutcome } from './types.js';
 import { heavyQuestionIds, idsToRepeat, medianOutcome, type RepeatStats } from './repeats.js';
 import { mapWithConcurrency } from '../util/concurrency.js';
@@ -137,6 +140,9 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
   // A question that names no sheets would be sent the whole file; on a big file that is more than any model takes, so code picks its sheets.
   const { scorecard, summary: readsSummary } = withAutoReads(expanded, wb);
   const readsNotes = readsSummary ? [readsSummary] : [];
+  // Before anyone is asked: does this scorecard ask about things this kind of file cannot hold? A note only; nothing is blocked or changed.
+  const fit = checkScorecardFit(scorecard.dimensions, wb);
+  if (fit) readsNotes.push(fitNote(fit));
   const artifactSheets = scorecard.artifact.sheets.map((s) => s.name);
   const contextSheets = scorecard.artifact.context.map((s) => s.name);
   for (const name of [...artifactSheets, ...contextSheets]) {
@@ -414,7 +420,10 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
     // A score below the lowest rung the criterion's own scale describes ("1 prose only" scored 0) is pulled back to that rung first, when the cited cells show it.
     const floored = applyAnchorFloors(working, scorecard.dimensions, wb, outsideIds);
     const exact = applyExactCeilings(floored.results, exactCeilingsFor(scorecard.dimensions, wb));
-    const collapsed = collapseCriteria(retyped.scorecard, exact.results);
+    // A high mark on a must-pass question needs a cell that is quoted, not only named.
+    const proven = applyCriticalProof(exact.results, wb);
+    exact.notes.push(...proven.notes);
+    const collapsed = collapseCriteria(retyped.scorecard, proven.results);
     // The score follows the exact evidence: a question the sweep found mistakes under cannot keep a clean score the examiners gave it.
     const capped = capByExactFindings(collapsed, swept, parentOf);
     return { floored, exact, dimensions: capped.dimensions, capNotes: capped.notes };
@@ -427,7 +436,7 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
   let secondLookCalls = 0;
   if (rated.length > 0) {
     const firstScore = scoreOf(assembled.dimensions);
-    const lineOf = (score: number) => [SCORE_BANDS.accept, SCORE_BANDS.refine].reduce((best, line) => (Math.abs(score - line) < Math.abs(score - best) ? line : best));
+    const lineOf = nearestLine;
     const disputedNow = () => consolidatedDims.filter((d) => d.measuredBy === 'raters' && d.status === 'scored' && (d.spread ?? 0) > 1);
     let looked: string[] = [];
     if (Math.abs(firstScore - lineOf(firstScore)) <= CLOSE_TO_LINE) {
@@ -545,6 +554,7 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
     finalizeFindings(retyped.scorecard, findingsToDimensions(retyped.scorecard, [...findingsFromChecks(scorecard, codeOutcomes), ...swept, ...checked.findings])),
     TIER_RULE,
     (f) => loneFindingTrusted(f, roster.raters, args.reliability),
+    (f) => aboutAFullMarkQuestion(f, dimensions),
   );
 
   /* 6. Freeze check: the file must be exactly what we hashed at the start. */

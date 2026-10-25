@@ -1,5 +1,9 @@
 import type {
+  AccuracyReport,
   ConfigResponse,
+  FeedbackLabel,
+  FindingFeedback,
+  HumanReview,
   LibraryCaseDetail,
   LibraryCaseSummary,
   PlantedResult,
@@ -100,6 +104,13 @@ export const api = {
   libraryCase: (id: string) => request<LibraryCaseDetail>(`/api/library/${id}`),
   projects: () => request<ProjectSummary[]>('/api/projects'),
   board: () => request<Board>('/api/board'),
+  accuracy: () => request<AccuracyReport>('/api/accuracy'),
+  humanReviews: (runId: string) => request<HumanReview[]>(`/api/runs/${runId}/human-review`),
+  addHumanReview: (runId: string, body: { reviewer: string; scores: Record<string, number>; verdict?: 'green' | 'amber' | 'red' | null; note?: string }) =>
+    request<HumanReview>(`/api/runs/${runId}/human-review`, json(body)),
+  feedback: (runId: string) => request<FindingFeedback[]>(`/api/runs/${runId}/feedback`),
+  addFeedback: (runId: string, findingId: string, body: { label: FeedbackLabel; who: string; note?: string }) =>
+    request<FindingFeedback[]>(`/api/runs/${runId}/findings/${encodeURIComponent(findingId)}/feedback`, json(body)),
   project: (id: string) => request<ProjectHistory>(`/api/projects/${id}`),
   run: (id: string) => request<RunDetail>(`/api/runs/${id}`),
 

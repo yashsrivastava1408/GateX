@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { issueNumbers, severityLabel, type Finding, type Severity } from '@ddd/shared';
 import { CellChip, SeverityChip } from '../../components/Chip';
+import { FindingFeedback } from '../../components/FindingFeedback';
 import { Icon } from '../../components/Icons';
 import { EmptyState } from '../../components/Layout';
 import { plural } from '../../copy';
@@ -79,6 +80,7 @@ export function FindingsList({ findings, issues, names = {}, secondary = false }
                   <span>About <strong>{names[f.dimensionId] ?? 'this area'}</strong></span>
                                     <span>{f.source === 'code' ? 'Found by the computer' : `Raised by ${g.reportedBy.join(', ')}`}{f.tierReason ? ` · ${f.tierReason}` : ''}</span>
                 </div>
+                <FindingFeedback findingId={f.id} />
                 {g.also.length > 0 && (
                   <div className="finding-also">
                     <span className="finding-fix-label">Also noted</span>

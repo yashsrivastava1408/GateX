@@ -30,6 +30,8 @@
     "exact:measure": "npm run exact:measure -w server --",
     "reliability": "npm run reliability -w server --",
     "planted": "npm run planted -w server --",
+    "generosity": "npm run generosity -w server --",
+    "stability": "npm run stability -w server --",
     "replay": "npm run replay -w server --",
     "wrongs": "npm run wrongs -w server --",
     "replay:all": "npm run replay:all -w server --",
@@ -46,6 +48,7 @@
     "verify:eval": "npm run verify:eval -w server --",
     "dump": "npm run dump -w server --",
     "doctor": "npm run doctor -w server --",
+    "accuracy": "npm run accuracy -w server --",
     "smoke": "node scripts/smokeTest.mjs"
   }
 }

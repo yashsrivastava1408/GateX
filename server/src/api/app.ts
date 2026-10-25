@@ -16,6 +16,7 @@ import { listLibrary, listPlanted, loadReliability, measureReliability, readLibr
 import { buildScorecardTemplate } from '../scorecard/template.js';
 import { SCORECARD_TYPES } from '../scorecard/resolve.js';
 import { UserError } from '../util/errors.js';
+import { registerHumanRoutes } from './humanRoutes.js';
 import type { EvaluationService } from './service.js';
 
 export interface AppDeps {
@@ -77,6 +78,8 @@ export function createApp(deps: AppDeps): express.Express {
   app.get('/api/library/:id', async (req, res) => {
     res.json(await readLibraryCase(config.dataDir, req.params.id));
   });
+
+  registerHumanRoutes(app, { store, config });
 
   // The status board (PDF p.18): five steps, four boxes each, read from the saved runs.
   app.get('/api/board', async (_req, res) => {

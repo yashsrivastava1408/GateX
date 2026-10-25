@@ -23,6 +23,7 @@ import { assembleReport } from '../report/assemble.js';
 import type { EvaluationOutput } from '../agent/index.js';
 import { UserError } from '../util/errors.js';
 import type { Db } from './pool.js';
+import { HumanStore } from './humanStore.js';
 
 const iso = (value: unknown): string => (value instanceof Date ? value.toISOString() : String(value));
 const isoOrNull = (value: unknown): string | null => (value === null || value === undefined ? null : iso(value));
@@ -135,6 +136,11 @@ export interface DeletedRun {
 
 export class Store {
   constructor(private readonly db: Db) {}
+
+  /** A person's own marks and their verdicts on issues (shadow mode, accuracy). */
+  get human(): HumanStore {
+    return new HumanStore(this.db);
+  }
 
   /* ------------------------------ runs ------------------------------ */
 
@@ -315,7 +321,7 @@ export class Store {
       );
       for (const { runId } of runs) {
         // human_evidence only holds rows from older versions, which let a person add scores by hand.
-        for (const table of ['model_calls', 'dimension_scores', 'findings', 'human_evidence', 'overrides']) {
+        for (const table of ['model_calls', 'dimension_scores', 'findings', 'human_evidence', 'overrides', 'human_reviews', 'finding_feedback']) {
           await tx.query(`delete from ${table} where run_id = $1`, [runId]);
         }
         await tx.query('delete from runs where id = $1', [runId]);

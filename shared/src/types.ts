@@ -302,6 +302,8 @@ export interface VerdictSection {
   /** Ids of questions left out of the score because the examiners found nothing in the file to measure them. */
   skipped: string[];
   reasons: string[];
+  /** Present only when the score is within CLOSE_TO_LINE points of a colour line: read the result as this span, not as one exact number. */
+  scoreRange?: ScoreRange;
   override: Override | null;
 }
 
@@ -355,7 +357,24 @@ export interface TwoRuns {
 export const UNSTABLE_GAP = 8;
 
 /** A score within this many points of a colour line (60 or 75) is "close to the line": another run could land on the other side. */
-export const CLOSE_TO_LINE = 4;
+export const CLOSE_TO_LINE = 5;
+
+/**
+ * How far the same file's score moves from one run to the next on the current build, in points (one standard deviation).
+ * Measured on saved Step 2 runs of the 1.8 prompts: the four runs before the final mark was set by code spread 3.0 (data/final-check/DRIFT.md, data/noise/simulate.ts),
+ * and the same four re-marked by the median rule spread 2.1; the two live runs of the median build differed by 1.0. The range shown near a line is the score plus or minus this.
+ */
+export const SCORE_NOISE = 2.2;
+
+/** The span a score near a colour line should be read as, instead of one exact number (see CLOSE_TO_LINE, SCORE_NOISE). The colour still comes from the score alone. */
+export interface ScoreRange {
+  low: number;
+  high: number;
+  /** The colour line it is close to: 75 (green starts) or 60 (amber starts). */
+  line: number;
+  /** What the span rests on, in plain words. */
+  basis: string;
+}
 
 /** What the second look near a colour line found (see CLOSE_TO_LINE). */
 export interface CloseLook {

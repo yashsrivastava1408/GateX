@@ -6,6 +6,7 @@ import { ImportScorecardPage } from './pages/ImportScorecardPage';
 import { ModelsPage } from './pages/ModelsPage';
 import { NewEvaluationPage } from './pages/NewEvaluationPage';
 import { ProjectPage } from './pages/ProjectPage';
+import { AccuracyPage } from './pages/AccuracyPage';
 import { BoardPage } from './pages/BoardPage';
 import { ProjectsPage } from './pages/ProjectsPage';
 import { RunPage } from './pages/RunPage';
@@ -26,6 +27,7 @@ export function App() {
       <Route element={<Layout />}>
         <Route path="projects" element={<ProjectsPage />} />
         <Route path="board" element={<BoardPage />} />
+        <Route path="accuracy" element={<AccuracyPage />} />
         <Route path="new" element={<NewEvaluationPage />} />
         <Route path="import-scorecard" element={<ImportScorecardPage />} />
         <Route path="library" element={<LibraryPage />} />
