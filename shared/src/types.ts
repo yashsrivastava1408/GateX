@@ -12,8 +12,10 @@ export type Gate = 'D1' | 'D3';
 export type ReturnTo = 'Discover' | 'Define' | 'Generate' | 'Analyse' | 'Validate' | 'Refine';
 export type Confidence = 'steady' | 'shaky' | 'single';
 export type DimensionStatus = 'scored' | 'unscored' | 'not_measurable';
-export type RunStatus = 'queued' | 'running' | 'done' | 'failed';
+/** waiting: saved, behind another check in the line. queued: taken off the line, starting now. cancelled: taken off the line by a person before it started. */
+export type RunStatus = 'waiting' | 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
 export type RunStage =
+  | 'waiting'
   | 'queued'
   | 'reading'
   | 'checks'
@@ -21,7 +23,8 @@ export type RunStage =
   | 'consolidating'
   | 'reporting'
   | 'done'
-  | 'failed';
+  | 'failed'
+  | 'cancelled';
 export type Resolution =
   | 'agreement'
   | 'claims_checked'
@@ -478,6 +481,8 @@ export interface RunSummary {
   finalDecision: Decision | null;
   createdAt: string;
   finishedAt: string | null;
+  /** Place in the waiting line (1 = starts next). Null unless the run is waiting. */
+  queuePosition: number | null;
 }
 
 export interface RunDetail extends RunSummary {

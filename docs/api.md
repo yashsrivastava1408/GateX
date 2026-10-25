@@ -14,7 +14,7 @@ The exact response types are in [`shared/src/types.ts`](../shared/src/types.ts) 
 - `400` the submission or request is wrong (the message says what to fix) · `404` no such run, project or endpoint ·
   `409` the roster is not ready, or the run has no finished report yet · `500` an unexpected server error (see the server log).
 - Timestamps are ISO 8601 UTC. Scores are numbers; the weighted score is 0-100 and rounded **down** to one decimal.
-- Runs are **asynchronous**: submit, then poll the run until `status` is `done` or `failed`.
+- Runs are **asynchronous**: submit, then poll the run until `status` is `done`, `failed` or `cancelled`. `status` is `waiting` (saved, in the [waiting line](#the-waiting-line)), `queued` (taken off the line, starting), `running`, `done`, `failed` or `cancelled`.
 
 ## Endpoints
 
@@ -29,7 +29,8 @@ The exact response types are in [`shared/src/types.ts`](../shared/src/types.ts) 
 | `POST /api/scorecards/check` | Re-check a hand-edited scorecard (YAML) and return it frozen |
 | `GET /api/scorecard-template.xlsx` | Download a starter Excel scorecard |
 | `DELETE /api/projects/:id` | Delete a project with all its runs, scores, findings and saved files (`204`; `409` while a run is in progress) |
-| `DELETE /api/runs/:id` | Delete one run and its saved files; its project goes too when it was the last run (`204`; `409` while it is in progress) |
+| `DELETE /api/runs/:id` | Delete one run and its saved files; its project goes too when it was the last run (`204`; `409` while it is waiting or running; cancel a waiting one first) |
+| `POST /api/runs/:id/cancel` | Take a **waiting** run out of the [line](#the-waiting-line) (`200` with the run, now `cancelled`; `409` once it has started or finished) |
 | `GET /api/runs/:id` | One run: progress while running, the full report when done |
 | `POST /api/runs/:id/override` | Optional: record a different verdict with a reason (nothing waits for it) |
 | `GET /api/library` | The test library: each real file pair with its runs and the share of checked issues that are useful |
@@ -87,7 +88,7 @@ have · the roster is not ready (`409`).
 
 ### `GET /api/runs/:id`
 
-Poll this. While running, `stage` is one of `queued`, `reading`, `checks`, `rating`, `consolidating`,
+Poll this. While `status` is `waiting`, `stage` is `waiting` and `queuePosition` is the place in line (1 = starts next); it is `null` otherwise. While running, `stage` is one of `queued`, `reading`, `checks`, `rating`, `consolidating`,
 `reporting` and `progress.participants` shows each model's status. When `status` is `done`, `report` holds the
 eight sections; when `failed`, `error` says why.
 
@@ -117,6 +118,18 @@ is `{ confirmed, worthALook }`. `verdict.blockingFindings`, the "Needs attention
 
 Downloads a starter scorecard in the Excel layout. It is valid as it stands: one dimension counted by code and two scored by the
 examiners. Edit the sheet names, columns, weights and anchors to fit your own workbook.
+
+### The waiting line
+
+Only **one** evaluation runs at a time (the setting `MAX_CONCURRENT_RUNS`, default `1`; see [operations](operations.md#one-check-at-a-time)). `POST /api/runs` still answers `202` straight away and saves the files, but when another run is going the new run is saved with `status: "waiting"` and starts by itself, first come first served, when the one before it finishes, fails or is cancelled. The answer says which happened:
+
+```json
+{ "runId": "9d2f...", "projectId": "7c1e...", "iteration": 4, "status": "waiting", "queuePosition": 2 }
+```
+
+`status` is `queued` or `running` with `queuePosition: null` when it started at once. `queuePosition` is also on every run in `GET /api/runs/:id`, `GET /api/projects` (`latest`) and `GET /api/projects/:id` (`runs`). Everything else (reading runs and reports, uploading, importing scorecards) stays free while a run is going. Run twice and Quick check wait in the same line, and the second look at each issue and the close-look pass happen inside the one run, so they never take a second place.
+
+`POST /api/runs/:id/cancel` removes a waiting run from the line (it ends as `cancelled`, `error`: "Cancelled before it started.", uploads kept until the run is deleted). Asking again is harmless. A run that has already started cannot be stopped: the answer is `409` ("This check has already started and cannot be stopped. It finishes by itself."). After a server restart, a run that was mid-way is marked `failed`; runs that were waiting keep their place and continue by themselves.
 
 ### `POST /api/runs/:id/override`
 

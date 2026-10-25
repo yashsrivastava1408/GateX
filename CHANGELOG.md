@@ -4,6 +4,15 @@ All notable changes to GateX (earlier entries call it the DDD Evaluator). Format
 
 ## [Unreleased]
 
+### Added: one check at a time, with a waiting line (25 Oct 2026)
+The hosted app has one shared login, one model token and a small server, and nothing stopped two evaluations running together.
+- **Only one evaluation runs at a time** (`MAX_CONCURRENT_RUNS`, default `1`; `0` or `off` turns it off, a bigger number allows that many). A run submitted while another is going is saved as `waiting` with its uploads, shows **Waiting (n in line)** with a plain-words note, and starts by itself, first come first served, when the running one finishes, fails or crashes. Quick check and Run twice wait in the same line; the second look and close-look pass stay inside the one run. Viewing, downloading and uploading stay free.
+- **Cancel a waiting run** (`POST /api/runs/:id/cancel`, new `cancelled` status; a "Cancel this check" button on the run page). A run that has already started cannot be stopped (`409`, in plain words): the model calls it has sent cannot be recalled.
+- **Restart.** A mid-way run is still marked failed; waiting runs keep their place and carry on at start-up. A failed or crashed run always frees its place.
+- API: `POST /api/runs` now answers with `status` and `queuePosition`; `queuePosition` is on every run summary. Migration `004_waiting_line.sql` (`runs.queue_no`, `runs.run_options`). Deleting a waiting run is refused until it is cancelled.
+- Dashboard: lists and the run page show **Waiting (n in line)** or **Running** and refresh by themselves; wording lives in `web/src/copy.ts`.
+- Tests: `server/tests/waitingLine.test.ts` (scripted models: order, one live at a time, failure and save-error advance the line, cancel, restart, off/2-at-a-time, burst of simultaneous submits) and `web/src/runStatus.test.ts`.
+
 ### Changed: livelier landing page (25 Oct 2026)
 - The landing page headline reveals word by word, the hero drifts softly with the pointer over a fine grain, a slow strip shows what GateX looks at, the step arrows draw themselves, cards get a glowing edge on hover, the main buttons lean toward the pointer, the nav blurs with a scroll bar, and a new "Confirmed / Worth a look" panel shows the two issue lists. No new libraries; reduced motion shows the finished page; code text now uses the one page font.
 

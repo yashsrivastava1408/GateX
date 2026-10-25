@@ -154,6 +154,12 @@ export function createApp(deps: AppDeps): express.Express {
     res.json(await store.getRunDetail(req.params.id));
   });
 
+  // Takes a run out of the waiting line. A run that has already started cannot be stopped (409).
+  app.post('/api/runs/:id/cancel', async (req, res) => {
+    await service.cancelRun(req.params.id);
+    res.json(await store.getRunDetail(req.params.id));
+  });
+
   app.post('/api/runs/:id/override', async (req, res) => {
     await store.addOverride(req.params.id, overrideBody.parse(req.body));
     await service.snapshot(req.params.id);

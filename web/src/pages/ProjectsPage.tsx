@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import type { ProjectSummary } from '@ddd/shared';
 import { api } from '../api';
 import { Chip, DecisionChip } from '../components/Chip';
+import { isActive, pendingChip } from '../runStatus';
 import { ConfirmDelete } from '../components/ConfirmDelete';
 import { Icon } from '../components/Icons';
 import { useToast } from '../components/Toast';
@@ -23,8 +24,8 @@ function Stat({ label, value, hint }: { label: string; value: number | string; h
 function LatestChip({ project }: { project: ProjectSummary }) {
   const latest = project.latest;
   if (!latest) return <span className="faint">—</span>;
-  if (latest.status === 'failed') return <Chip tone="red">Failed</Chip>;
-  if (latest.status !== 'done') return <Chip tone="accent">In progress</Chip>;
+  const pending = pendingChip(latest);
+  if (pending) return <Chip tone={pending.tone}>{pending.label}</Chip>;
   return <DecisionChip decision={latest.finalDecision} size="sm" />;
 }
 
@@ -52,7 +53,7 @@ export function ProjectsPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const [removing, setRemoving] = useState<ProjectSummary | null>(null);
-  const projects = useResource(api.projects, [], (list) => (list.some((p) => p.latest && p.latest.status !== 'done' && p.latest.status !== 'failed') ? 2000 : null));
+  const projects = useResource(api.projects, [], (list) => (list.some((p) => p.latest && isActive(p.latest.status)) ? 2000 : null));
   const list = projects.data ?? [];
 
   const evaluations = list.reduce((sum, p) => sum + p.runCount, 0);

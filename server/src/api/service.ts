@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, rm, rmdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { ParticipantProgress, RunProgress } from '@ddd/shared';
+import type { ParticipantProgress, RunProgress, RunStatus } from '@ddd/shared';
 import type { AppConfig } from '../config.js';
-import type { DeletedRun, Store } from '../db/store.js';
+import type { DeletedRun, RunJob, Store } from '../db/store.js';
 import { evaluate, evaluateTwice, preflight, type ProgressEvent } from '../agent/index.js';
 import { serializeSheets } from '../excel/serialize.js';
 import { resolvePageRanges } from '../excel/pageRanges.js';
@@ -49,6 +49,10 @@ const safeName = (name: string) => path.basename(name).replace(/[^\w.\- ]+/g, '_
  */
 export class EvaluationService {
   private readonly running = new Set<Promise<void>>();
+  /** Filling free places from the waiting line happens one call at a time, so two triggers never take the same run or an extra place. */
+  private fillChain: Promise<void> = Promise.resolve();
+  /** Saving a run and giving it its place in line happens one submission at a time, so the line is strictly first come, first served. */
+  private saveChain: Promise<unknown> = Promise.resolve();
   readonly scorecards: ScorecardResolver;
 
   constructor(private readonly deps: ServiceDeps) {
@@ -69,7 +73,12 @@ export class EvaluationService {
     return checkScorecardYaml(yamlText);
   }
 
-  async submit(input: SubmitInput): Promise<{ runId: string; projectId: string; iteration: number }> {
+  /** How many evaluations may run at once (1 unless MAX_CONCURRENT_RUNS says otherwise); 0 means no limit. */
+  get limit(): number {
+    return this.deps.config.maxConcurrentRuns ?? 1;
+  }
+
+  async submit(input: SubmitInput): Promise<{ runId: string; projectId: string; iteration: number; status: RunStatus; queuePosition: number | null }> {
     const instructions = (input.instructions ?? '').trim();
     if (instructions.length > MAX_INSTRUCTIONS) {
       throw new UserError(`The extra instructions are ${instructions.length} characters; the limit is ${MAX_INSTRUCTIONS}. Shorten them.`);
@@ -139,23 +148,70 @@ export class EvaluationService {
       ),
     };
 
-    const created = await this.deps.store.createRun(
-      {
-        projectName, step: parsed.step, gate: parsed.gate, scorecard: parsed, scorecardHash: hash, sources: input.sources, instructions,
-        artifactName: name, artifactHash: sha256(input.workbook.buffer), artifactPath: workbookPath, progress,
-      },
-      runId,
+    const save = this.saveChain.then(() =>
+      this.deps.store.createRun(
+        {
+          projectName, step: parsed.step, gate: parsed.gate, scorecard: parsed, scorecardHash: hash, sources: input.sources, instructions,
+          artifactName: name, artifactHash: sha256(input.workbook.buffer), artifactPath: workbookPath, progress,
+          options: { quick: Boolean(input.quick), runTwice: Boolean(input.runTwice), scorecardNotes },
+        },
+        runId,
+      ),
     );
+    this.saveChain = save.catch(() => undefined);
+    const created = await save;
     // Only a converted scorecard is pinned: one in the app's own format is the same scorecard whenever the same file is sent.
     if (!pin && resolved?.conversion) {
       await this.deps.store.addPin(created.projectId, sourceHash, { sourceName: input.scorecard.name, scorecardHash: hash, scorecard: parsed, iteration: created.iteration });
     }
 
-    const job = this.execute(created.runId, projectName, created.iteration, workbookPath, name, input.sources, instructions, parsed, hash, progress, scorecardNotes, Boolean(input.quick), Boolean(input.runTwice))
-      .catch((error) => this.deps.log?.(`run ${runId} crashed: ${errorMessage(error)}`))
-      .finally(() => this.running.delete(job));
-    this.running.add(job);
-    return created;
+    // The run is saved as "waiting"; it starts now if there is a free place, else it keeps its place in the line.
+    await this.fill();
+    const detail = await this.deps.store.getRunDetail(created.runId);
+    return { ...created, status: detail.status, queuePosition: detail.queuePosition };
+  }
+
+  /**
+   * Starts waiting runs, oldest first, while there is a free place. Called after every submit, whenever a run ends
+   * (finished, failed or crashed) and when the server starts, so the line cannot stall.
+   */
+  fill(): Promise<void> {
+    this.fillChain = this.fillChain
+      .then(async () => {
+        while (this.limit === 0 || this.running.size < this.limit) {
+          const job = await this.deps.store.claimNext();
+          if (!job) break;
+          this.start(job);
+        }
+      })
+      .catch((error) => this.deps.log?.(`could not start the next waiting check: ${errorMessage(error)}`));
+    return this.fillChain;
+  }
+
+  /** After a restart: carries on with the runs that were waiting. Runs that were mid-way were already marked failed. */
+  async resume(): Promise<number> {
+    const waiting = (await this.deps.store.waitingIds()).length;
+    await this.fill();
+    return waiting;
+  }
+
+  /** Takes a waiting run out of the line. A run that has already started cannot be stopped (it needs a way to stop the model calls it has sent). */
+  async cancelRun(runId: string): Promise<void> {
+    await this.deps.store.cancelWaiting(runId);
+  }
+
+  private start(job: RunJob): void {
+    const task = this.execute(job)
+      .catch(async (error) => {
+        this.deps.log?.(`run ${job.runId} crashed: ${errorMessage(error)}`);
+        // Whatever went wrong, the run must not stay "running" for ever, or its place could never be freed.
+        await this.deps.store.failRun(job.runId, errorMessage(error)).catch(() => undefined);
+      })
+      .finally(() => {
+        this.running.delete(task);
+        void this.fill();
+      });
+    this.running.add(task);
   }
 
   /** Saves a copy of the run's report as files. A failure here is logged and never loses the result held in the database. */
@@ -193,24 +249,19 @@ export class EvaluationService {
 
   /** Resolves when every started evaluation has finished (used by tests and graceful shutdown). */
   async idle(): Promise<void> {
-    while (this.running.size > 0) await Promise.allSettled([...this.running]);
+    for (;;) {
+      await this.fillChain;
+      if (this.running.size === 0) return;
+      await Promise.allSettled([...this.running]);
+    }
   }
 
-  private async execute(
-    runId: string,
-    projectName: string,
-    iteration: number,
-    workbookPath: string,
-    artifactName: string,
-    sources: string,
-    instructions: string,
-    scorecard: Parameters<typeof evaluate>[0]['scorecard'],
-    scorecardHash: string,
-    progress: RunProgress,
-    scorecardNotes: string[],
-    quick = false,
-    runTwice = false,
-  ): Promise<void> {
+  private async execute(job: RunJob): Promise<void> {
+    const { runId, projectName, iteration, artifactName, sources, instructions, scorecard, scorecardHash, progress } = job;
+    const workbookPath = job.artifactPath;
+    const scorecardNotes = job.options.scorecardNotes;
+    const quick = job.options.quick;
+    const runTwice = job.options.runTwice;
     const { store, config, providers, env } = this.deps;
     // Progress writes are queued so they reach the database in the order they happened.
     let chain: Promise<unknown> = Promise.resolve();

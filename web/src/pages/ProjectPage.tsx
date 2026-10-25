@@ -8,13 +8,14 @@ import { Icon } from '../components/Icons';
 import { Card, ErrorBanner, Loading, PageHeader } from '../components/Layout';
 import { formatDate, formatScore } from '../format';
 import { useDocumentTitle, useResource } from '../hooks';
+import { isActive, pendingChip } from '../runStatus';
 
 export function ProjectPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
   const [removing, setRemoving] = useState<{ kind: 'project' } | { kind: 'run'; id: string } | null>(null);
-  const history = useResource(() => api.project(id), [id], (h) => (h.runs.some((r) => r.status === 'queued' || r.status === 'running') ? 2000 : null));
+  const history = useResource(() => api.project(id), [id], (h) => (h.runs.some((r) => isActive(r.status)) ? 2000 : null));
   const h = history.data;
   useDocumentTitle(h?.project.name ?? 'Project');
 
@@ -79,11 +80,11 @@ export function ProjectPage() {
                   <td><Link to={`/runs/${r.id}`} className="row-title" onClick={(e) => e.stopPropagation()}>{formatDate(r.createdAt)}</Link></td>
                   <td className="mono faint truncate">{r.artifactName}</td>
                   <td>
-                    {r.status === 'failed' ? <Chip tone="red">Failed</Chip> : r.status !== 'done' ? <Chip tone="accent">In progress</Chip> : <DecisionChip decision={r.finalDecision} size="sm" />}
+                    {pendingChip(r) ? <Chip tone={pendingChip(r)!.tone}>{pendingChip(r)!.label}</Chip> : <DecisionChip decision={r.finalDecision} size="sm" />}
                   </td>
                   <td className="num mono">{formatScore(r.weightedScore)}</td>
                   <td className="num">
-                    {r.status !== 'queued' && r.status !== 'running' && (
+                    {!isActive(r.status) && (
                       <button type="button" className="btn btn-ghost btn-sm row-delete" aria-label="Delete this report" onClick={(e) => { e.stopPropagation(); setRemoving({ kind: 'run', id: r.id }); }}>
                         <Icon name="trash" size={14} />
                       </button>

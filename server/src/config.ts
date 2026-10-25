@@ -87,7 +87,22 @@ export interface AppConfig {
   databaseUrl: string | undefined;
   mock: boolean;
   mockDelayMs: number;
+  /**
+   * How many evaluations may run at the same time; the rest wait in line (first come, first served). Default 1.
+   * 0 turns the line off (every run starts at once). Left out in code that builds a config by hand: the same as 1.
+   */
+  maxConcurrentRuns?: number;
   models: ModelsConfig;
+}
+
+/** MAX_CONCURRENT_RUNS: unset = 1; "0", "off", "false" or "no" = no limit; a whole number = that many at once. */
+export function parseMaxConcurrentRuns(value: string | undefined): number {
+  const text = (value ?? '').trim().toLowerCase();
+  if (text === '') return 1;
+  if (['off', 'false', 'no', 'none', 'unlimited'].includes(text)) return 0;
+  const n = Number(text);
+  if (!Number.isInteger(n) || n < 0 || n > 64) throw new Error(`MAX_CONCURRENT_RUNS must be a whole number from 0 to 64, or "off". It is "${value}".`);
+  return n;
 }
 
 const serverDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -131,6 +146,7 @@ export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     databaseUrl,
     mock,
     mockDelayMs: Number(env.MOCK_DELAY_MS ?? 700),
+    maxConcurrentRuns: parseMaxConcurrentRuns(env.MAX_CONCURRENT_RUNS),
     models: loadModelsConfig(modelsFile),
   };
 }

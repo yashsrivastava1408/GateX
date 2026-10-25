@@ -415,6 +415,7 @@ describe('history across iterations', () => {
     const created = await h.store.createRun({
       projectName: 'Orphan', gate: 'D1', scorecard: (await import('../src/scorecard/parse.js')).parseScorecard(CLEAN_SCORECARD_YAML).scorecard,
       scorecardHash: 'h', sources: '', instructions: '', artifactName: 'a.xlsx', artifactHash: 'h', artifactPath: '/x', progress: { participants: [] },
+      options: { quick: false, runTwice: false, scorecardNotes: [] },
     });
     await h.store.setStage(created.runId, 'rating');
     expect(await h.store.failInterrupted()).toBeGreaterThanOrEqual(1);

@@ -33,6 +33,8 @@ words go to all three Examiners and are saved with the report.
 
 You can watch each step as it runs.
 
+**One check runs at a time.** If someone else's check is running, yours is saved and shows **Waiting (n in line)**, with your place. It starts by itself when the ones ahead of it finish, so you do not have to stay on the page. Your files are kept. You can still open reports, download them and add more files while you wait. To change your mind, open the waiting check and choose **Cancel this check**. A check that has already started cannot be stopped.
+
 ## 3. Read the report
 
 - **The colour comes from the score alone.** Below 60 is **red**, 60 to 74 is **amber**, and 75 or more is **green**. The same rule is used
@@ -77,6 +79,8 @@ issues were fixed, which are still open and which are new. Keep going until the 
 - A scorecard is converted once and then reused, so every round of a project is marked against the same scorecard.
 
 ## Helpful messages
+
+- *"Another check is running. Yours is next and starts by itself when it finishes."*: nothing is wrong. Yours is waiting its turn.
 
 - *"The file to check and the scorecard are the same file"*: the same file went into both boxes. Add two different files.
 - *"The scorecard names a sheet that this workbook does not have"*: compare the sheet names in your file with the scorecard.

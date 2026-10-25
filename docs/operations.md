@@ -15,9 +15,10 @@ How to install, set up, run and look after GateX. For what it does, see [agent.m
 9. [Upgrading](#upgrading)
 10. [Putting it on a server](#putting-it-on-a-server)
 11. [Check the set-up](#check-the-set-up-npm-run-doctor)
-12. [When a run fails half-way](#when-a-run-fails-half-way)
-13. [Old logs and scripts](#old-logs-and-scripts)
-14. [Setup messages](#setup-messages)
+12. [One check at a time](#one-check-at-a-time)
+13. [When a run fails half-way](#when-a-run-fails-half-way)
+14. [Old logs and scripts](#old-logs-and-scripts)
+15. [Setup messages](#setup-messages)
 
 ## Prerequisites
 
@@ -62,6 +63,7 @@ variable always wins over the file, so CI and containers can override it.
 | `DATA_DIR` | `./data` (project root) | Where uploaded files are kept (`data/uploads/<run id>/`) |
 | `MODELS_CONFIG` | `server/config/models.json` | Use a different roster file |
 | `VERIFY_FINDINGS` | on | `0` = skip the second look at every issue (also `settings.verifyFindings` in the models file; a Quick check skips it too) |
+| `MAX_CONCURRENT_RUNS` | `1` | How many evaluations run at the same time; the others wait in line. `0` or `off` turns the line off. See [One check at a time](#one-check-at-a-time) |
 | `MOCK_LLM` | unset | `1` = scripted models from `models.mock.json`, no API calls |
 | `MOCK_DELAY_MS` | `700` | Pause per mock call so live progress is visible |
 | `DB_MODE` | derived | `memory` forces the in-memory database even if `DATABASE_URL` is set |
@@ -241,6 +243,19 @@ Says in plain words whether this machine is ready: Node version, whether `.env` 
 models file reads and has a key for every provider it uses, whether the database answers (when `DATABASE_URL` is set), and whether `data/` is writable.
 On a server running in Docker, use `docker compose exec app npm run doctor` (the settings reach the container as environment variables, so the `.env` line may say it is not a file; that is fine).
 Each line starts with `OK`, `CHECK` (worth a look) or `NEEDS FIX` (with the next step). It exits non-zero only when something needs fixing, and it makes no model call.
+
+## One check at a time
+
+One shared login, one Bedrock token and a small server cannot take two evaluations at once, so GateX runs **one** and lines the rest up. This is on by default (`MAX_CONCURRENT_RUNS=1`).
+
+- **What a person sees.** Submitting while another check runs does not start it. The files are saved and the run shows **Waiting (n in line)** with "Another check is running. Yours is next and starts by itself when it finishes." The run page and the lists update by themselves. Viewing, downloading and uploading stay free.
+- **Order.** First come, first served. When the running check finishes, **fails** or crashes, the next waiting one starts by itself. A waiting run can be cancelled from its page (`POST /api/runs/:id/cancel`). A run that has already started cannot be stopped, because the model calls it has sent cannot be recalled; it finishes (or fails) by itself.
+- **Quick check and Run twice** wait in the same line. The second look at each issue and the close-look pass are part of the one run.
+- **Restart.** A run that was mid-way when the server stopped is marked failed ("The server stopped before this evaluation finished") as before. Runs that were only waiting keep their uploads and place, and the line carries on at start-up (the log says "waiting check(s) ... carry on in line"). Waiting runs live in the database (`runs.status = 'waiting'`, with `queue_no` and `run_options`, migration `004_waiting_line.sql`), so use Postgres if the line must survive a restart; the in-memory database forgets everything.
+- **A crash cannot block the line.** The place is freed in every case (finished, failed, an error while saving the result), and the next run is started from there. If a database error stops the next run from starting, it is retried at the next submit or restart.
+- **Turn it off or change it.** `MAX_CONCURRENT_RUNS=0` (or `off`) lets every run start at once, as before; `2` lets two run together. A bad value stops the server at start with a message.
+- **One server only.** The line is kept by the server process. Two server processes on the same database would each run one check.
+- Time shown on a run's page counts from when it was submitted, so a run that waited shows the wait too.
 
 ## When a run fails half-way
 

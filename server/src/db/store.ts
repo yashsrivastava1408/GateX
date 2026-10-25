@@ -58,7 +58,7 @@ const RUN_COLUMNS = `r.id, r.project_id, p.name as project_name, r.iteration, r.
   r.artifact_name, r.artifact_path, r.weighted_score, r.agent_decision, r.final_decision, r.created_at, r.finished_at,
   r.progress, r.error, r.core, r.run_log, r.scorecard`;
 
-function toSummary(row: RunRow): RunSummary {
+function toSummary(row: RunRow, positions: Map<string, number> = new Map()): RunSummary {
   return {
     id: row.id,
     projectId: row.project_id,
@@ -74,6 +74,7 @@ function toSummary(row: RunRow): RunSummary {
     finalDecision: row.final_decision,
     createdAt: iso(row.created_at),
     finishedAt: isoOrNull(row.finished_at),
+    queuePosition: row.status === 'waiting' ? (positions.get(row.id) ?? null) : null,
   };
 }
 
@@ -89,6 +90,29 @@ export interface NewRun {
   artifactHash: string;
   artifactPath: string;
   progress: RunProgress;
+  options: RunOptions;
+}
+
+/** What was chosen at submit that the run needs later, when it leaves the waiting line. */
+export interface RunOptions {
+  quick: boolean;
+  runTwice: boolean;
+  scorecardNotes: string[];
+}
+
+/** Everything needed to start a saved run. */
+export interface RunJob {
+  runId: string;
+  projectName: string;
+  iteration: number;
+  artifactPath: string;
+  artifactName: string;
+  sources: string;
+  instructions: string;
+  scorecard: Scorecard;
+  scorecardHash: string;
+  progress: RunProgress;
+  options: RunOptions;
 }
 
 /** The scorecard a project is marked against for one uploaded scorecard file. */
@@ -123,17 +147,93 @@ export class Store {
       }
       const [last] = await tx.query<{ last: number | null }>('select max(iteration) as last from runs where project_id = $1', [project.id]);
       const iteration = Number(last?.last ?? 0) + 1;
+      const [top] = await tx.query<{ top: number | string | null }>('select max(queue_no) as top from runs');
+      const queueNo = Number(top?.top ?? 0) + 1;
       await tx.query(
         `insert into runs (id, project_id, iteration, status, stage, gate, scorecard_id, scorecard_version, scorecard_hash,
-           scorecard, sources, instructions, artifact_name, artifact_hash, artifact_path, progress)
-         values ($1,$2,$3,'queued','queued',$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+           scorecard, sources, instructions, artifact_name, artifact_hash, artifact_path, progress, queue_no, run_options)
+         values ($1,$2,$3,'waiting','waiting',$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
         [
           runId, project.id, iteration, input.gate, input.scorecard.id, input.scorecard.version, input.scorecardHash,
           json(input.scorecard), input.sources, input.instructions, input.artifactName, input.artifactHash, input.artifactPath, json(input.progress),
+          queueNo, json(input.options),
         ],
       );
       return { runId, projectId: project.id, iteration };
     });
+  }
+
+  /* --------------------------- waiting line --------------------------- */
+
+  /** Waiting runs, first in line first. */
+  async waitingIds(): Promise<string[]> {
+    const rows = await this.db.query<{ id: string }>(`select id from runs where status = 'waiting' order by queue_no, id`);
+    return rows.map((r) => r.id);
+  }
+
+  private async positions(): Promise<Map<string, number>> {
+    return new Map((await this.waitingIds()).map((id, index) => [id, index + 1]));
+  }
+
+  /**
+   * Takes the run at the front of the line off it (waiting -> queued) and returns what is needed to start it, or null when nobody waits.
+   * Only the status flips, so a run cancelled a moment earlier is never started.
+   */
+  async claimNext(): Promise<RunJob | null> {
+    for (const id of await this.waitingIds()) {
+      const claimed = await this.db.tx(async (tx) => {
+        const [still] = await tx.query<{ id: string }>(`select id from runs where id = $1 and status = 'waiting'`, [id]);
+        if (!still) return false;
+        await tx.query(`update runs set status = 'queued', stage = 'queued' where id = $1 and status = 'waiting'`, [id]);
+        return true;
+      });
+      if (claimed) return this.jobOf(id);
+    }
+    return null;
+  }
+
+  private async jobOf(runId: string): Promise<RunJob> {
+    const [row] = await this.db.query<Record<string, unknown>>(
+      `select r.id, r.iteration, r.artifact_path, r.artifact_name, r.sources, r.instructions, r.scorecard, r.scorecard_hash, r.progress, r.run_options,
+         p.name as project_name from runs r join projects p on p.id = r.project_id where r.id = $1`,
+      [runId],
+    );
+    if (!row) throw new UserError('That run does not exist.', 404);
+    const options = parseJson<Partial<RunOptions>>(row.run_options) ?? {};
+    return {
+      runId: String(row.id),
+      projectName: String(row.project_name),
+      iteration: Number(row.iteration),
+      artifactPath: String(row.artifact_path),
+      artifactName: String(row.artifact_name),
+      sources: String(row.sources ?? ''),
+      instructions: String(row.instructions ?? ''),
+      scorecard: parseJson<Scorecard>(row.scorecard)!,
+      scorecardHash: String(row.scorecard_hash),
+      progress: parseJson<RunProgress>(row.progress) ?? { participants: [] },
+      options: { quick: Boolean(options.quick), runTwice: Boolean(options.runTwice), scorecardNotes: options.scorecardNotes ?? [] },
+    };
+  }
+
+  /** Takes a run out of the line before it starts. A run that already started cannot be stopped. */
+  async cancelWaiting(runId: string): Promise<void> {
+    const [row] = await this.db.query<{ status: string }>('select status from runs where id = $1', [runId]);
+    if (!row) throw new UserError('That run does not exist.', 404);
+    if (row.status === 'cancelled') return;
+    if (row.status !== 'waiting') {
+      throw new UserError(
+        row.status === 'queued' || row.status === 'running'
+          ? 'This check has already started and cannot be stopped. It finishes by itself.'
+          : 'This check has already finished, so there is nothing to cancel.',
+        409,
+      );
+    }
+    // The status test sits in the update, so a run that was started in the meantime is left alone.
+    await this.db.query(`update runs set status = 'cancelled', stage = 'cancelled', error = $2, finished_at = now() where id = $1 and status = 'waiting'`, [
+      runId, 'Cancelled before it started.',
+    ]);
+    const [after] = await this.db.query<{ status: string }>('select status from runs where id = $1', [runId]);
+    if (after?.status !== 'cancelled') throw new UserError('This check started just now and cannot be stopped. It finishes by itself.', 409);
   }
 
   /* ------------------------- scorecard pins ------------------------- */
@@ -187,6 +287,7 @@ export class Store {
   async deleteRun(runId: string): Promise<DeletedRun[]> {
     const [row] = await this.db.query<{ status: string }>('select status from runs where id = $1', [runId]);
     if (!row) throw new UserError('That run does not exist.', 404);
+    if (row.status === 'waiting') throw new UserError('This evaluation is waiting its turn. Cancel it first, then delete it.', 409);
     if (row.status === 'queued' || row.status === 'running') throw new UserError('This evaluation is still running. Delete it once it has finished.', 409);
     return this.removeRuns('where r.id = $1', [runId]);
   }
@@ -195,8 +296,8 @@ export class Store {
   async deleteProject(projectId: string): Promise<DeletedRun[]> {
     const [project] = await this.db.query<{ id: string }>('select id from projects where id = $1', [projectId]);
     if (!project) throw new UserError('That project does not exist.', 404);
-    const [live] = await this.db.query<{ n: number | string }>(`select count(*) as n from runs where project_id = $1 and status in ('queued', 'running')`, [projectId]);
-    if (Number(live?.n ?? 0) > 0) throw new UserError('This project has an evaluation that is still running. Delete it once it has finished.', 409);
+    const [live] = await this.db.query<{ n: number | string }>(`select count(*) as n from runs where project_id = $1 and status in ('waiting', 'queued', 'running')`, [projectId]);
+    if (Number(live?.n ?? 0) > 0) throw new UserError('This project has an evaluation that is running or waiting its turn. Delete it once it has finished (or cancel the waiting one).', 409);
     return this.removeRuns('where r.project_id = $1', [projectId], projectId);
   }
 
@@ -227,7 +328,10 @@ export class Store {
     });
   }
 
-  /** On start-up, a run left "running" by a crashed process can never finish: mark it failed. */
+  /**
+   * On start-up, a run left "running" by a crashed process can never finish: mark it failed.
+   * A run that was only waiting is left alone: it kept its uploads and starts again by itself.
+   */
   async failInterrupted(): Promise<number> {
     const rows = await this.db.query<{ id: string }>(`select id from runs where status in ('queued', 'running')`);
     for (const row of rows) await this.failRun(row.id, 'The server stopped before this evaluation finished. Submit it again.');
@@ -299,7 +403,7 @@ export class Store {
     const override = await this.latestOverride(runId);
     const core = parseJson<EvaluationCore>(row.core);
     return {
-      ...toSummary(row),
+      ...toSummary(row, await this.positions()),
       progress: parseJson<RunProgress>(row.progress),
       error: row.error,
       report: core ? assembleReport(core, override) : null,
@@ -369,8 +473,9 @@ export class Store {
       'select id, name, step, created_at from projects order by created_at desc',
     );
     const out: ProjectSummary[] = [];
+    const positions = await this.positions();
     for (const project of projects) {
-      const runs = await this.runsOf(project.id);
+      const runs = await this.runsOf(project.id, positions);
       const latest = runs.length > 0 ? runs[runs.length - 1]! : null;
       out.push({
         id: project.id,
@@ -384,12 +489,13 @@ export class Store {
     return out.sort((a, b) => (b.latest?.createdAt ?? '').localeCompare(a.latest?.createdAt ?? ''));
   }
 
-  private async runsOf(projectId: string): Promise<RunSummary[]> {
+  private async runsOf(projectId: string, positions?: Map<string, number>): Promise<RunSummary[]> {
+    const place = positions ?? (await this.positions());
     const rows = await this.db.query<RunRow>(
       `select ${RUN_COLUMNS} from runs r join projects p on p.id = r.project_id where r.project_id = $1 order by r.iteration`,
       [projectId],
     );
-    return rows.map(toSummary);
+    return rows.map((row) => toSummary(row, place));
   }
 
   async getHistory(projectId: string): Promise<ProjectHistory> {

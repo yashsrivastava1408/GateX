@@ -116,3 +116,20 @@ export const friendlyReason = (text: string): string =>
     .replace(/Critical gate/g, 'Key check')
     .replace(/Must-pass check/g, 'Key check')
     .replace(/(\d+) high-risk (?:findings?|issues?) blocks? green until fixed/g, (_m, n: string) => `${n} must-fix ${n === '1' ? 'issue blocks' : 'issues block'} green until fixed`);
+
+/** The waiting line: one check runs at a time, the others wait their turn. */
+export const LINE = {
+  waitingLabel: (place: number | null): string => (place ? `Waiting (${place} in line)` : 'Waiting'),
+  running: 'Running',
+  cancelled: 'Cancelled',
+  title: 'Waiting for its turn',
+  explain: 'Another check is running. Yours is next and starts by itself when it finishes.',
+  explainLater: 'Another check is running. Yours starts by itself, in its turn, when the ones ahead of it finish.',
+  place: (place: number | null): string =>
+    place === null ? 'Your check is saved and waiting.' : place === 1 ? 'You are next in line.' : `Your place in line: ${place}. ${place} checks are ahead of yours.`,
+  keepPage: 'Your files are saved. You can close this page or leave it open, and come back any time. This page updates by itself.',
+  cancel: 'Cancel this check',
+  cancelledToast: 'Cancelled. It never started, and nothing was marked.',
+  cancelFailed: 'Could not cancel. It may have just started.',
+  cancelledBanner: 'This check was cancelled before it started.',
+};

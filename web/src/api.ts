@@ -107,7 +107,7 @@ export const api = {
     body.append('instructions', form.instructions);
     if (form.quick) body.append('quick', '1');
     if (form.runTwice) body.append('runTwice', '1');
-    return request<{ runId: string; projectId: string; iteration: number }>('/api/runs', { method: 'POST', body });
+    return request<{ runId: string; projectId: string; iteration: number; status: string; queuePosition: number | null }>('/api/runs', { method: 'POST', body });
   },
 
   importScorecard(scorecard: File, document: File | null) {
@@ -119,6 +119,7 @@ export const api = {
 
   checkScorecard: (yaml: string) => request<CheckedScorecard>('/api/scorecards/check', json({ yaml })),
 
+  cancelRun: (id: string) => request<RunDetail>(`/api/runs/${id}/cancel`, { method: 'POST' }),
   deleteRun: (id: string) => request<null>(`/api/runs/${id}`, { method: 'DELETE' }),
   deleteProject: (id: string) => request<null>(`/api/projects/${id}`, { method: 'DELETE' }),
 

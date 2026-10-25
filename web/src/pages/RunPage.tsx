@@ -13,9 +13,11 @@ import { formatDate } from '../format';
 import { hideModels } from '../present';
 import { summaryText } from '../reportSummary';
 import { useDocumentTitle, useResource } from '../hooks';
+import { LINE } from '../copy';
+import { isActive, pendingChip } from '../runStatus';
 import { ReportView } from './report/ReportView';
 
-const isLive = (run: RunDetail) => run.status === 'queued' || run.status === 'running';
+const isLive = (run: RunDetail) => isActive(run.status);
 
 export function RunPage() {
   const { id = '' } = useParams();
@@ -30,6 +32,20 @@ export function RunPage() {
       toast('Summary copied');
     } catch {
       toast('Could not copy. Your browser blocked it.', 'bad');
+    }
+  };
+  const [cancelling, setCancelling] = useState(false);
+  const cancel = async () => {
+    setCancelling(true);
+    try {
+      await api.cancelRun(id);
+      toast(LINE.cancelledToast);
+      run.reload();
+    } catch (error) {
+      toast(error instanceof Error && error.message ? error.message : LINE.cancelFailed, 'bad');
+      run.reload();
+    } finally {
+      setCancelling(false);
     }
   };
   useDocumentTitle(r ? r.projectName : 'Check');
@@ -50,8 +66,7 @@ export function RunPage() {
           <span className="title-row">
             Your result
             {r.status === 'done' && <DecisionChip decision={r.finalDecision} size="md" />}
-            {isLive(r) && <Chip tone="accent">In progress</Chip>}
-            {r.status === 'failed' && <Chip tone="red">Failed</Chip>}
+            {pendingChip(r) && <Chip tone={pendingChip(r)!.tone}>{pendingChip(r)!.label}</Chip>}
           </span>
         }
         actions={
@@ -78,7 +93,12 @@ export function RunPage() {
                 <Icon name="trash" /> Delete
               </button>
             )}
-            {r.status === 'failed' && (
+            {r.status === 'waiting' && (
+              <button type="button" className="btn btn-secondary" disabled={cancelling} onClick={cancel}>
+                <Icon name="x" /> {LINE.cancel}
+              </button>
+            )}
+            {(r.status === 'failed' || r.status === 'cancelled') && (
               <Link to={`/new?project=${encodeURIComponent(r.projectName)}`} className="btn btn-primary">
                 <Icon name="refresh" /> Try again
               </Link>
@@ -101,7 +121,22 @@ export function RunPage() {
         </div>
       )}
 
-      {r.status !== 'done' && (
+      {r.status === 'cancelled' && (
+        <div className="banner banner-accent" role="status">
+          <Icon name="info" />
+          <span><strong>{LINE.cancelledBanner}</strong></span>
+        </div>
+      )}
+
+      {r.status === 'waiting' && (
+        <Card title={LINE.title} aside={<span className="faint">Updates live</span>}>
+          <p><strong>{LINE.place(r.queuePosition)}</strong></p>
+          <p>{r.queuePosition === 1 ? LINE.explain : LINE.explainLater}</p>
+          <p className="faint">{LINE.keepPage}</p>
+        </Card>
+      )}
+
+      {r.status !== 'done' && r.status !== 'waiting' && r.status !== 'cancelled' && (
         <Card title={isLive(r) ? 'Working on it' : 'Where it stopped'} aside={isLive(r) ? <span className="faint">Updates live</span> : undefined}>
           <Pipeline run={r} />
         </Card>

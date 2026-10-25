@@ -36,11 +36,14 @@ if (refreshed > 0) log(`${refreshed} saved result(s) updated to the current deci
 const providers = createProviderFactory(config.models, { env, mockDelayMs: config.mockDelayMs });
 const service = new EvaluationService({ store, config, providers, env, log });
 const webDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../web/dist');
+const waiting = await service.resume();
+if (waiting > 0) log(`${waiting} waiting check(s) from a previous session carry on in line`);
 const app = createApp({ store, service, config, env, webDist, log });
 
 const server = app.listen(config.port, () => {
   const roster = inspectRoster(config.models, env);
   log(`listening on http://localhost:${config.port}`);
+  log(config.maxConcurrentRuns === 0 ? 'checks: no limit, every check starts at once' : `checks: ${config.maxConcurrentRuns ?? 1} at a time, the rest wait in line`);
   log(config.dbMode === 'postgres' ? 'database: Postgres' : 'database: in-memory (set DATABASE_URL to keep data)');
   log(config.mock ? 'models: MOCK (scripted, no live APIs)' : `models: ${roster.raters.map((r) => `${r.id}=${r.provider}/${r.model}`).join(', ')}, consolidator ${roster.consolidator.provider}/${roster.consolidator.model}`);
   for (const problem of roster.problems) log(`${problem.level}: ${problem.message}`);
