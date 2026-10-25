@@ -39,6 +39,9 @@ function Sidebar() {
         <NavLink to="/projects" end className="nav-link">
           <Icon name="folder" /> Projects
         </NavLink>
+        <NavLink to="/board" className="nav-link">
+          <Icon name="flag" /> Status board
+        </NavLink>
         <NavLink to="/import-scorecard" className="nav-link">
           <Icon name="sheet" /> Convert a scorecard
         </NavLink>

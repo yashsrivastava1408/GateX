@@ -31,6 +31,7 @@ Status values: **Done** (built and tested), **GateX choice** (a deliberate choic
 | Run log and audit trail | Done |
 | Scorecard format, Examiner and Final reviewer prompts | Done |
 | Score trend across rounds | Done (project history) |
+| Gate tracker: one board of D1-D4 for every step (p.16, p.18) | Done (Status board) |
 | Overrides with a written reason | Done |
 
 ## Principles (p.5)
@@ -128,6 +129,7 @@ and how many planted mistakes GateX finds.
 | Orchestrator | Done | `agent/orchestrator.ts` |
 | Report writer: PDF, workbook and readable summary | Done | `report/` |
 | Run log | Done | Postgres: `model_calls`, `runs.run_log` |
+| Gate tracker | Done | `shared/src/board.ts`, `GET /api/board`, `web/src/pages/BoardPage.tsx` (Status board) |
 
 ## Formats and prompts (p.17)
 

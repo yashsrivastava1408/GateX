@@ -3,6 +3,7 @@ import path from 'node:path';
 import express, { type ErrorRequestHandler } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
+import { buildBoard } from '@ddd/shared';
 import type { ConfigResponse } from '@ddd/shared';
 import type { AppConfig } from '../config.js';
 import type { Store } from '../db/store.js';
@@ -77,6 +78,11 @@ export function createApp(deps: AppDeps): express.Express {
     res.json(await readLibraryCase(config.dataDir, req.params.id));
   });
 
+  // The status board (PDF p.18): five steps, four boxes each, read from the saved runs.
+  app.get('/api/board', async (_req, res) => {
+    res.json(buildBoard(await store.boardRuns()));
+  });
+
   app.get('/api/projects', async (_req, res) => {
     res.json(await store.listProjects());
   });
@@ -116,6 +122,8 @@ export function createApp(deps: AppDeps): express.Express {
         projectName: body.projectName,
         quick: body.quick === '1' || body.quick === 'true',
         runTwice: body.runTwice === '1' || body.runTwice === 'true',
+        ...(body.step ? { step: body.step } : {}),
+        ...(body.gate ? { gate: body.gate } : {}),
       });
       res.status(202).json(created);
     },

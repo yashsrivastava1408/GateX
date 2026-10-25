@@ -23,6 +23,7 @@ The exact response types are in [`shared/src/types.ts`](../shared/src/types.ts) 
 | `GET /api/health` | Liveness: `{ "ok": true, "db": "postgres" \| "memory" }` |
 | `GET /api/config` | The model roster (Examiners 1-3 and the Final reviewer) and whether it is ready |
 | `GET /api/projects` | All projects with their latest run and a score history |
+| `GET /api/board` | The status board: five steps, each with D1 and D3 (latest result, coloured by score) and D2 and D4 (Frozen once a check used a scorecard), and whether the step is complete |
 | `GET /api/projects/:id` | One project's rounds, trend, per-question heatmap and issue changes |
 | `POST /api/runs` | Submit a file to check (`.xlsx`, `.csv` or `.pdf`) and its scorecard, in any layout, for evaluation. Nothing needs approving. Add the form field `quick=1` to score every question once and skip the second look at each issue (faster, slightly less steady), and `runTwice=1` to do the whole check twice: the report then carries `twoRuns` (both scores, `average`, `gap`, `unstable`), the score and colour are the average's, and an unstable pair adds a "Needs attention" note (about twice the time and cost) |
 | `POST /api/scorecards/import` | Show how a scorecard in any layout is converted into this app's format (multipart: `scorecard`, optional `document`). Optional: `POST /api/runs` converts it the same way |

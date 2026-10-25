@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, rm, rmdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { ParticipantProgress, RunProgress, RunStatus } from '@ddd/shared';
+import type { Gate, ParticipantProgress, RunProgress, RunStatus } from '@ddd/shared';
 import type { AppConfig } from '../config.js';
 import type { DeletedRun, RunJob, Store } from '../db/store.js';
 import { evaluate, evaluateTwice, preflight, type ProgressEvent } from '../agent/index.js';
@@ -29,6 +29,9 @@ export interface SubmitInput {
   quick?: boolean;
   /** Run twice: two full checks with the same examiners; the report shows the average and the gap. */
   runTwice?: boolean;
+  /** Which of the five steps this is (1-5), and whether the file is a schema (D1) or an output (D3). They place the result on the status board; when empty, the scorecard's own are used. */
+  step?: string;
+  gate?: string;
 }
 
 export interface ServiceDeps {
@@ -87,6 +90,10 @@ export class EvaluationService {
     if (sha256(input.workbook.buffer) === sha256(input.scorecard.buffer)) {
       throw new UserError('The file to check and the scorecard are the same file. Put the schema or output you want scored in "Your file", and the scorecard in "Scorecard".');
     }
+    const step = (input.step ?? '').trim();
+    if (step && !/^[1-5]$/.test(step)) throw new UserError('The step must be a number from 1 to 5.');
+    const gate = (input.gate ?? '').trim().toUpperCase();
+    if (gate && gate !== 'D1' && gate !== 'D3') throw new UserError('Say whether the file is a schema (D1) or an output (D3).');
     const name = safeName(input.workbook.name);
     const projectName = (input.projectName?.trim() || path.basename(name, path.extname(name))).slice(0, 120);
 
@@ -151,7 +158,7 @@ export class EvaluationService {
     const save = this.saveChain.then(() =>
       this.deps.store.createRun(
         {
-          projectName, step: parsed.step, gate: parsed.gate, scorecard: parsed, scorecardHash: hash, sources: input.sources, instructions,
+          projectName, step: step || parsed.step, gate: (gate as Gate) || parsed.gate, scorecard: parsed, scorecardHash: hash, sources: input.sources, instructions,
           artifactName: name, artifactHash: sha256(input.workbook.buffer), artifactPath: workbookPath, progress,
           options: { quick: Boolean(input.quick), runTwice: Boolean(input.runTwice), scorecardNotes },
         },

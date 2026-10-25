@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { SCORE_BANDS } from '@ddd/shared';
+import type { BoardRun } from '@ddd/shared';
 import type {
   Decision,
   DimensionTrendRow,
@@ -144,6 +145,9 @@ export class Store {
       if (!project) {
         project = { id: randomUUID() };
         await tx.query('insert into projects (id, name, step) values ($1, $2, $3)', [project.id, input.projectName, input.step ?? null]);
+      } else if (input.step) {
+        // A step chosen at submit places an older project that was saved without one; a step already saved is not changed.
+        await tx.query('update projects set step = $2 where id = $1 and step is null', [project.id, input.step]);
       }
       const [last] = await tx.query<{ last: number | null }>('select max(iteration) as last from runs where project_id = $1', [project.id]);
       const iteration = Number(last?.last ?? 0) + 1;
@@ -467,6 +471,24 @@ export class Store {
   }
 
   /* ---------------------------- projects ---------------------------- */
+
+  /** Every run with its project's step, newest first: what the status board is built from. */
+  async boardRuns(): Promise<BoardRun[]> {
+    const rows = await this.db.query<{ id: string; project_id: string; name: string; step: string | null; gate: Gate | null; status: RunStatus; weighted_score: number | null; created_at: unknown }>(
+      `select r.id, r.project_id, p.name, p.step, r.gate, r.status, r.weighted_score, r.created_at
+         from runs r join projects p on p.id = r.project_id order by r.created_at desc`,
+    );
+    return rows.map((r) => ({
+      runId: r.id,
+      projectId: r.project_id,
+      projectName: r.name,
+      step: r.step,
+      gate: r.gate,
+      status: r.status,
+      score: r.weighted_score === null ? null : Number(r.weighted_score),
+      createdAt: iso(r.created_at),
+    }));
+  }
 
   async listProjects(): Promise<ProjectSummary[]> {
     const projects = await this.db.query<{ id: string; name: string; step: string | null; created_at: unknown }>(

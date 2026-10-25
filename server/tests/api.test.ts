@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import ExcelJS from 'exceljs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { bandOf, type ConfigResponse, type ProjectHistory, type ProjectSummary, type RunDetail } from '@ddd/shared';
+import { bandOf, type Board, type ConfigResponse, type ProjectHistory, type ProjectSummary, type RunDetail } from '@ddd/shared';
 import { createApp } from '../src/api/app.js';
 import { EvaluationService } from '../src/api/service.js';
 import type { AppConfig } from '../src/config.js';
@@ -52,13 +52,15 @@ async function start(models = mockModels()): Promise<Harness> {
   };
 }
 
-async function submit(h: Harness, files: { workbook?: Buffer; scorecard?: string | Buffer; name?: string; scorecardName?: string; projectName?: string; instructions?: string; runTwice?: boolean }) {
+async function submit(h: Harness, files: { workbook?: Buffer; scorecard?: string | Buffer; name?: string; scorecardName?: string; projectName?: string; instructions?: string; runTwice?: boolean; step?: string; gate?: string }) {
   const form = new FormData();
   if (files.workbook) form.append('workbook', new Blob([new Uint8Array(files.workbook)]), files.name ?? 'schema.xlsx');
   if (files.scorecard !== undefined) form.append('scorecard', new Blob([typeof files.scorecard === 'string' ? files.scorecard : new Uint8Array(files.scorecard)]), files.scorecardName ?? 'scorecard.yaml');
   if (files.instructions !== undefined) form.append('instructions', files.instructions);
   if (files.projectName) form.append('projectName', files.projectName);
   if (files.runTwice) form.append('runTwice', '1');
+  if (files.step) form.append('step', files.step);
+  if (files.gate) form.append('gate', files.gate);
   const res = await fetch(`${h.base}/api/runs`, { method: 'POST', body: form });
   return { status: res.status, body: (await res.json()) as { runId?: string; iteration?: number; projectId?: string; error?: string } };
 }
@@ -458,5 +460,34 @@ describe('keeping saved results in line with the rule', () => {
     expect(after.finalDecision).toBe(run.finalDecision);
     expect(await h.store.refreshVerdicts()).toBe(0);
     await fetch(`${h.base}/api/projects/${res.body.projectId}`, { method: 'DELETE' });
+  });
+});
+
+describe('the status board through the API', () => {
+  it('places a finished check under the step and gate chosen at submit, and refuses a bad choice', async () => {
+    const h = await start();
+    try {
+      const book = await makeWorkbook({ Tree: CLEAN_TREE });
+      const bad = await submit(h, { workbook: book, scorecard: CLEAN_SCORECARD_YAML, projectName: 'Board A', step: '9' });
+      expect(bad.status).toBe(400);
+      expect(bad.body.error).toMatch(/1 to 5/);
+      const badGate = await submit(h, { workbook: book, scorecard: CLEAN_SCORECARD_YAML, projectName: 'Board A', gate: 'D2' });
+      expect(badGate.status).toBe(400);
+
+      const ok = await submit(h, { workbook: book, scorecard: CLEAN_SCORECARD_YAML, projectName: 'Board A', step: '3', gate: 'D3' });
+      expect(ok.status).toBe(202);
+      const run = await done(h, ok.body.runId!);
+      expect(run.status).toBe('done');
+      expect(run.gate).toBe('D3');
+
+      const board = (await (await fetch(`${h.base}/api/board`)).json()) as Board;
+      const step3 = board.steps[2]!;
+      expect(step3.d3.state).toBe(bandOf(run.weightedScore!));
+      expect(step3.d4.state).toBe('frozen');
+      expect(step3.d1.state).toBe('not_started');
+      expect(board.steps[0]!.status).toBe('not_started');
+    } finally {
+      await h.close();
+    }
   });
 });

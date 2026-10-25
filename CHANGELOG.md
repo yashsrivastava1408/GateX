@@ -4,6 +4,11 @@ All notable changes to GateX (earlier entries call it the DDD Evaluator). Format
 
 ## [Unreleased]
 
+### Added: the status board, the Roadmap's gate tracker (25 Oct 2026)
+- A **Status board** page (`/board`, `GET /api/board`) shows the five Phase 1 steps with four boxes each, as on page 18 of the Roadmap. D1 (schema design) and D3 (output document) show the latest finished check in green, amber or red by score alone, with the score, and link to the report. D2 and D4 (the scorecards) read **Frozen** once a check has used a scorecard for that gate (GateX freezes a scorecard by its hash on submit), else **Not started**. A step is **Complete** only when D1 and D3 are green and D2 and D4 are frozen, as the Roadmap says.
+- The upload page has an optional **Place it on the status board** card: the step (1 to 5) and whether the file is a schema (D1) or an output (D3). They go with `POST /api/runs` as `step` and `gate`; a wrong value is refused in plain words. Left empty, the scorecard's own are used. A project keeps the step it was first given (an older project saved without one takes the first step chosen). Projects with no usable step are counted under the board, not guessed.
+- No migration: `projects.step` and `runs.gate` already existed. Logic is a pure function (`shared/src/board.ts`); tests `server/tests/board.test.ts` (8) and one through the API.
+
 ### Added: one check at a time, with a waiting line (25 Oct 2026)
 The hosted app has one shared login, one model token and a small server, and nothing stopped two evaluations running together.
 - **Only one evaluation runs at a time** (`MAX_CONCURRENT_RUNS`, default `1`; `0` or `off` turns it off, a bigger number allows that many). A run submitted while another is going is saved as `waiting` with its uploads, shows **Waiting (n in line)** with a plain-words note, and starts by itself, first come first served, when the running one finishes, fails or crashes. Quick check and Run twice wait in the same line; the second look and close-look pass stay inside the one run. Viewing, downloading and uploading stay free.

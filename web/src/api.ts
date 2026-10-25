@@ -6,6 +6,7 @@ import type {
   ReliabilityTable,
   Decision,
   ProjectHistory,
+  Board,
   ProjectSummary,
   RunDetail,
 } from '@ddd/shared';
@@ -56,6 +57,9 @@ export interface SubmitForm {
   /** Score every question once: faster, slightly less steady. */
   quick?: boolean;
   runTwice?: boolean;
+  /** 1-5 and D1 (schema) or D3 (output): where the result sits on the status board. Empty means the scorecard's own. */
+  step?: string;
+  gate?: string;
 }
 
 interface ImportedQuestion {
@@ -95,6 +99,7 @@ export const api = {
   planted: () => request<PlantedResult[]>('/api/library/planted'),
   libraryCase: (id: string) => request<LibraryCaseDetail>(`/api/library/${id}`),
   projects: () => request<ProjectSummary[]>('/api/projects'),
+  board: () => request<Board>('/api/board'),
   project: (id: string) => request<ProjectHistory>(`/api/projects/${id}`),
   run: (id: string) => request<RunDetail>(`/api/runs/${id}`),
 
@@ -107,6 +112,8 @@ export const api = {
     body.append('instructions', form.instructions);
     if (form.quick) body.append('quick', '1');
     if (form.runTwice) body.append('runTwice', '1');
+    if (form.step) body.append('step', form.step);
+    if (form.gate) body.append('gate', form.gate);
     return request<{ runId: string; projectId: string; iteration: number; status: string; queuePosition: number | null }>('/api/runs', { method: 'POST', body });
   },
 

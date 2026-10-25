@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api';
-import { examinerLabel } from '@ddd/shared';
+import { BOARD_STEPS, examinerLabel } from '@ddd/shared';
 import { hideModels } from '../present';
 import { Chip } from '../components/Chip';
 import { DropZone } from '../components/DropZone';
@@ -47,6 +47,8 @@ export function NewEvaluationPage() {
   const [instructions, setInstructions] = useState('');
   const [quick, setQuick] = useState(false);
   const [runTwice, setRunTwice] = useState(false);
+  const [step, setStep] = useState('');
+  const [gate, setGate] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,7 +64,7 @@ export function NewEvaluationPage() {
     setBusy(true);
     setError(null);
     try {
-      const created = await api.submit({ workbook, scorecard, projectName: projectName.trim(), sources, instructions, quick, runTwice });
+      const created = await api.submit({ workbook, scorecard, projectName: projectName.trim(), sources, instructions, quick, runTwice, step, gate });
       navigate(`/runs/${created.runId}`);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Your check could not start. Please try again.');
@@ -117,7 +119,30 @@ export function NewEvaluationPage() {
             </div>
           </Card>
 
-          <Card title={<StepTitle n={2} text="Add your files" />} aside={<span className="faint">Nothing in them is ever changed</span>}>
+          <Card title={<StepTitle n={2} text="Place it on the status board" />} aside={<span className="faint">Optional</span>}>
+            <div className="drop-pair">
+              <div className="field">
+                <label className="field-label" htmlFor="board-step">Step</label>
+                <select id="board-step" className="input" value={step} onChange={(e) => setStep(e.target.value)}>
+                  <option value="">Not placed</option>
+                  {BOARD_STEPS.map((s) => (
+                    <option key={s.n} value={String(s.n)}>{`Step ${s.n} · ${s.name}`}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label className="field-label" htmlFor="board-gate">What is this file?</label>
+                <select id="board-gate" className="input" value={gate} onChange={(e) => setGate(e.target.value)}>
+                  <option value="">Use the scorecard’s own</option>
+                  <option value="D1">A schema (D1)</option>
+                  <option value="D3">An output document (D3)</option>
+                </select>
+              </div>
+            </div>
+            <span className="field-hint">The result is shown on the Status board under this step. A project keeps the step it was first given.</span>
+          </Card>
+
+          <Card title={<StepTitle n={3} text="Add your files" />} aside={<span className="faint">Nothing in them is ever changed</span>}>
             <div className="drop-pair">
               <DropZone label="Your file" hint=".xlsx, .csv or .pdf · the file you want checked" accept={['.xlsx', '.csv', '.pdf']} file={workbook} onFile={setWorkbook} icon="upload" error={workbookOk ? null : 'This has to be an .xlsx, .csv or .pdf file.'} />
               <DropZone label="Scorecard" hint="any layout · Excel, CSV, PDF, YAML, JSON or text" accept={SCORECARD_TYPES} file={scorecard} onFile={setScorecard} icon="list" error={scorecardOk ? null : 'Use an .xlsx, .csv, .pdf, .yaml, .json, .txt or .md scorecard.'} />
@@ -140,7 +165,7 @@ export function NewEvaluationPage() {
             </div>
           </Card>
 
-          <Card title={<StepTitle n={3} text="Guide the examiners" optional />}>
+          <Card title={<StepTitle n={4} text="Guide the examiners" optional />}>
             <details className="fold" open={Boolean(instructions || sources)}>
               <summary>
                 <span>Add instructions or background notes</span>
