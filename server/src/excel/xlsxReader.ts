@@ -13,6 +13,16 @@ export interface RawGrid {
   cells: Map<string, string>;
   maxRow: number;
   maxCol: number;
+  /** Only for a PDF page that holds tables: their columns and rows, each row with the line (row of this grid) it was read as. */
+  pdfTables?: GridTable[];
+}
+
+export interface GridTable {
+  /** The header cells, one per column. */
+  headers: string[];
+  /** The x start of each column on the page. */
+  x: number[];
+  rows: Array<{ cells: string[]; merged: boolean; line: number }>;
 }
 
 const ARRAYS = new Set(['row', 'c', 'si', 'r', 'sheet', 'Relationship', 'xf', 'numFmt']);

@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { UserError } from '../util/errors.js';
 import { isPdf, readPdf } from './pdfReader.js';
-import { readXlsx, type RawGrid } from './xlsxReader.js';
+import { readXlsx, type GridTable, type RawGrid } from './xlsxReader.js';
 import { looksLikeCsv, readCsv } from './csvReader.js';
 
 export interface Header {
@@ -58,6 +58,16 @@ export class WorkbookModel {
     const bytes = typeof source === 'string' ? await readFile(source) : source;
     if (isPdf(bytes)) return new WorkbookModel(await readPdf(bytes));
     return new WorkbookModel(looksLikeCsv(bytes) ? readCsv(bytes) : readXlsx(bytes));
+  }
+
+  /** A workbook made of ready grids (the tables of a PDF rebuilt as sheets). */
+  static fromGrids(grids: Map<string, RawGrid>): WorkbookModel {
+    return new WorkbookModel(grids);
+  }
+
+  /** The tables of a PDF's pages, in page order (none for any other kind of file). */
+  pdfTables(): Array<{ sheet: string; table: GridTable }> {
+    return [...this.grids].flatMap(([sheet, g]) => (g.pdfTables ?? []).map((table) => ({ sheet, table })));
   }
 
   sheetNames(): string[] {

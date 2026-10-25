@@ -115,6 +115,7 @@ describe.skipIf(!existsSync(path.join(INPUT, SCHEMA)) || !existsSync(CACHE))('th
     const out = applyAnchorFloors([result(0, { evidence: cited })], [q], wb);
     expect(out.results[0]!.consolidated).toBe(1);
     expect(out.notes[0]).toContain('G07-C05 was raised from 0 to 1');
+    expect(out.notes[0]).toContain('exist and hold text');
     // A criterion whose scale has its own 0 ("Absent or contradicted") is never raised.
     const g07c03 = expandCriteria(resolved.scorecard).dimensions.find((d) => d.id === 'G07-C03')!;
     expect(lowestRung(g07c03)).toBeNull();

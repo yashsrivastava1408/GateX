@@ -2,6 +2,7 @@ import type { DimensionResult, DimensionSpec } from '@ddd/shared';
 import type { WorkbookModel } from '../excel/workbook.js';
 import { profileWorkbook } from '../excel/profile.js';
 import { emptyStats, sweepAll, type SweepFinding, type SweepStats } from './sweep.js';
+import { pdfOwnChecks, sweepPdfDeep } from './pdfSweep.js';
 import { statedChildLimit, statedIdPattern, sweepDeep, sweepIdFormats, sweepWidth } from './sweepDeep.js';
 
 /**
@@ -168,15 +169,47 @@ export function exactCeilings(
   return out;
 }
 
-/** Runs the full count over the file and returns the ceilings. Cheap: one pass over the cells. */
-export function exactCeilingsFor(questions: DimensionSpec[], wb: WorkbookModel): Map<string, ExactCeiling> {
+/** The count over the whole file: what the sweep found, how much it looked at, and the counts that depend on a criterion's own words. */
+function countFile(wb: WorkbookModel, noPdf = false) {
   const stats = emptyStats();
   const profile = profileWorkbook(wb);
-  const found = [...sweepAll(wb, { all: true, stats }), ...sweepDeep(wb, { sheets: profile.sheets.filter((s) => !/^Page \d+$/.test(s.name)) }, { all: true, stats })];
   const real = { sheets: profile.sheets.filter((s) => !/^Page \d+$/.test(s.name)) };
-  return exactCeilings(questions, found, stats, (family, text) =>
-    family === 'idformat' ? sweepIdFormats(wb, real, statedIdPattern(text), { all: true }) : family === 'width' ? sweepWidth(wb, real, statedChildLimit(text), { all: true }) : null,
-  );
+  const found = [...sweepAll(wb, { all: true, stats, noPdf }), ...sweepDeep(wb, real, { all: true, stats }), ...(noPdf ? [] : sweepPdfDeep(wb, { all: true, stats }))];
+  const own = (family: ExactFamilyId, text: string): { found: SweepFinding[]; looked: number } | null => {
+    if (family !== 'idformat' && family !== 'width') return null;
+    const mine = family === 'idformat' ? sweepIdFormats(wb, real, statedIdPattern(text), { all: true }) : sweepWidth(wb, real, statedChildLimit(text), { all: true });
+    // The tables of a PDF are counted the same way, and their ids and parents add to the sheets' (a file is one or the other in practice).
+    const pdf = noPdf ? null : pdfOwnChecks(wb, family, text, { all: true });
+    return pdf ? { found: [...mine.found, ...pdf.found], looked: mine.looked + pdf.looked } : mine;
+  };
+  return { stats, found, own };
+}
+
+/** Runs the full count over the file and returns the ceilings. Cheap: one pass over the cells. */
+export function exactCeilingsFor(questions: DimensionSpec[], wb: WorkbookModel): Map<string, ExactCeiling> {
+  const { stats, found, own } = countFile(wb);
+  return exactCeilings(questions, found, stats, own);
+}
+
+/**
+ * Which questions the file's own counts actually looked at. A question can ask for a count (its words say "unique ids") and still get no
+ * ceiling because the code read no rows for it (a PDF whose tables were never swept); this says, per question, how many things each asked
+ * family looked at, so the share that is truly counted (and not only worded as a count) can be measured. `pdf: false` is the count without the
+ * tables of a PDF.
+ */
+export function exactCoverage(questions: DimensionSpec[], wb: WorkbookModel, options: { pdf?: boolean } = {}): Map<string, Array<{ family: ExactFamilyId; looked: number }>> {
+  const { stats, own } = countFile(wb, options.pdf === false);
+  const out = new Map<string, Array<{ family: ExactFamilyId; looked: number }>>();
+  for (const q of questions) {
+    if (q.measuredBy !== 'raters') continue;
+    const text = `${q.name} ${q.measure ?? ''}`;
+    if (ABOUT_A_MECHANISM.test(text)) continue;
+    const covered = FAMILIES.filter((f) => f.asks(text))
+      .map((f) => ({ family: f.id, looked: own(f.id, text)?.looked ?? f.looked(stats) }))
+      .filter((c) => c.looked > 0);
+    if (covered.length > 0) out.set(q.id, covered);
+  }
+  return out;
 }
 
 /**

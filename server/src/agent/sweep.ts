@@ -4,6 +4,7 @@ import { profileWorkbook, stems, type ColumnProfile, type SheetProfile, type Wor
 import { columnLetters, type WorkbookModel } from '../excel/workbook.js';
 import type { DraftFinding } from './types.js';
 import { recountTallies } from './tallies.js';
+import { sweepPdfTables } from './pdfSweep.js';
 
 /**
  * A row-by-row sweep done in code, whatever the scorecard asks. Models that read a whole sheet skim it and miss a blank cell or a repeated
@@ -55,6 +56,8 @@ export interface SweepStats {
 }
 export interface SweepOptions {
   all?: boolean;
+  /** Leave the tables of a PDF out (used to measure what the PDF tables add). */
+  noPdf?: boolean;
   stats?: SweepStats;
 }
 export const emptyStats = (): SweepStats => ({ rows: 0, ids: 0, references: 0, childCounts: 0, obligations: 0, tallies: 0 });
@@ -372,7 +375,7 @@ export function sweepWorkbook(wb: WorkbookModel, profile: WorkbookProfile = prof
 export function sweepAll(wb: WorkbookModel, options: SweepOptions = {}): SweepFinding[] {
   const profile = profileWorkbook(wb);
   const real = { sheets: profile.sheets.filter((s) => !isPdfPage(s.name)) };
-  return [...sweepWorkbook(wb, real, options), ...recountTallies(wb, profile, options)];
+  return [...sweepWorkbook(wb, real, options), ...(options.noPdf ? [] : sweepPdfTables(wb, options)), ...recountTallies(wb, profile, options)];
 }
 
 /** Pages of a PDF are "sheets" with one column; a sweep by column means nothing there. */

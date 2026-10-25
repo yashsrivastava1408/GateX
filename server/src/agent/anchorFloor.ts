@@ -99,7 +99,7 @@ export function applyAnchorFloors(
     if (!rung || d.consolidated >= rung.score) return d;
     const cells = supportedCells(wb, d.evidence);
     if (cells.length === 0) return d;
-    notes.push(`${d.id} was raised from ${d.consolidated} to ${rung.score}: the scorecard's own scale starts at ${rung.score} ("${rung.text}") and the cited cell${cells.length === 1 ? '' : 's'} ${cells.slice(0, 3).join(', ')} exist${cells.length === 1 ? 's' : ''} and hold text.`);
+    notes.push(`${d.id} was raised from ${d.consolidated} to ${rung.score}: the scorecard's own scale starts at ${rung.score} ("${rung.text}") and the cited cell${cells.length === 1 ? '' : 's'} ${cells.slice(0, 3).join(', ')} exist${cells.length === 1 ? 's' : ''} and hold${cells.length === 1 ? 's' : ''} text.`);
     return { ...d, consolidated: rung.score, rationale: `${d.rationale} Raised to ${rung.score} (the examiners gave ${d.consolidated}): the scorecard's lowest rung is ${rung.score} ("${rung.text}") and the cited cells ${cells.slice(0, 3).join(', ')} hold text.` };
   });
   return { results: next, notes };

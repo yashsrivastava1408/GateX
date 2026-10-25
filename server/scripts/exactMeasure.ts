@@ -8,7 +8,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { ScorecardResolver } from '../src/scorecard/resolve.js';
 import { expandCriteria, retypeOutsideCriteria } from '../src/agent/aggregate.js';
-import { ABOUT_A_MECHANISM, FAMILIES, exactCeilingsFor } from '../src/agent/exactScore.js';
+import { ABOUT_A_MECHANISM, FAMILIES, exactCeilingsFor, exactCoverage } from '../src/agent/exactScore.js';
 import { WorkbookModel } from '../src/excel/workbook.js';
 const root = path.resolve('../data/inputs');
 const pairs: Record<string, [string, string]> = {
@@ -21,7 +21,7 @@ const pairs: Record<string, [string, string]> = {
 for (let i = 1; i <= 5; i++) pairs[`raw-step${i}`] = ['scorecard.xlsx', 'schema.pdf'];
 const resolver = new ScorecardResolver({ cacheDir: path.resolve('../data/scorecards'), candidates: () => [] as never });
 const verbose = process.argv.includes('-v');
-console.log('pair | questions | outside(unmeasurable) | code | judged-exact | judged-other | exact share | ceilings that fire on the file');
+console.log('pair | questions | outside(unmeasurable) | code | judged-exact | judged-other | exact share | counted on real rows (without PDF tables -> with) | ceilings that fire on the file');
 for (const [name, [s, d]] of Object.entries(pairs)) {
   const read = async (f: string) => ({ name: f, bytes: await readFile(path.join(root, name, f)) });
   const r = await resolver.lookup(await read(s), await read(d));
@@ -37,6 +37,9 @@ for (const [name, [s, d]] of Object.entries(pairs)) {
   const wb = await WorkbookModel.load(path.join(root, name, d));
   const c = exactCeilingsFor(qs, wb);
   const measurable = qs.length - outside.length;
-  console.log(`${name} | ${qs.length} | ${outside.length} | ${code.length} | ${ex.length} | ${other.length} | ${(((code.length + ex.length) / measurable) * 100).toFixed(0)}% | ${[...c].map(([id, v]) => `${id}:${v.family}<=${v.ceiling} (${v.summary})`).join('; ') || '-'}`);
-  if (verbose) for (const q of ex) console.log('   EXACT', q.id, q.name, '=>', asked(q).map((f) => f.id).join(','));
+  const live0 = exactCoverage(qs, wb, { pdf: false });
+  const live1 = exactCoverage(qs, wb);
+  const liveOf = (m: typeof live0) => ex.filter((q) => m.has(q.id)).length;
+  console.log(`${name} | ${qs.length} | ${outside.length} | ${code.length} | ${ex.length} | ${other.length} | ${(((code.length + ex.length) / measurable) * 100).toFixed(0)}% | ${liveOf(live0)} -> ${liveOf(live1)} of ${ex.length} | ${[...c].map(([id, v]) => `${id}:${v.family}<=${v.ceiling} (${v.summary})`).join('; ') || '-'}`);
+  if (verbose) for (const q of ex) console.log('   EXACT', q.id, q.name, '=>', asked(q).map((f) => f.id).join(','), live1.has(q.id) ? `[counted: ${live1.get(q.id)!.map((x) => `${x.family} ${x.looked}`).join(', ')}]` : '[wording only: nothing counted]');
 }

@@ -39,7 +39,7 @@ const looseShape = (v: string) => v.replace(/\d+/g, '#');
  * Only an id column of a sheet is looked at, and only when the column is plainly governed by the pattern: with a stated one, 90% of the ids
  * must start with its prefix; without, 97% must share one shape that has a letter in it (path ids such as 1.2.3 vary in depth by design).
  */
-export function sweepIdFormats(wb: WorkbookModel, profile: WorkbookProfile, stated: ReturnType<typeof statedIdPattern>, options: SweepOptions = {}): { found: SweepFinding[]; looked: number } {
+export function sweepIdFormats(wb: WorkbookModel, profile: WorkbookProfile, stated: ReturnType<typeof statedIdPattern>, options: SweepOptions & { isolatedOnly?: boolean } = {}): { found: SweepFinding[]; looked: number } {
   const found: SweepFinding[] = [];
   let looked = 0;
   for (const sheet of profile.sheets) {
@@ -61,8 +61,12 @@ export function sweepIdFormats(wb: WorkbookModel, profile: WorkbookProfile, stat
       // PER-999 followed by PER-1000 is the count growing, not a slip: a longer number under a zero-padded pattern.
       const sample = ids.find((y) => shapeOf(y.v) === top)!.v;
       const padded = /\d/.test(sample) && /(?<=\D)0\d*$/.test(sample);
+      // In a PDF's section-coded ids (F-S21-04, F-RB-01, F-TC-01) a shape that several ids share is another family of ids, not a slip: only a shape seen once or twice counts.
+      const seen = new Map<string, number>();
+      for (const x of ids) seen.set(shapeOf(x.v), (seen.get(shapeOf(x.v)) ?? 0) + 1);
       bad = ids
         .filter((x) => shapeOf(x.v) !== top)
+        .filter((x) => !options.isolatedOnly || (seen.get(shapeOf(x.v)) ?? 0) <= 2)
         .filter((x) => !(padded && looseShape(x.v) === looseShape(sample) && x.v.length > sample.length))
         .map((x) => ({ ...x, why: `has a different form from the other ${topCount} ids (${sample})` }));
       if (bad.length > Math.max(3, Math.floor(ids.length * 0.03))) continue;
