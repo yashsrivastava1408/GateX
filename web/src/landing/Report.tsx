@@ -92,7 +92,7 @@ export function ReportShowcase() {
         <Reveal as="header" className="section-head">
           <p className="lp-eyebrow">A clear, visual report</p>
           <h2>The report you get</h2>
-          <p>A designed report with exact proof, charts and a path to green.</p>
+          <p>A designed report with exact proof, charts and a path to green, as a PDF, an Excel file and a Markdown file.</p>
         </Reveal>
         <Reveal className="format-buttons" role="tablist" aria-label="Report format">
           {([['pdf', 'PDF Report', 'doc'], ['xlsx', 'Excel File', 'grid'], ['md', 'Markdown', 'list']] as const).map(([id, label, icon]) => (
@@ -151,6 +151,7 @@ export function ReportShowcase() {
           </div>
         </div>
 
+        <small className="sample">Sample report pages, with example numbers.</small>
         <div className="feature-row">
           {FEATURES.map((f, i) => (
             <Reveal key={f.title} delay={i * 90} className={`feature ${open ? 'is-on' : ''}`}>
@@ -186,7 +187,7 @@ export function FixFirst() {
         <div className="fix-head">
           <Reveal as="header" className="section-head left">
             <h2>What to fix first</h2>
-            <p>Clear, prioritised issues with exact locations.</p>
+            <p>Clear, prioritised issues with exact locations. <span className="sample-inline">Sample issues.</span></p>
           </Reveal>
           <Reveal delay={100} className="chips" role="tablist" aria-label="Filter issues">
             {FILTERS.map((f) => (

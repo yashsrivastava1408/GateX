@@ -20,6 +20,22 @@ import { ReportView } from './report/ReportView';
 
 const isLive = (run: RunDetail) => isActive(run.status);
 
+/** The waiting line as a row of places: the check that is running, the ones waiting, and this one marked. */
+function LineMeter({ place }: { place: number }) {
+  const shown = Math.min(place, 8);
+  return (
+    <ol className="line-meter" aria-label={`Place ${place} in line`}>
+      <li className="line-running"><span>Running</span></li>
+      {Array.from({ length: shown }, (_, i) => i + 1).map((n) => (
+        <li key={n} className={n === place ? 'line-you' : ''}>
+          <span>{n === place ? 'This check' : n}</span>
+        </li>
+      ))}
+      {place > shown && <li className="line-more" aria-hidden="true"><span>…</span></li>}
+    </ol>
+  );
+}
+
 export function RunPage() {
   const { id = '' } = useParams();
   const run = useResource(() => api.run(id), [id], (r) => (isLive(r) ? 1500 : null));
@@ -132,6 +148,7 @@ export function RunPage() {
       {r.status === 'waiting' && (
         <Card title={LINE.title} aside={<span className="faint">Updates live</span>}>
           <p><strong>{LINE.place(r.queuePosition)}</strong></p>
+          {r.queuePosition !== null && <LineMeter place={r.queuePosition} />}
           <p>{r.queuePosition === 1 ? LINE.explain : LINE.explainLater}</p>
           <p className="faint">{LINE.keepPage}</p>
         </Card>

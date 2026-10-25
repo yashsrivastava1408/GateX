@@ -196,3 +196,38 @@
 .run-summary-time { margin-left: auto; color: var(--accent-strong); font-variant-numeric: tabular-nums; }
 .progress { height: 6px; border-radius: 999px; background: rgb(var(--ink) / 0.08); overflow: hidden; }
 .progress-fill { height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), var(--accent-cyan)); box-shadow: 0 0 10px rgb(var(--accent-rgb) / 0.5); transition: width var(--slow) var(--ease); }
+
+/* the waiting line, as places in a row */
+.line-meter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-4) 0;
+  padding: 0;
+  list-style: none;
+}
+.line-meter li span {
+  display: inline-flex;
+  align-items: center;
+  min-width: 2.4rem;
+  justify-content: center;
+  padding: 0.4rem 0.8rem;
+  border-radius: 999px;
+  border: 1px dashed var(--border-strong);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+.line-meter .line-running span {
+  border-style: solid;
+  border-color: var(--green);
+  background: var(--green-dim);
+  color: var(--green-bright);
+}
+.line-meter .line-you span {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent-strong);
+  font-weight: 600;
+}

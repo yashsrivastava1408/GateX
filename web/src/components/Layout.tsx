@@ -36,24 +36,30 @@ function Sidebar() {
         <NavLink to="/new" className="btn btn-primary nav-cta">
           <Icon name="plus" /> New check
         </NavLink>
-        <NavLink to="/projects" end className="nav-link">
-          <Icon name="folder" /> Projects
-        </NavLink>
-        <NavLink to="/board" className="nav-link">
-          <Icon name="flag" /> Status board
-        </NavLink>
-        <NavLink to="/import-scorecard" className="nav-link">
-          <Icon name="sheet" /> Convert a scorecard
-        </NavLink>
-        <NavLink to="/accuracy" className="nav-link">
-          <Icon name="scale" /> Accuracy
-        </NavLink>
-        <NavLink to="/library" className="nav-link">
-          <Icon name="check" /> Test library
-        </NavLink>
-        <NavLink to="/models" className="nav-link">
-          <Icon name="cpu" /> Examiners
-        </NavLink>
+        <div className="nav-group" role="group" aria-labelledby="nav-track">
+          <div className="nav-group-title" id="nav-track">Track</div>
+          <NavLink to="/board" className="nav-link">
+            <Icon name="flag" /> Status board
+          </NavLink>
+          <NavLink to="/projects" end className="nav-link">
+            <Icon name="folder" /> Projects
+          </NavLink>
+          <NavLink to="/accuracy" className="nav-link">
+            <Icon name="scale" /> Accuracy
+          </NavLink>
+        </div>
+        <div className="nav-group" role="group" aria-labelledby="nav-tools">
+          <div className="nav-group-title" id="nav-tools">Tools</div>
+          <NavLink to="/import-scorecard" className="nav-link">
+            <Icon name="sheet" /> Convert a scorecard
+          </NavLink>
+          <NavLink to="/library" className="nav-link">
+            <Icon name="check" /> Test library
+          </NavLink>
+          <NavLink to="/models" className="nav-link">
+            <Icon name="cpu" /> Examiners
+          </NavLink>
+        </div>
       </nav>
 
       <div className="side-section">
@@ -90,8 +96,9 @@ export function Layout() {
   const { pathname } = useLocation();
   return (
     <div className="shell">
+      <a className="skip-link" href="#main">Skip to the page</a>
       <Sidebar />
-      <main className="main">
+      <main className="main" id="main" tabIndex={-1}>
         <div className="main-inner">
           {/* Keyed by the address, so each page animates in when you navigate to it. */}
           <div key={pathname} className="page">

@@ -6,7 +6,8 @@ import { scrollToId, scrollToY } from './hooks';
 const LINKS: Array<[string, string]> = [
   ['How it works', 'how'],
   ['What you get', 'report'],
-  ['Scorecards', 'scorecards'],
+  ['Status board', 'board'],
+  ['Accuracy', 'people'],
   ['FAQ', 'faq'],
 ];
 
@@ -69,7 +70,7 @@ export function Nav() {
           </button>
         ))}
         <Link to="/projects" tabIndex={open ? 0 : -1}>
-          Open the dashboard
+          Open the app
         </Link>
         <Link to="/new" className="lp-btn lp-btn-primary" tabIndex={open ? 0 : -1}>
           Check a file

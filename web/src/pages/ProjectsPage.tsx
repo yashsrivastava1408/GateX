@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import type { ProjectSummary } from '@ddd/shared';
 import { api } from '../api';
 import { Chip, DecisionChip } from '../components/Chip';
+import { Stat } from '../components/Stat';
 import { isActive, pendingChip } from '../runStatus';
 import { ConfirmDelete } from '../components/ConfirmDelete';
 import { Icon } from '../components/Icons';
@@ -10,16 +11,6 @@ import { useToast } from '../components/Toast';
 import { Card, EmptyState, ErrorBanner, Loading, PageHeader } from '../components/Layout';
 import { formatScore, timeAgo } from '../format';
 import { useDocumentTitle, useResource } from '../hooks';
-
-function Stat({ label, value, hint }: { label: string; value: number | string; hint: string }) {
-  return (
-    <div className="stat">
-      <span className="stat-label">{label}</span>
-      <span className="stat-value">{value}</span>
-      <span className="stat-hint">{hint}</span>
-    </div>
-  );
-}
 
 function LatestChip({ project }: { project: ProjectSummary }) {
   const latest = project.latest;

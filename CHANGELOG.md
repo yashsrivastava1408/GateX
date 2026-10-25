@@ -4,6 +4,18 @@ All notable changes to GateX (earlier entries call it the DDD Evaluator). Format
 
 ## [Unreleased]
 
+### Changed: a landing page that tells the Level 1 story, and a calmer app (25 Oct 2026)
+UI and wording only. No scoring, API or database change.
+- **Landing page.** New hero copy for the Level 1 evaluator (what it does, and that it only reads your file), a "Check the work before anyone builds on it" section (frozen target, independent Examiners, a mark you can question), a note on the waiting line, a live "close to the line" note under the colour bar, the status board as a worked example, a "Checked against people, not just by itself" section (Compare with a person, Right / Wrong / Unclear, the Accuracy page saying "Not enough data yet"), a note about the scorecard-fit warning, and a longer FAQ that says plainly that GateX is not yet proven accurate. Every number on the page is labelled as an example or a sample. Nothing claims accuracy, customers or testimonials. New: `web/src/landing/Story.tsx`; nav and footer link to the board and the Accuracy page.
+- **Sidebar.** Links are grouped (Track: Status board, Projects, Accuracy; Tools: Convert a scorecard, Test library, Examiners), the Recent list scrolls instead of overlapping the footer, a "Skip to the page" link for keyboards, and on a phone the links become one row you can swipe.
+- **Status board page.** Summary tiles (steps complete, open, green results, projects not placed), a legend, named boxes for screen readers, and on a phone each step is a card.
+- **Waiting page.** The line is shown as places in a row, and the wording no longer repeats the number ("You are number 4 in line: one check is running and 3 are waiting ahead of yours").
+- **Report.** The score bar shows the "close to the line" span as a dashed band next to the chip.
+- **Fixed.** A phone view of Projects (and any table with an invisible heading) scrolled sideways by 270 px, because a screen-reader-only heading escaped the table's scroll box (`.table-scroll` is now positioned).
+- Tests: `web/src/landing/closeLine.test.ts`, `web/src/lineCopy.test.ts` (16 web tests).
+- Looked at in a real headless Chrome at 1440 and 390 px wide (dark, and light for the app pages), with demo models: landing page, Projects, New check, run waiting page, report with a patched near-the-line score, Status board, Accuracy.
+
+
 ### Added: harder to get a false green, a range near a colour line, and a check that the scorecard fits (25 Oct 2026)
 The evaluator is the Roadmap's Level 1 agent; this is work on making it accurate and steady, not a generator or an auto-fixer. Every number below is from real files and real runs, labels are ours (an AI's), and nothing here has been checked by a person.
 - **False-green guard** (`npm run generosity`, `server/src/planted/generosity.ts`, `server/tests/generosity.test.ts`, a step of `npm run release:check`). Examiners that are perfectly generous (a clean 5 everywhere, citing real cells) can only be stopped by the checks done in code. For three real pairs a clean file and a copy with mistakes

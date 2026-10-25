@@ -7,6 +7,7 @@ import { AnyScorecard, Iterate, PathToGreen, Proof } from '../landing/Lower';
 import { Marquee, Tiers } from '../landing/Extras';
 import { useMagnetic } from '../landing/hooks';
 import { Faq, FinalCta, Footer } from '../landing/Closing';
+import { PeopleProof, StatusBoardSection, WhyCheck } from '../landing/Story';
 import '../styles/landing.css';
 
 /** The first page a visitor sees: what GateX does, shown rather than told. The dashboard lives at /projects. */
@@ -26,14 +27,17 @@ export function LandingPage() {
         <Hero />
         <TrustStrip />
         <Marquee />
+        <WhyCheck />
         <HowItWorks />
         <ResultExplained />
         <ReportShowcase />
         <FixFirst />
         <PathToGreen />
         <AnyScorecard />
+        <StatusBoardSection />
         <Proof />
         <Tiers />
+        <PeopleProof />
         <Iterate />
         <Faq />
         <FinalCta />

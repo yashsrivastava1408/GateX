@@ -3,17 +3,18 @@ import { LIcon } from './icons';
 import { Reveal } from './Reveal';
 import { Tilt } from './Tilt';
 import { useInView, usePrefersReducedMotion } from './hooks';
+import { CloseToLineNote } from './Story';
 
 const TRUST = [
-  { icon: 'search', title: 'Every score has proof', text: 'Points to the exact cell' },
-  { icon: 'people', title: 'Three independent Examiners', text: 'Mark on their own' },
-  { icon: 'shield', title: 'Result from a fixed rule', text: 'Green, amber or red' },
-  { icon: 'fileCheck', title: 'Your file is never changed', text: 'You stay in control' },
+  { icon: 'search', title: 'Every mark has proof', text: 'Points to the exact cell' },
+  { icon: 'people', title: 'Three independent Examiners', text: 'From different makers, marking blind' },
+  { icon: 'shield', title: 'Colour from the score alone', text: 'Below 60 red, 75 and up green' },
+  { icon: 'fileCheck', title: 'Your file is never changed', text: 'GateX only reads it' },
 ];
 
 export function TrustStrip() {
   return (
-    <section className="lp-trust" aria-label="Why you can rely on a check">
+    <section className="lp-trust" aria-label="How a check stays honest">
       <div className="lp-wrap">
         <Reveal className="trust-panel" from="up">
           {TRUST.map((t, i) => (
@@ -35,7 +36,7 @@ const STEPS = [
   { icon: 'upload', title: 'Add your file and scorecard', text: 'Upload your file and a scorecard in any layout.' },
   { icon: 'people', title: 'Examiners mark it on their own', text: 'Three independent AI Examiners check the work.' },
   { icon: 'list', title: 'Final reviewer settles differences', text: 'Compares the marks and resolves any differences.' },
-  { icon: 'gear', title: 'A fixed rule gives the result', text: 'You get a score, colour and a clear plan to reach green.' },
+  { icon: 'gear', title: 'A fixed rule gives the result', text: 'You get a score, a colour and a clear plan to reach green.' },
 ];
 
 export function HowItWorks() {
@@ -74,6 +75,7 @@ export function HowItWorks() {
             </div>
           ))}
         </div>
+        <p className="how-note"><LIcon name="clock" size={16} /> One check runs at a time. If another is running, yours waits in line, shows its place, and starts by itself. You can cancel it while it waits.</p>
       </div>
     </section>
   );
@@ -177,6 +179,7 @@ export function ResultExplained() {
               <span style={{ left: '75%' }}>75</span>
               <span style={{ left: '100%' }}>100</span>
             </div>
+            <CloseToLineNote value={value} />
           </Reveal>
           <Reveal delay={240} from="right" className="checks-shell">
             <Tilt className="checks-card" max={4}>

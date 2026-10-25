@@ -75,7 +75,7 @@ const FORMATS = [
   { label: 'PDF', name: 'PDF', tone: 'red' },
   { label: 'TXT', name: 'Text', tone: 'grey' },
 ];
-const CONVERT_POINTS = ['Same scorecard used every time', 'Works with any layout', 'Fair and comparable results'];
+const CONVERT_POINTS = ['Same scorecard used every time', 'Works with any layout', 'A note if it asks about things your file cannot hold'];
 
 export function AnyScorecard() {
   const [ref, seen] = useInView<HTMLDivElement>();
@@ -115,6 +115,7 @@ export function AnyScorecard() {
             </ul>
           </Tilt>
         </div>
+        <p className="fit-note"><LIcon name="alert" size={16} /> Before it scores, GateX tells you in plain words if a scorecard asks about something your file cannot hold, for example a built database when the file is a feature list. It never blocks the check.</p>
       </div>
     </section>
   );
@@ -140,7 +141,7 @@ export function Proof() {
         </Reveal>
         <div ref={ref} className={`proof ${seen ? 'in' : ''}`}>
           <Tilt className="sheet-window" max={3}>
-            <div className="sw-bar"><LIcon name="grid" size={16} /> Orders.xlsx</div>
+            <div className="sw-bar"><LIcon name="grid" size={16} /> Orders.xlsx <em>sample</em></div>
             <div className="sw-grid" aria-hidden="true">
               <span className="corner" />
               {cols.map((c) => <b key={c}>{c}</b>)}
@@ -196,7 +197,7 @@ export function Iterate() {
       <div className="lp-wrap">
         <Reveal as="header" className="section-head">
           <h2>Iterate until green</h2>
-          <p>Run checks, fix issues and track your progress.</p>
+          <p>Run a check, fix what it found, then check again. Every round is saved, so you can watch the score move. <span className="sample-inline">Sample history.</span></p>
         </Reveal>
         <div ref={ref} className={`iterate ${seen ? 'in' : ''}`}>
           <Reveal className="iter-chart-shell" from="left">

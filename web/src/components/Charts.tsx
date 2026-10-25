@@ -78,7 +78,7 @@ export function ScoreRing({ score, decision, size = 124 }: { score: number; deci
 }
 
 /** A 0-100 track with the refine and accept thresholds marked and the score on it. */
-export function ThresholdBar({ score, refine, accept, decision }: { score: number; refine: number; accept: number; decision: Decision }) {
+export function ThresholdBar({ score, refine, accept, decision, range }: { score: number; refine: number; accept: number; decision: Decision; range?: { low: number; high: number } }) {
   const at = (v: number) => `${Math.max(0, Math.min(100, v))}%`;
   const mounted = useMounted();
   return (
@@ -87,6 +87,7 @@ export function ThresholdBar({ score, refine, accept, decision }: { score: numbe
         <span className="threshold-zone zone-red" style={{ width: at(refine) }} />
         <span className="threshold-zone zone-amber" style={{ left: at(refine), width: at(accept - refine) }} />
         <span className="threshold-zone zone-green" style={{ left: at(accept), width: at(100 - accept) }} />
+        {range && <span className="threshold-range" style={{ left: at(range.low), width: at(range.high - range.low) }} />}
         <span className="threshold-marker" style={{ left: mounted ? at(score) : '0%', background: TONE[decision], color: TONE[decision] }} />
       </div>
       <div className="threshold-labels">

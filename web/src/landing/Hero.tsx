@@ -108,7 +108,7 @@ export function Hero() {
       <Mountains className="hero-mountains" />
       <div className="lp-wrap hero-grid">
         <div className="lp-hero-copy">
-          <p className="lp-eyebrow rise" style={{ '--d': '60ms' } as CSSProperties}>Checks your work against a scorecard.</p>
+          <p className="lp-eyebrow rise" style={{ '--d': '60ms' } as CSSProperties}>The Level 1 evaluator</p>
           <h1 className="headline">
             {HEADLINE.map((h, i) => (
               <span key={i} className={`hw ${h.grad ? 'grad' : ''} ${i === 4 ? 'br' : ''}`} style={{ '--w': i } as CSSProperties}>
@@ -117,7 +117,7 @@ export function Hero() {
             ))}
           </h1>
           <p className="lede rise" style={{ '--d': '300ms' } as CSSProperties}>
-            Upload your file and scorecard. Three AI Examiners check it, a Final reviewer settles differences, and you get a clear result with exact proof and a path to green.
+            Add your file and its scorecard. Three independent AI Examiners mark it, a Final reviewer settles any difference, and fixed rules turn the marks into a score, a colour and a path to green. GateX reads your file and never edits it.
           </p>
           <div className="hero-cta rise" style={{ '--d': '420ms' } as CSSProperties}>
             <Link to="/new" className="lp-btn lp-btn-primary lp-btn-lg">
@@ -129,11 +129,13 @@ export function Hero() {
           </div>
           <p className="hero-note rise" style={{ '--d': '520ms' } as CSSProperties}>
             <span>Excel, CSV, PDF or text</span>
-            <span>No changes to your file</span>
+            <span>Your file is never changed</span>
+            <span>One check at a time</span>
           </p>
         </div>
         <div className="hero-visual rise" style={{ '--d': '380ms' } as CSSProperties}>
           <Scene />
+          <small className="scene-tag">Example check: the file, scorecard and score shown here are samples.</small>
         </div>
       </div>
     </section>

@@ -126,7 +126,7 @@ export const LINE = {
   explain: 'Another check is running. Yours is next and starts by itself when it finishes.',
   explainLater: 'Another check is running. Yours starts by itself, in its turn, when the ones ahead of it finish.',
   place: (place: number | null): string =>
-    place === null ? 'Your check is saved and waiting.' : place === 1 ? 'You are next in line.' : `Your place in line: ${place}. ${place} checks are ahead of yours.`,
+    place === null ? 'Your check is saved and waiting.' : place === 1 ? 'You are next in line.' : `You are number ${place} in line: one check is running and ${place - 1} ${place - 1 === 1 ? 'is' : 'are'} waiting ahead of yours.`,
   keepPage: 'Your files are saved. You can close this page or leave it open, and come back any time. This page updates by itself.',
   cancel: 'Cancel this check',
   cancelledToast: 'Cancelled. It never started, and nothing was marked.',

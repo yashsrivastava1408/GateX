@@ -35,7 +35,7 @@ export function VerdictHero({ run }: { run: RunDetail }) {
             </ul>
           </div>
 
-          <ThresholdBar score={verdict.weightedScore} refine={verdict.thresholds.refine} accept={verdict.thresholds.accept} decision={verdict.decision} />
+          <ThresholdBar score={verdict.weightedScore} refine={verdict.thresholds.refine} accept={verdict.thresholds.accept} decision={verdict.decision} range={verdict.scoreRange} />
           <div className="threshold-caption">
             <span><i className="swatch swatch-red" /> Red below {verdict.thresholds.refine}</span>
             <span><i className="swatch swatch-amber" /> Amber {verdict.thresholds.refine} to {verdict.thresholds.accept - 1}</span>
