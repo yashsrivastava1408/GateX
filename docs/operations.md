@@ -14,7 +14,10 @@ How to install, set up, run and look after GateX. For what it does, see [agent.m
 8. [Backup and restore](#backup-and-restore)
 9. [Upgrading](#upgrading)
 10. [Putting it on a server](#putting-it-on-a-server)
-11. [Setup messages](#setup-messages)
+11. [Check the set-up](#check-the-set-up-npm-run-doctor)
+12. [When a run fails half-way](#when-a-run-fails-half-way)
+13. [Old logs and scripts](#old-logs-and-scripts)
+14. [Setup messages](#setup-messages)
 
 ## Prerequisites
 
@@ -227,6 +230,36 @@ The image runs as an ordinary user, not root, and has a health check (`docker ps
 user id 1000, the default first user: `sudo chown -R 1000:1000 data`.
 
 Reports and projects can be deleted from the dashboard (a confirmation first). Deleting removes the database rows and the saved files for them.
+
+## Check the set-up: `npm run doctor`
+
+```bash
+npm run doctor
+```
+
+Says in plain words whether this machine is ready: Node version, whether `.env` exists (it shows setting **names** only, never values), whether the
+models file reads and has a key for every provider it uses, whether the database answers (when `DATABASE_URL` is set), and whether `data/` is writable.
+Each line starts with `OK`, `CHECK` (worth a look) or `NEEDS FIX` (with the next step). It exits non-zero only when something needs fixing, and it makes no model call.
+
+## When a run fails half-way
+
+What happens today: if a model service goes down in the middle of a run, the run is saved as **failed** with the error message only. The marks
+that finished before the outage are **not kept**, so submitting the same files again starts from the beginning (and pays for the finished sections again). A
+single rater failing is different: the other raters carry on, a fallback model is tried first, and the run still finishes.
+The same happens to a run cut short by a server restart ("the server stopped before this evaluation finished").
+
+Why it is not built: `evaluate()` in `server/src/agent/orchestrator.ts` keeps the section results in memory only, and repeated marks of the same prompt
+are *meant* to differ (the median of `repeats` calls steadies the score), so a plain "same prompt, same model" cache would collapse them.
+
+Recommended approach if it is needed (a small, safe change, not done yet):
+1. In `service.ts` wrap the provider factory in a caching layer, outside the agent. Key: hash of model + system prompt + user prompt + **call number** (the n-th identical call in this run). Store the reply in `data/cache/<hash>.json` only after a successful reply.
+2. Use the cache only when a run is submitted as a **re-run of a failed run** (a new "Resume" button, or `resumeOf` on the request) and give it the failed run's cache folder. Normal runs never read it, so scores stay independent.
+3. Show "N model calls reused" in the report notes so the saving is visible, and delete the cache folder when the run finishes.
+Until then: if a run fails on a model outage, wait for the service to recover (or use a Quick check) and submit it again.
+
+## Old logs and scripts
+
+Logs and helper scripts from past live runs (`docker-build*.log`, `live-*.log`, `run-*.sh`, `planted-*.log`, `swing-run-*.log`) are kept in `data/archive/`. `data/` is not committed, so they are only on this machine.
 
 ## Setup messages
 

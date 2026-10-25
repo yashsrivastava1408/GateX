@@ -4,7 +4,7 @@ flowchart TD
   RED["RED<br/>below 60"]
   Q2{"score below 75?"}
   AMB["AMBER<br/>60 to 74"]
-  GRN["GREEN<br/>75 to 100"]
+  GRN["GREEN (light green)<br/>75 to 100"]
   N["Needs attention (listed first, colour unchanged):<br/>must-pass questions below 4, Must fix issues,<br/>marks only one Examiner backed, little of the scorecard marked"]
 
   S --> Q1
@@ -14,7 +14,7 @@ flowchart TD
   Q2 -- no --> GRN
   S -.-> N
 
-  classDef good fill:#0f2218,stroke:#3ecf8e,color:#ececf0
+  classDef good fill:#12301f,stroke:#86efac,color:#ececf0
   classDef warn fill:#262010,stroke:#f5b13d,color:#ececf0
   classDef bad fill:#2a1413,stroke:#f2655c,color:#ececf0
   classDef gate fill:#14141a,stroke:#7aa2f7,color:#ececf0

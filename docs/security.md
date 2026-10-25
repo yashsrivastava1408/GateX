@@ -75,6 +75,10 @@ A file is data from an author, and an author could write instructions into a cel
 - [ ] `npm audit` run as part of your pipeline
 - [ ] Someone owns the scorecards: changes are versioned, reviewed and frozen
 
+## Access control
+
+Access control is not enabled: anyone who can reach the address can use GateX. Keep it inside the company network or VPN. If a sign-in is needed later, the suggested route is basic-auth in the `Caddyfile` (Caddy's `basic_auth` directive with a hashed password from `caddy hash-password`).
+
 ## Reporting a security concern
 
 This is an internal Talencia Global project. Send security concerns to the project owner directly, not in a shared channel. Include the steps
