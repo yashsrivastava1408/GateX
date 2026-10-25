@@ -16,6 +16,7 @@ import { CONSOLIDATOR_SYSTEM } from './prompts/consolidator.js';
 import { normalise } from '../util/text.js';
 import { sha256 } from '../util/hash.js';
 import { callJsonModel, extractJson, type CallSettings } from './callModel.js';
+import { decideMark, hasQuotedProof, strayMarks } from './finalMark.js';
 import { validateCitations } from './evidence.js';
 import {
   consolidatorDimensionSchema,
@@ -281,7 +282,18 @@ function reconcileDimension(
     };
   }
 
-  const scores = given.map((g) => g.score);
+  // Marks that need proof (a stray 0, a lone mark far from two examiners who agree) count only if the examiner quoted a cell that holds the words.
+  // On a question that needs evidence from outside the file a 0 means "not in the file", which the scorecard's own rule handles, so it is not a stray.
+  const markNotes: string[] = [];
+  const stray = spec.criterionOf?.outside ? new Set<number>() : strayMarks(given.map((g) => g.score));
+  const usable = given.filter((g, i) => {
+    if (!stray.has(i) || hasQuotedProof(g.evidence, (e) => input.wb.cellText(e.sheet, e.cell))) return true;
+    markNotes.push(`Examiner ${g.raterId}'s mark ${g.score} was set aside: it is far from the other examiners' marks (${given.filter((_, j) => j !== i).map((o) => o.score).join(', ')}) and the cell it cited does not quote the words that show it.`);
+    return false;
+  });
+  const kept = usable.length > 0 ? usable : given;
+
+  const scores = kept.map((g) => g.score);
   const low = Math.min(...scores);
   const high = Math.max(...scores);
   const spread = high - low;
@@ -305,30 +317,37 @@ function reconcileDimension(
   let consolidated: number;
   let resolution: DimensionResult['resolution'];
   let flagged = false;
+  let moveNote: string | undefined;
 
-  if (given.length === 1) {
-    consolidated = given[0]!.score;
+  if (kept.length === 1) {
+    consolidated = kept[0]!.score;
     resolution = 'single_rater';
     flagged = true;
-  } else if (spread <= 1) {
-    consolidated = proposed ?? low;
-    resolution = 'agreement';
-  } else if (proposed !== null && fromConsolidator?.resolved && (proposed === low || consolidatorEvidence.length > 0)) {
-    consolidated = proposed;
-    resolution = 'claims_checked';
   } else {
-    // PDF page 10: an unresolved disagreement keeps the lower score, and the item is flagged as uncertain.
-    consolidated = low;
-    resolution = 'lower_stands';
-    flagged = true;
+    // The mark is the median of the examiners' marks, set by code. The final reviewer can move it only with cells code has checked,
+    // and only as far as that evidence goes (decideMark).
+    const decision = decideMark(kept, proposed === null ? null : { proposed, cited: consolidatorEvidence });
+    consolidated = decision.mark;
+    moveNote = decision.note;
+    if (decision.note) markNotes.push(decision.note);
+    if (spread <= 1) {
+      resolution = 'agreement';
+    } else if (proposed !== null && fromConsolidator?.resolved && proposed === consolidated && (proposed === low || consolidatorEvidence.length > 0)) {
+      resolution = 'claims_checked';
+    } else {
+      // PDF page 10: a disagreement nobody settled with evidence is flagged as uncertain; the lower middle mark stands.
+      resolution = 'lower_stands';
+      flagged = true;
+    }
   }
 
   // Steady: two or more examiners within a point of each other, and each stable across its own repeats.
-  const unstable = given.some((g) => g.repeatSpread > 1);
-  const confidence: Confidence = given.length === 1 ? 'single' : spread <= 1 && !unstable ? 'steady' : 'shaky';
+  const unstable = kept.some((g) => g.repeatSpread > 1);
+  const confidence: Confidence = kept.length === 1 ? 'single' : spread <= 1 && !unstable ? 'steady' : 'shaky';
 
-  const supporting = given.find((g) => g.score === consolidated) ?? given[0]!;
-  const evidence = consolidatorEvidence.length > 0 && proposed === consolidated ? consolidatorEvidence : supporting.evidence;
+  const supporting = kept.find((g) => g.score === consolidated) ?? kept[0]!;
+  const reviewerMark = proposed === consolidated;
+  const evidence = consolidatorEvidence.length > 0 && reviewerMark ? consolidatorEvidence : supporting.evidence;
   return {
     ...base,
     consolidated,
@@ -337,11 +356,14 @@ function reconcileDimension(
     flagged,
     confidence,
     // The final reviewer's words can say "all examiners agree" when only one score survived the evidence check, so say what really happened.
-    rationale: (given.length === 1
-      ? `Only examiner ${given[0]!.raterId} gave a score that the file could back up, so this is a single opinion. ${supporting.rationale || ''}`
-      : fromConsolidator?.rationale || supporting.rationale || ''
+    rationale: (kept.length === 1
+      ? `Only examiner ${kept[0]!.raterId} gave a score that the file could back up, so this is a single opinion. ${supporting.rationale || ''}`
+      : reviewerMark || proposed === null
+        ? fromConsolidator?.rationale || supporting.rationale || ''
+        : `${moveNote ?? `The mark is the median of the examiners' marks (${consolidated}).`} ${supporting.rationale || ''}`
     ).trim(),
     evidence: evidence.slice(0, 5),
+    ...(markNotes.length > 0 ? { markNotes } : {}),
   };
 }
 

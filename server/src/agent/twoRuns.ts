@@ -59,8 +59,10 @@ function mergeUsage(a: UsageLine[], b: UsageLine[]): UsageLine[] {
  * the gap between the two runs is recorded. Everything else about a run (adaptive repeats, checks) is unchanged.
  */
 export async function evaluateTwice(args: EvaluateArgs): Promise<EvaluationOutput> {
-  const first = await evaluate(args);
-  const second = await evaluate(args);
+  // The average of two runs is the range finder here, so each run skips the extra look near a colour line.
+  const twice = { ...args, models: { ...args.models, settings: { ...args.models.settings, closeLook: false } } };
+  const first = await evaluate(twice);
+  const second = await evaluate(twice);
   const result = summariseTwoRuns(scoreOf(first.core), scoreOf(second.core));
   const base = Math.abs(scoreOf(first.core) - result.average) <= Math.abs(scoreOf(second.core) - result.average) ? first : second;
 

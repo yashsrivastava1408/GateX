@@ -111,7 +111,7 @@ export interface DimensionSpec {
   /** Scored criterion by criterion when present; the dimension's score is then combined by code. */
   criteria?: CriterionSpec[];
   /** Set by the agent on the working copy of a criterion: the dimension it belongs to. Never in a scorecard file. */
-  criterionOf?: { id: string; name: string };
+  criterionOf?: { id: string; name: string; /** The weight of that dimension, so code can tell heavy questions from light ones. */ weight?: number; /** The criterion needs evidence from outside the file: a 0 there means "not in the file". */ outside?: boolean };
 }
 
 export interface Scorecard {
@@ -195,6 +195,8 @@ export interface CriterionResult {
   codeDetail?: { passed: number; total: number; summary: string };
   /** Carried from the criterion's spec. */
   outside?: boolean;
+  /** What code did with the marks of this question, in plain words: marks set aside for lack of proof, reviewer moves granted or refused. */
+  markNotes?: string[];
 }
 
 export interface DimensionResult {
@@ -219,6 +221,8 @@ export interface DimensionResult {
   error?: string;
   /** Per-criterion results when the dimension is scored criterion by criterion; `consolidated` is then their combination. */
   criteria?: CriterionResult[];
+  /** What code did with the examiners' marks for this question (see CriterionResult.markNotes). */
+  markNotes?: string[];
 }
 
 export interface Finding {
@@ -347,6 +351,27 @@ export interface TwoRuns {
 /** A gap of this many points or more between two runs means the result is a range, not a number. */
 export const UNSTABLE_GAP = 8;
 
+/** A score within this many points of a colour line (60 or 75) is "close to the line": another run could land on the other side. */
+export const CLOSE_TO_LINE = 4;
+
+/** What the second look near a colour line found (see CLOSE_TO_LINE). */
+export interface CloseLook {
+  /** The colour line the score is close to: 75 (green starts) or 60 (amber starts). */
+  line: number;
+  /** The score before the second look, and the score reported. */
+  first: number;
+  final: number;
+  /** Where the score would land if every question the examiners still disagree on (by 2 or more) went the lowest or the highest way. */
+  low: number;
+  high: number;
+  /** The questions that were scored again (empty when the examiners already agreed, or the second look was off). */
+  questions: string[];
+  /** Model calls the second look made (examiners and final reviewer). */
+  calls: number;
+  /** Questions still in dispute after the second look. */
+  stillDisputed: string[];
+}
+
 export interface EvaluationCore {
   header: ReportHeader;
   scorecard: Scorecard;
@@ -359,6 +384,8 @@ export interface EvaluationCore {
   droppedFindings?: DroppedFinding[];
   /** Present only when the check was run twice. */
   twoRuns?: TwoRuns;
+  /** Present only when the score is close to a colour line (60 or 75). */
+  closeLook?: CloseLook;
   /** Tokens used per model in this run (the cost table is built from it). */
   usage?: UsageLine[];
 }
@@ -465,13 +492,17 @@ export interface RunLog {
   nodeVersion: string;
   promptVersion: string;
   promptHashes: Record<string, string>;
-  settings: { temperature: number; maxOutputTokens: number };
+  settings: { temperature: number; maxOutputTokens: number; /** Only when examiners' repeat answers were asked at a different temperature. */ repeatTemperature?: number };
   models: ModelRef[];
   artifactHash: string;
   scorecardHash: string;
   timings: { totalMs: number; checksMs: number; ratingMs: number; consolidationMs: number };
   /** How repeats were spent: adaptive runs repeat only disputed questions. Absent when nothing went to the raters. */
   repeats?: { mode: 'all' | 'adaptive'; repeats: number; planned: number; made: number; saved: number; repeated: string[] };
+  /** What code did with the examiners' marks, one line per case: marks set aside for lack of proof, final-reviewer moves granted or refused. */
+  markLog?: string[];
+  /** The second look near a colour line: the questions scored again and the model calls it made. */
+  secondLook?: { line: number; questions: string[]; calls: number };
   /** The second check that reads each examiner finding against the file. Absent when it was off or nothing was left to check. */
   verification?: {
     /** The model that answered. */

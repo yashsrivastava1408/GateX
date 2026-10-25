@@ -16,8 +16,8 @@ until it is green.
 2. **GateX counts what can be counted.** Blank cells, repeated ids, lists that do not match: code checks every row, so those numbers are exact.
 3. **Three AI Examiners mark the rest.** Examiner 1, Examiner 2 and Examiner 3 each give every question a mark from 0 to 5. They do not see each
    other's marks, and every mark has to point at a real cell in your file.
-4. **A Final reviewer compares their marks.** Where the Examiners agree, the mark stands. Where they differ, the Final reviewer looks at the
-   evidence in the file, and the lower mark stands unless the evidence supports a higher one.
+4. **A Final reviewer compares their marks.** Where the Examiners agree, the mark stands. Where they differ, the middle mark stands (the lower
+   one when two are left), and the Final reviewer can move it only by pointing at a cell in your file that supports the change.
 5. **A fixed rule picks the colour.** The score is out of 100. **Below 60 is red, 60 to 74 is amber and 75 or more is green.** The same rule
    is used for every scorecard, so the colour always means the same thing.
 6. **You get a plain report.** It lists the issues in the order to fix them, with the cell where each one is, and a path to green. It comes as

@@ -4,6 +4,34 @@ All notable changes to GateX (earlier entries call it the DDD Evaluator). Format
 
 ## [Unreleased]
 
+### Changed: steadier scores from run to run (25 Oct 2026)
+Cause (data/final-check/DRIFT.md): the same file scored 77.2 to 86.6 across five runs; half the swing came from the Final reviewer picking differently between near-identical
+Examiner marks, half from one Examiner's stray mark. Run twice stays optional.
+- **The final mark of a question is set by code** (`agent/finalMark.ts`, used by `consolidate.ts`): the **median** of the Examiners' marks (the lower middle when two are left). The Final reviewer
+  can move it only by citing cells that code confirms exist and hold its quote: all the way to a mark an Examiner gave from the same cell, otherwise one point. A suggestion with no checked cell
+  is refused. Every move and refusal is written into the question's `markNotes` and into `run-log.json` (`markLog`); the report notes carry the totals. PDF rules kept: lower middle on ties,
+  evidence or nothing, verdict by code. A disagreement nobody settled with evidence is flagged as before (the mark is now the median, not the minimum).
+- **A stray mark needs proof.** A 0 against an Examiner who gave 2 or more, or a mark 2+ points from two Examiners who agree, counts only if its cited cell holds the words it quoted
+  (8+ characters, or most of a short cell). Otherwise it is set aside for that question and logged. Two Examiners sharing a 0 are not strays, and a 0 on a question that needs outside evidence
+  is left to the scorecard's own rule.
+- **Targeted repeats** (`repeats.ts`): besides questions the Examiners differ on by 2+, a **heavy** question (criteria of the top quarter of dimensions by weight, ties included; none on a scorecard of
+  3 dimensions or fewer) is marked again whenever the Examiners are not all the same.
+- **Second look near a colour line** (`orchestrator.ts`, `verdict.ts`, new setting `closeLook`, default on): a score within 4 points of 75 or 60 triggers a re-mark of the (up to 8) questions the
+  Examiners still differ on by 2+ and a new review of just those. The report says in plain words that the result is "Close to the line", what was looked at again and the range (all disputed questions
+  lowest / highest). The colour is still the score alone. Skipped for Quick check (one repeat) and inside Run twice. New `core.closeLook`, run-log `secondLook`.
+- **Temperature.** Found: with `repeats` above 1 the old code silently raised every Examiner call to 0.4 while the run log said 0. Now every call (Examiners' first answers and repeats, Final reviewer,
+  fact checks, conversion) asks for `settings.temperature` (0). Measured on Bedrock (`data/noise/temperature-probe.json`): GLM-5, GLM-4.7, Llama 3.3, Qwen3-next, Qwen3-32B and Nova Pro all accept 0, and
+  still do not repeat themselves exactly (2 or 3 different replies out of 3 at 0), so repeats stay independent samples. New optional `settings.repeatTemperature` (unset) for repeat answers only; the run log records it.
+- No prompt changed, so `PROMPT_VERSION` stays `l1-prompts/1.8`.
+- **Measured offline** (`data/noise/simulate.ts` on the saved Step 2 runs; saved reports keep each Examiner's mark but not its cited cells, so the stray-mark rule is simulated as its upper bound,
+  every stray set aside): the four 1.8-prompt runs (80.2, 79.8, 77.2, 84.4; sd 3.0, range 7.2) become 84.4, 84.8, 80.4, 84.4 (sd 2.1, range 4.4). The mean rises about 3 points: where the Examiners were
+  a point apart the Final reviewer used to lean low, the median does not. Against the human scorecard's criterion marks the error falls (100 to 93 points summed over the 1.8 runs, 168 to 146 over the older runs); the
+  criteria that move away from the human mark move one point (G08-C06, G11-C03 4 to 5; G02-C02, G09-C02/C03 5 to 4), except G01-C01 (4 to 1, human 3) where the Examiners truly split 1 against 4/5. Older 1.5-prompt runs do not
+  get steadier (sd 3.6 to 4.8), their spread came from misreads fixed later. Small sample: 4 and 5 runs.
+- **Measured live** (`data/noise/live-run-1`, `-run-2`, Step 2 v3.2, Bedrock roster): 83.2 and 84.2 (gap 1.0), 9.6 and 10.1 minutes, 3.27M and 3.41M tokens in (earlier runs of this build: 3.24M to 4.08M; heavy-question repeats added
+  no measurable tokens). No question differed by 2 or more between the two runs (before: six). Only G01 differed (3 and 4). The second look did not fire (both scores are far from a line).
+- Tests: `finalMark.test.ts` (16), `closeLook.test.ts` (8), `temperature.test.ts` (4), plus `adaptiveRepeats.test.ts` (heavy questions) and three updated `orchestrator.test.ts` expectations (median instead of minimum).
+
 ### Added: the row sweep and exact scores now run over the tables of a PDF (24 Oct 2026)
 - **PDF tables are first-class for the sweep** (`server/src/agent/pdfSweep.ts`, `excel/pdfTables.ts`, `pdfReader.ts`). A PDF page used to be one column of text, so none of the
   row checks ran on it and every criterion that reads a PDF table was judged by the examiners alone. Now the reader also returns each table as columns and rows: laid out on its own

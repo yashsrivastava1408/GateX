@@ -44,7 +44,7 @@ export function assembleReport(core: EvaluationCore, override: Override | null, 
       treatment,
     }));
 
-  const verdict = buildVerdictSection(core.scorecard, core.dimensions, override, confirmed, core.twoRuns);
+  const verdict = buildVerdictSection(core.scorecard, core.dimensions, override, confirmed, core.twoRuns, core.closeLook);
   // A score from two examiners is not a score from three: say so next to the colour, not only in the run notes.
   const lost = core.notes.map((n) => /^Rater (\w+) \(.*\) failed and was left out/.exec(n)?.[1]).filter((id): id is string => Boolean(id));
   if (lost.length > 0) {

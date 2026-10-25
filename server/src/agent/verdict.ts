@@ -1,5 +1,6 @@
 import { SCORE_BANDS, bandOf } from '@ddd/shared';
 import type {
+  CloseLook,
   CriticalGate,
   Decision,
   DimensionResult,
@@ -139,6 +140,7 @@ export function buildVerdictSection(
   override: Override | null,
   findings: Finding[] = [],
   twoRuns?: TwoRuns,
+  closeLook?: CloseLook,
 ): VerdictSection {
   const blocking = blockingFindings(findings);
   const verdict = decide(scorecard, effectiveDimensions(scorecard, dimensions), blocking);
@@ -148,6 +150,9 @@ export function buildVerdictSection(
     verdict.score = twoRuns.average;
     verdict.decision = bandOf(twoRuns.average);
     reasons.splice(0, 1, ...twoRunsReasons(twoRuns));
+  } else if (closeLook) {
+    // Next to the score line, in words; the colour above it is still the score's band and nothing else.
+    reasons.splice(1, 0, ...closeLookReasons(closeLook));
   }
   if (override) {
     reasons.push(`A person overrode the verdict to ${override.decision.toUpperCase()}: ${override.reason}`);
@@ -167,6 +172,20 @@ export function buildVerdictSection(
 
 const pts = (n: number) => floor1(n).toFixed(1);
 const colourWord = { green: 'green', amber: 'amber', red: 'red' } as const;
+
+/** The plain-words line for a score close to a colour line: what was looked at again and how wide the result is. */
+export function closeLookReasons(c: CloseLook): string[] {
+  const side = c.line === SCORE_BANDS.accept ? `green starts at ${c.line}` : `amber starts at ${c.line}`;
+  const asked =
+    c.questions.length > 0
+      ? ` We looked again at the ${c.questions.length} question${c.questions.length === 1 ? '' : 's'} the examiners disagreed on (${pts(c.first)} before, ${pts(c.final)} after).`
+      : ' The examiners agreed closely on every question, so there was nothing to look at again.';
+  const left =
+    c.stillDisputed.length > 0
+      ? ` ${c.stillDisputed.length} question${c.stillDisputed.length === 1 ? ' is' : 's are'} still in dispute: if they all went the lowest way the score would be ${pts(c.low)}, the highest way ${pts(c.high)}.`
+      : ' No question is still in dispute.';
+  return [`Close to the line: the score is ${pts(c.final)} and ${side}, so another run could land on the other side.${asked}${left} Read this result as about ${pts(c.low)} to ${pts(c.high)}, not as one exact number. The colour comes from the score alone.`];
+}
 
 /** The plain-words lines for a two-run result: how the average was reached, and the unstable note when it applies. */
 export function twoRunsReasons(t: TwoRuns): string[] {

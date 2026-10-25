@@ -53,13 +53,30 @@ export function medianOutcome(runs: RaterOutcome[]): RaterOutcome {
 export const REPEAT_SPREAD = 1;
 
 /**
+ * The questions that carry the most of the score: those of the heaviest dimensions (the top quarter of them by weight, ties included).
+ * Works on the working questions, where a criterion knows the weight of its dimension. A scorecard of three dimensions or fewer has
+ * no "heavy" ones: when everything is heavy, nothing is singled out.
+ */
+export function heavyQuestionIds(questions: Array<{ id: string; weight: number; criterionOf?: { id: string; weight?: number } }>): Set<string> {
+  const parents = new Map<string, number>();
+  for (const q of questions) parents.set(q.criterionOf?.id ?? q.id, q.criterionOf?.weight ?? q.weight);
+  if (parents.size <= 3) return new Set();
+  const weights = [...parents.values()].sort((a, b) => b - a);
+  const threshold = weights[Math.max(1, Math.ceil(parents.size / 4)) - 1]!;
+  return new Set(questions.filter((q) => (q.criterionOf?.weight ?? q.weight) >= threshold).map((q) => q.id));
+}
+
+/**
  * Adaptive repeats: after every rater has scored a section once, the questions worth scoring again. A question is
- * repeated when two or more examiners are more than a point apart, or when an examiner that answered gave no usable
- * score for it (missing, or discarded for lack of evidence) without calling it not measurable. Questions the examiners
- * agree on, or all called not measurable, are not asked again, which is where the saving comes from. Generic over
+ * repeated when
+ *  - two or more examiners are more than a point apart, or
+ *  - it is a heavy question (see heavyQuestionIds) and the examiners are not all the same, since a one-point difference there is worth
+ *    most to the score and is where the final reviewer's pick used to swing it, or
+ *  - an examiner that answered gave no usable score for it (missing, or discarded for lack of evidence) without calling it not measurable.
+ * Questions the examiners agree on, or all called not measurable, are not asked again, which is where the saving comes from. Generic over
  * whatever ids the rater outcomes carry (dimensions today, criteria if raters score those).
  */
-export function idsToRepeat(ids: string[], firstPass: RaterOutcome[]): string[] {
+export function idsToRepeat(ids: string[], firstPass: RaterOutcome[], heavy: ReadonlySet<string> = new Set()): string[] {
   const answered = firstPass.filter((o) => o.status === 'ok');
   if (answered.length === 0) return [];
   return ids.filter((id) => {
@@ -67,7 +84,7 @@ export function idsToRepeat(ids: string[], firstPass: RaterOutcome[]): string[] 
     const scores = entries.filter((d): d is RaterDimension => d !== undefined && d.score !== null).map((d) => d.score!);
     const unusable = entries.some((d) => !d || (d.score === null && !d.notMeasurable));
     const spread = scores.length >= 2 ? Math.max(...scores) - Math.min(...scores) : 0;
-    return unusable || spread > REPEAT_SPREAD;
+    return unusable || spread > REPEAT_SPREAD || (heavy.has(id) && spread >= 1);
   });
 }
 

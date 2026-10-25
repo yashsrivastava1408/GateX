@@ -41,7 +41,8 @@ server/src/agent/
 ├── rater.ts            step 3: runs one Examiner, keeps only evidence-backed claims
 ├── fallback.ts           backup models: same Examiner, same family, tried in order
 ├── twoRuns.ts            the optional "run twice" mode: two full evaluations, their average, the gap and the unstable note
-├── repeats.ts            the median of one Examiner's repeated runs of a section, and how far they differed
+├── repeats.ts            the median of one Examiner's repeated runs of a section, which questions are asked again (disputed, and heavy ones), and the heavy-question rule
+├── finalMark.ts          step 4: the final mark by code: the median of the Examiners' marks, stray marks that need proof, how far the Final reviewer may move it
 ├── sectionPlanner.ts     groups questions into sections by the sheets and columns they `reads`
 ├── autoReads.ts          gives a question that names no sheets the sheets that match it, when the whole file is large
 ├── prompt.ts             builds what the Examiners are sent, one prompt per section (shared with the pre-submit check)
@@ -149,22 +150,44 @@ If a model is busy, its configured **fallback models** are tried in order. A fal
 family, so independence is kept (`agent/fallback.ts`). The report header names the model that really answered. The Final reviewer has
 fallbacks too.
 
-### Step 4 · The Final reviewer compares  (`consolidate.ts`, `prompts/consolidator.ts`)
+#### Asking again where it matters  (`repeats.ts`, `orchestrator.ts`)
+
+With `repeats` above 1 each Examiner marks every section once, and then a question is **marked again** (`repeats - 1` more times by each Examiner, and the
+median of each Examiner's answers is kept) when
+- two Examiners differ by **2 points or more**,
+- it is a **heavy** question (a criterion of one of the heaviest dimensions: the top quarter by weight, ties included, none on a scorecard of three dimensions or fewer)
+  and the Examiners are not all the same, since one point on a heavy question is worth the most and was where the Final reviewer's pick used to swing the score, or
+- an Examiner gave no usable mark.
+
+Questions the Examiners agree on are not asked again, which is where most of the saving comes from. Every call, the first answers and the repeats, is made at
+**temperature 0** (`settings.temperature`, 0 by default; Bedrock accepts it for every model in the roster). `settings.repeatTemperature` can set a different
+temperature for repeat answers only; it is unset by default because models do not repeat themselves exactly even at 0. The run log records the temperature used.
+
+### Step 4 · The Final reviewer compares  (`consolidate.ts`, `finalMark.ts`, `prompts/consolidator.ts`)
 
 The Final reviewer reads the three checked sets of marks plus the file and proposes, for each question, one mark and a set of merged issues. It
-does **not** mark from scratch. Then **code applies the PDF's rules** to whatever it proposed (PDF p.10):
+does **not** mark from scratch, and it no longer sets the final mark: **code does**, from the Examiners' marks, so the same marks always give the same result
+(`finalMark.ts`). The PDF's rules still hold (PDF p.10): lower on ties, no mark without evidence, never a mark outside what the Examiners said.
+
+1. **A stray mark needs proof.** A **0**, or a mark that is 2 or more points from two Examiners who agree, counts only when the cell the Examiner cited holds the words
+   it quoted (a quote of 8 characters or more, or most of what a short cell says). Without that proof the mark is **set aside for that question** and logged. A 0 that
+   two Examiners share is not a stray, and neither is a 0 on a question that needs evidence from outside the file (there a 0 means "not in the file").
+2. **The final mark is the median** of the marks that count: the middle one, and the lower middle when two are left, so a tie never rounds up.
+3. **The Final reviewer can move the median only with checked evidence.** It must cite cells code confirms exist and hold its quote. It may move the mark all the way
+   to a mark an Examiner gave when that Examiner cited one of the same cells; otherwise by one point at most. A suggestion with no checked cell is refused. Every
+   set-aside mark, move and refusal is written in plain words into the question's `markNotes` and into `run-log.json` (`markLog`), with a total in the report notes.
 
 | Situation | Result |
 |---|---|
 | Every Examiner declined | The question is **not in the file**: left out of the score (`unmeasured: skip`, the default) or counted as 0 (`zero`) |
 | No Examiner gave a valid mark, but some were set aside | **Unscored**: counts as 0 and is flagged |
-| Only one Examiner gave a valid mark | That mark, flagged as backed by one Examiner |
-| Examiners differ by **1 point or less** | The Final reviewer's mark if it lies between the lowest and highest Examiner mark, otherwise the lowest |
-| Examiners differ by **more than 1** and the Final reviewer settled it **with cited evidence** | Its mark, if it lies between the lowest and highest Examiner mark (choosing the lowest needs no evidence) |
-| Examiners differ by more than 1 and there is no evidence-backed answer | **The lower mark stands** |
+| Only one Examiner's mark is left (one gave a mark, or the other was a stray without proof) | That mark, flagged as backed by one Examiner |
+| Examiners differ by **1 point or less** | The median (the lower middle for two), moved only as above |
+| Examiners differ by **more than 1** and the Final reviewer's mark, after the rules above, is the final mark and is backed by a cited cell | That mark, marked as checked |
+| Examiners differ by more than 1 and nobody settled it with evidence | **The median stands**, and the question is flagged as uncertain |
 
-So the Final reviewer can never invent a mark outside what the Examiners said, and a big disagreement is only settled with evidence that really
-exists in the file. Repeated issues are merged, the highest severity of any member wins (merging never softens an issue), and any issue the
+So the Final reviewer can never invent a mark outside what the Examiners said, and the choice between near-identical marks, which used to swing a question by 3 or 4
+points between runs, is made by a rule. Repeated issues are merged, the highest severity of any member wins (merging never softens an issue), and any issue the
 Final reviewer did not merge is kept.
 
 ### Step 5 · Decide by a fixed rule  (`verdict.ts`)
@@ -187,6 +210,16 @@ Examiner backed (or one the Examiners could not agree on) and a score built on a
 listed first as **Needs attention** notes. They do not change the colour. When the server starts, it refreshes any saved result that an older
 version of this rule coloured differently. The score is compared unrounded and shown rounded **down**, so 74.96 is never shown as 75. An
 optional override (API only, with a written reason) is shown next to GateX's own verdict, which stays on record.
+
+#### Close to a colour line: a second look  (`orchestrator.ts`, `verdict.ts`)
+
+When the score is within **4 points of 75 or of 60** (`CLOSE_TO_LINE`), another run could land on the other side of the line. GateX then looks again, by
+code, at the questions the Examiners still differ on by 2 or more (the 8 with the most weight at stake at most): each Examiner marks just those questions
+`repeats - 1` more times, the median is taken over all their answers and the Final reviewer reviews just those questions again. The report then says, in plain words and
+next to the score, that the result is **close to the line**, what was looked at again (the score before and after), and the **range**: where the score would land if
+every question still in dispute went the lowest way, and the highest way. The colour is still the score's band and nothing else. The setting `closeLook` (on by
+default) can turn the extra calls off, and a Quick check never makes them; the plain-words note stays either way. A run-twice result skips it (its average and gap already say how wide the result is).
+The run log records the questions and the number of calls (`secondLook`).
 
 #### Optional: run twice  (`twoRuns.ts`)
 
@@ -376,7 +409,7 @@ Every safeguard on PDF page 13 is enforced by code, and each has a test.
 | Freeze: fixed and hashed before marking | `orchestrator.ts` hashes first, re-hashes last | › Freeze |
 | Blind marking | one shared prompt, built without marks or other Examiners | › keeps raters blind |
 | Evidence: unsupported claims set aside | `evidence.ts`, `rater.ts` | `evidence.test.ts`, › discards scores that cite no evidence |
-| Lower mark stands | `consolidate.ts` | › keeps the lower score… / › refuses a consolidator score outside the range |
+| Lower mark stands (the median of the marks; the lower middle on ties) | `consolidate.ts`, `finalMark.ts` | › keeps the median mark… / › refuses a consolidator score outside the range / `finalMark.test.ts` |
 | Read-only | the reader only reads; hash compared after | › never touches the workbook |
 | Reproducible | prompts, hashes, models, tokens and set-aside claims stored | `api.test.ts` run log |
 | Confidentiality | `llm/roster.ts` approved list | › Confidentiality |

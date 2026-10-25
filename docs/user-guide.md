@@ -26,8 +26,9 @@ words go to all three Examiners and are saved with the report.
 - **Counting.** GateX counts everything that can be counted, such as blank cells and repeated ids. Code does this, so the numbers are exact.
 - **Marking.** Three AI Examiners, called Examiner 1, Examiner 2 and Examiner 3, mark the rest on their own. They cannot see each other's
   marks, and each mark points at a real cell in your file.
-- **Comparing.** A Final reviewer compares the three sets of marks. If the Examiners agree, the mark stands. If they differ, the Final reviewer
-  checks the file, and the lower mark stands unless the file supports a higher one.
+- **Comparing.** A Final reviewer compares the three sets of marks. If the Examiners agree, the mark stands. If they differ, the middle mark
+  stands (the lower one when two are left) unless the Final reviewer shows, with a cell in your file, that it should move. A very low mark that
+  quotes nothing from the file is not counted. Questions the Examiners differ on, and the most important questions, are marked again first.
 - **Deciding.** A fixed rule turns the score into a colour. No AI picks the colour.
 
 You can watch each step as it runs.
@@ -37,6 +38,9 @@ You can watch each step as it runs.
 - **The colour comes from the score alone.** Below 60 is **red**, 60 to 74 is **amber**, and 75 or more is **green**. The same rule is used
   everywhere in GateX and in every report.
 - **The score** is out of 100 and uses the weights in your scorecard.
+- **Close to the line.** When the score is within 4 points of 60 or 75, another check could land on the other side. The report then says
+  "Close to the line", shows the range the score could fall in, and GateX has already looked a second time at the questions the Examiners
+  disagreed on. The colour still comes from the score alone; treat a close result as a range, not one exact number.
 - **Needs attention** lines sit at the top. They point out things worth a look first, such as a must-pass question that scored low or a mark
   that only one Examiner backed. They do not change the colour.
 - **What to improve** is your to-do list. Start at the top. Each issue is marked **Must fix**, **Should fix** or **Nice to fix**, and says

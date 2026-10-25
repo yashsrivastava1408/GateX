@@ -186,13 +186,14 @@ describe('when models misbehave', () => {
     );
   });
 
-  it('keeps the lower score and flags it as uncertain when a big disagreement cannot be resolved', async () => {
+  it('keeps the median mark and flags it as uncertain when a big disagreement cannot be resolved', async () => {
     const run = await runEvaluation({
       workbook: TALENTRA_XLSX,
       models: mockModels(['mock-low', 'mock-lenient', 'mock-strict'], 'mock-consolidator-unresolved'),
     });
     const j01 = run.core.dimensions.find((d) => d.id === 'J01')!;
-    expect(j01).toMatchObject({ consolidated: 1, spread: 4, resolution: 'lower_stands', flagged: true });
+    // Marks 1, 5 and 3 and no one settles it: the median (3) stands, and the question is flagged as uncertain.
+    expect(j01).toMatchObject({ consolidated: 3, spread: 4, resolution: 'lower_stands', flagged: true });
     expect(assembleReport(run.core, null).agreement.find((a) => a.dimensionId === 'J01')!.flagged).toBe(true);
   });
 
@@ -209,10 +210,11 @@ describe('when models misbehave', () => {
     expect(run.core.dimensions.find((d) => d.id === 'J01')).toMatchObject({ consolidated: 1, resolution: 'lower_stands', flagged: true });
   });
 
-  it('falls back to the lower score everywhere when the consolidator itself fails', async () => {
+  it('falls back to the median mark everywhere when the consolidator itself fails', async () => {
     const run = await runEvaluation({ workbook: TALENTRA_XLSX, models: mockModels(['mock-mid', 'mock-lenient', 'mock-strict'], 'mock-consolidator-down') });
     expect(run.core.consolidatorFailed).toBe(true);
-    expect(run.core.dimensions.find((d) => d.id === 'J01')).toMatchObject({ consolidated: 3, flagged: true });
+    // marks 4, 5 and 3: the median is 4, set by code without the final reviewer
+    expect(run.core.dimensions.find((d) => d.id === 'J01')).toMatchObject({ consolidated: 4, flagged: true });
     expect(run.core.notes.join(' ')).toMatch(/consolidator failed/);
     expect(run.core.findings.some((f) => f.source === 'raters')).toBe(true);
   });

@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
-import { TIER_RULE, tierFindings } from '@ddd/shared';
+import { CLOSE_TO_LINE, SCORE_BANDS, TIER_RULE, tierFindings } from '@ddd/shared';
 import type {
+  CloseLook,
   DimensionResult,
   DimensionSpec,
   EvaluationCore,
@@ -36,8 +37,9 @@ import { applyAnchorFloors } from './anchorFloor.js';
 import { applyExactCeilings, exactCeilingsFor } from './exactScore.js';
 import { collapseCriteria, expandCriteria, findingsToDimensions, retypeOutsideCriteria } from './aggregate.js';
 import { runRater } from './rater.js';
+import { effectiveDimensions, weightedScore } from './verdict.js';
 import type { CallMeta, DraftFinding, RaterOutcome } from './types.js';
-import { idsToRepeat, medianOutcome, type RepeatStats } from './repeats.js';
+import { heavyQuestionIds, idsToRepeat, medianOutcome, type RepeatStats } from './repeats.js';
 import { mapWithConcurrency } from '../util/concurrency.js';
 import { resolvePageRanges } from '../excel/pageRanges.js';
 import { addRelevantPages } from '../excel/pageSelect.js';
@@ -80,8 +82,8 @@ export interface EvaluationOutput {
 
 type DroppedFindingLike = { title: string; dimensionId: string; reason: string };
 const APP_VERSION = '1.0.0';
-/** Repeated scoring needs some randomness, or every repeat would be the same answer. */
-const REPEAT_TEMPERATURE = 0.4;
+/** At most this many questions are scored again by the second look near a colour line. */
+const CLOSE_LOOK_MAX_QUESTIONS = 8;
 
 /**
  * One evaluation, start to finish. It follows the Level 1 flow on PDF page 9:
@@ -166,6 +168,9 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
   const repeatedIds = new Set<string>();
   const repeatStats: RepeatStats = { mode: repeatMode, repeats, planned: 0, made: 0, saved: 0, repeated: [] };
   const settings = { temperature: args.models.settings.temperature, maxOutputTokens: args.models.settings.maxOutputTokens };
+  // Every call asks for the configured temperature (0 by default): the first answer of each examiner, the final reviewer, the checks. Repeat
+  // answers use settings.repeatTemperature when one is set (it is not by default: models do not repeat themselves exactly even at 0).
+  const repeatSettings = { ...settings, temperature: args.models.settings.repeatTemperature ?? settings.temperature };
   const returnTo = defaultReturnTo(scorecard.gate);
 
   const { rated, artifactText } = buildRaterPrompt({ scorecard, wb, sources: args.sources, instructions });
@@ -173,6 +178,8 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
   const fallbackNotes: string[] = [];
   const ratingStarted = Date.now();
   let outcomes: RaterOutcome[] = [];
+  /** Set when there are examiners to ask: scores the given questions again and rebuilds `outcomes`; returns the number of calls made. */
+  let reScore: ((ids: string[]) => Promise<number>) | null = null;
   if (rated.length > 0) {
     emit({ type: 'stage', stage: 'rating' });
 
@@ -180,10 +187,9 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
     // The raters work in parallel inside a section; sections run one at a time unless the roster allows more (settings.sectionConcurrency).
     const sections = planSectionsWithSupport(scorecard, wb, { limit: smallestLimit });
     const perRater = roster.raters.map((member) => ({ member, outcomes: [] as RaterOutcome[] }));
-    // Repeats need some randomness to be independent samples, so every scoring call uses it when there are repeats.
-    const runSettings = repeats > 1 ? { ...settings, temperature: Math.max(settings.temperature, REPEAT_TEMPERATURE) } : settings;
     const adaptive = repeatMode === 'adaptive' && repeats > 1;
-    const scoreOnce = (member: (typeof roster.raters)[number], expected: DimensionSpec[], user: string) => {
+    const heavy = heavyQuestionIds(rated);
+    const scoreOnce = (member: (typeof roster.raters)[number], expected: DimensionSpec[], user: string, again = false) => {
       const candidates = candidatesFor(member);
       callsMade += 1;
       return runWithFallback(
@@ -200,7 +206,7 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
             wb,
             allowedSheets,
             defaultReturnTo: returnTo,
-            settings: runSettings,
+            settings: again ? repeatSettings : settings,
             maxInputTokens: candidate.maxInputTokens,
           });
         },
@@ -208,22 +214,44 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
       );
     };
 
-    await mapWithConcurrency(sections, args.models.settings.sectionConcurrency, async (section) => {
+    // Every attempt of every rater is kept per section, so that a second look at the disputed questions can add answers to them.
+    type Attempt = Awaited<ReturnType<typeof scoreOnce>>;
+    const sectionPasses: Attempt[][][] = [];
+    const settled: RaterOutcome[][] = perRater.map(() => []);
+    /** One rater's answers to one section as a single outcome (the median of its attempts). `firstNew` is the first attempt not yet reported. */
+    const settle = (sectionIndex: number, raterIndex: number, firstNew: number) => {
+      const member = perRater[raterIndex]!.member;
+      const attempts = sectionPasses[sectionIndex]![raterIndex]!;
+      const where = sections.length > 1 ? ` (${sections[sectionIndex]!.label})` : '';
+      const outcome = medianOutcome(attempts.map((a) => a.result));
+      const failures = attempts.slice(firstNew).flatMap((a) => a.failures);
+      if (failures.length > 0) {
+        if (outcome.status === 'ok') {
+          fallbackNotes.push(`Rater ${member.id}${where}: ${describeFailures(failures)}. ${outcome.model.model} answered instead (same model family).`);
+        } else {
+          outcome.error = describeFailures(attempts.flatMap((a) => a.failures));
+        }
+      }
+      settled[raterIndex]![sectionIndex] = outcome;
+      emit({ type: 'participant', id: member.id, status: outcome.status, error: outcome.error, latencyMs: outcome.latencyMs, provider: outcome.model.provider, model: outcome.model.model });
+    };
+
+    await mapWithConcurrency(sections, args.models.settings.sectionConcurrency, async (section, sectionIndex) => {
       const sectionPrompt = buildRaterPromptForSection({ scorecard, section, wb, sources: args.sources, instructions });
-      const where = sections.length > 1 ? ` (${section.label})` : '';
 
       // Pass 1: each rater scores the whole section, `repeats` times when every question is repeated, else once.
       const passes = await Promise.all(
         perRater.map(({ member }) => {
           emit({ type: 'participant', id: member.id, status: 'running', provider: member.provider, model: member.model });
-          return Promise.all(Array.from({ length: adaptive ? 1 : repeats }, () => scoreOnce(member, section.dimensions, sectionPrompt.user)));
+          return Promise.all(Array.from({ length: adaptive ? 1 : repeats }, (_, n) => scoreOnce(member, section.dimensions, sectionPrompt.user, n > 0)));
         }),
       );
 
       // Pass 2 (adaptive): only the questions the examiners disagree on, or gave no usable score for, are scored again,
       // by every rater that answered, with a prompt that holds just those questions. The median is then taken as before.
+      // Heavy questions (the top weights) are scored again on a one-point difference too.
       if (adaptive) {
-        const again = idsToRepeat(section.dimensions.map((d) => d.id), passes.map((attempts) => attempts[0]!.result));
+        const again = idsToRepeat(section.dimensions.map((d) => d.id), passes.map((attempts) => attempts[0]!.result), heavy);
         if (again.length > 0) {
           again.forEach((id) => repeatedIds.add(id));
           const subset = section.dimensions.filter((d) => again.includes(d.id));
@@ -231,29 +259,38 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
           await Promise.all(
             perRater.map(async ({ member }, i) => {
               if (passes[i]![0]!.result.status !== 'ok') return;
-              passes[i]!.push(...(await Promise.all(Array.from({ length: repeats - 1 }, () => scoreOnce(member, subset, smaller.user)))));
+              passes[i]!.push(...(await Promise.all(Array.from({ length: repeats - 1 }, () => scoreOnce(member, subset, smaller.user, true)))));
             }),
           );
         }
       }
 
-      perRater.forEach(({ member, outcomes: done }, i) => {
-        const attempts = passes[i]!;
-        const outcome = medianOutcome(attempts.map((a) => a.result));
-        const failures = attempts.flatMap((a) => a.failures);
-        if (failures.length > 0) {
-          if (outcome.status === 'ok') {
-            fallbackNotes.push(`Rater ${member.id}${where}: ${describeFailures(failures)}. ${outcome.model.model} answered instead (same model family).`);
-          } else {
-            outcome.error = describeFailures(failures);
-          }
-        }
-        done.push(outcome);
-        emit({ type: 'participant', id: member.id, status: outcome.status, error: outcome.error, latencyMs: outcome.latencyMs, provider: outcome.model.provider, model: outcome.model.model });
-      });
+      sectionPasses[sectionIndex] = passes;
+      perRater.forEach((_, i) => settle(sectionIndex, i, 0));
     });
     repeatStats.planned = sections.length * roster.raters.length * repeats;
-    outcomes = perRater.map(({ outcomes: done }) => mergeSectionOutcomes(done));
+    outcomes = perRater.map((_, i) => mergeSectionOutcomes(settled[i]!));
+
+    // The second look near a colour line: the given questions are scored `repeats - 1` more times by each rater that answered, and the
+    // examiners' outcomes are rebuilt from all their attempts (the median is then taken over more answers).
+    reScore = async (ids: string[]) => {
+      const before = callsMade;
+      const touched = sections.map((section, s) => ({ section, s, subset: section.dimensions.filter((d) => ids.includes(d.id)) })).filter((x) => x.subset.length > 0);
+      await mapWithConcurrency(touched, args.models.settings.sectionConcurrency, async ({ section, s, subset }) => {
+        const prompt = buildRaterPromptForSection({ scorecard, section: { ...section, dimensions: subset }, wb, sources: args.sources, instructions });
+        await Promise.all(
+          perRater.map(async ({ member }, i) => {
+            const attempts = sectionPasses[s]![i]!;
+            if (attempts[0]!.result.status !== 'ok') return;
+            const start = attempts.length;
+            attempts.push(...(await Promise.all(Array.from({ length: Math.max(1, repeats - 1) }, () => scoreOnce(member, subset, prompt.user, true)))));
+            settle(s, i, start);
+          }),
+        );
+      });
+      outcomes = perRater.map((_, i) => mergeSectionOutcomes(settled[i]!));
+      return callsMade - before;
+    };
 
     if (outcomes.every((o) => o.status === 'failed')) {
       const why = outcomes.map((o) => `${o.model.id}: ${o.error}`).join('; ');
@@ -270,6 +307,8 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
   let consolidatedDims: DimensionResult[] = [];
   let raterFindings: DraftFinding[] = [];
   let consolidation: Awaited<ReturnType<typeof consolidateInBatches>> | null = null;
+  /** Set when the final reviewer has been asked: reviews only the given questions again, on the examiners' latest outcomes. */
+  let reconsolidate: ((ids: string[]) => Promise<{ dimensions: DimensionResult[]; call: CallMeta }>) | null = null;
   if (rated.length > 0) {
     emit({ type: 'stage', stage: 'consolidating' });
     emit({ type: 'participant', id: consolidatorRef.id, status: 'running', provider: roster.consolidator.provider, model: roster.consolidator.model });
@@ -328,44 +367,117 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
     });
     consolidatedDims = consolidation.dimensions;
     raterFindings = consolidation.findings;
+    reconsolidate = async (ids) => {
+      const subset = rated.filter((d) => ids.includes(d.id));
+      const again = await runWithFallback(
+        consolidatorCandidates,
+        (candidate) => consolidateInBatches({ model: candidate.ref, provider: args.providers(candidate.ref.provider), rated: subset, outcomes, buildUser, wb, allowedSheets, defaultReturnTo: returnTo, settings }),
+        (r) => ({ ok: r.call.status === 'ok', error: r.call.error }),
+      );
+      return { dimensions: again.result.dimensions, call: again.result.call };
+    };
   }
   const consolidationMs = Date.now() - consolidationStarted;
 
   /* 5. Assemble every dimension in scorecard order, then the findings. */
   emit({ type: 'stage', stage: 'reporting' });
-  const byId = new Map<string, DimensionResult>();
-  for (const { result } of codeOutcomes) byId.set(result.id, result);
-  for (const dim of consolidatedDims) byId.set(dim.id, dim);
-  const working = scorecard.dimensions.map((spec): DimensionResult => {
-    return (
-      byId.get(spec.id) ?? {
-        id: spec.id,
-        name: spec.name,
-        weight: spec.weight,
-        critical: spec.critical,
-        measuredBy: spec.measuredBy,
-        status: 'not_measurable',
-        raterScores: {},
-        consolidated: null,
-        spread: null,
-        resolution: 'none',
-        flagged: false,
-        rationale: 'Nothing in the file measures this.',
-        evidence: [],
-      }
-    );
-  });
-  // A counted criterion ("no duplicate ids", "every field has a definition") is counted by code over every row; the examiners can only lower it.
-  // A score below the lowest rung the criterion's own scale describes ("1 prose only" scored 0) is pulled back to that rung first, when the cited cells show it.
-  const floored = applyAnchorFloors(working, scorecard.dimensions, wb, new Set(retyped.scorecard.dimensions.flatMap((d) => (d.criteria ?? []).filter((c) => c.outside).map((c) => c.id))));
-  const exact = applyExactCeilings(floored.results, exactCeilingsFor(scorecard.dimensions, wb));
-  const collapsed = collapseCriteria(retyped.scorecard, exact.results);
   // The examiners tag a finding with the question it answers, which is a criterion id ("AU-01") when the dimension has criteria.
   const parentOf = new Map(retyped.scorecard.dimensions.flatMap((d) => (d.criteria ?? []).map((c) => [c.id, d.id] as const)));
   // A row-by-row sweep in code: models skim a long sheet and miss a blank cell or a repeated id; code reads every row.
   const swept = sweepFindings(scorecard, scorecard.dimensions.filter((d) => d.measuredBy === 'raters'), wb, returnTo);
-  // The score follows the exact evidence: a question the sweep found mistakes under cannot keep a clean score the examiners gave it.
-  const { dimensions, notes: capNotes } = capByExactFindings(collapsed, swept, parentOf);
+  const outsideIds = new Set(retyped.scorecard.dimensions.flatMap((d) => (d.criteria ?? []).filter((c) => c.outside).map((c) => c.id)));
+  /** From the final reviewer's results to the dimensions of the scorecard: floors, exact ceilings, criteria combined, caps. Pure code, so it can be run again on other marks. */
+  const assemble = (consolidatedInput: DimensionResult[]) => {
+    const byId = new Map<string, DimensionResult>();
+    for (const { result } of codeOutcomes) byId.set(result.id, result);
+    for (const dim of consolidatedInput) byId.set(dim.id, dim);
+    const working = scorecard.dimensions.map((spec): DimensionResult => {
+      return (
+        byId.get(spec.id) ?? {
+          id: spec.id,
+          name: spec.name,
+          weight: spec.weight,
+          critical: spec.critical,
+          measuredBy: spec.measuredBy,
+          status: 'not_measurable',
+          raterScores: {},
+          consolidated: null,
+          spread: null,
+          resolution: 'none',
+          flagged: false,
+          rationale: 'Nothing in the file measures this.',
+          evidence: [],
+        }
+      );
+    });
+    // A counted criterion ("no duplicate ids", "every field has a definition") is counted by code over every row; the examiners can only lower it.
+    // A score below the lowest rung the criterion's own scale describes ("1 prose only" scored 0) is pulled back to that rung first, when the cited cells show it.
+    const floored = applyAnchorFloors(working, scorecard.dimensions, wb, outsideIds);
+    const exact = applyExactCeilings(floored.results, exactCeilingsFor(scorecard.dimensions, wb));
+    const collapsed = collapseCriteria(retyped.scorecard, exact.results);
+    // The score follows the exact evidence: a question the sweep found mistakes under cannot keep a clean score the examiners gave it.
+    const capped = capByExactFindings(collapsed, swept, parentOf);
+    return { floored, exact, dimensions: capped.dimensions, capNotes: capped.notes };
+  };
+  const scoreOf = (dims: DimensionResult[]) => weightedScore(effectiveDimensions(args.scorecard, dims));
+  let assembled = assemble(consolidatedDims);
+
+  /* 5b. Close to a colour line: look again at the questions the examiners still disagree on, and say how wide the result is. */
+  let closeLook: CloseLook | undefined;
+  let secondLookCalls = 0;
+  if (rated.length > 0) {
+    const firstScore = scoreOf(assembled.dimensions);
+    const lineOf = (score: number) => [SCORE_BANDS.accept, SCORE_BANDS.refine].reduce((best, line) => (Math.abs(score - line) < Math.abs(score - best) ? line : best));
+    const disputedNow = () => consolidatedDims.filter((d) => d.measuredBy === 'raters' && d.status === 'scored' && (d.spread ?? 0) > 1);
+    let looked: string[] = [];
+    if (Math.abs(firstScore - lineOf(firstScore)) <= CLOSE_TO_LINE) {
+      if (args.models.settings.closeLook && repeats > 1 && reScore && reconsolidate) {
+        // The questions that can move the score most: wide disagreement on a heavy question, a handful at most so the extra cost stays bounded.
+        const impact = (d: DimensionResult) => {
+          const spec = rated.find((r) => r.id === d.id);
+          const parent = spec?.criterionOf?.id ?? d.id;
+          const siblings = Math.max(1, rated.filter((r) => (r.criterionOf?.id ?? r.id) === parent).length);
+          return ((spec?.criterionOf?.weight ?? spec?.weight ?? 1) / siblings) * (d.spread ?? 0);
+        };
+        looked = disputedNow().sort((x, y) => impact(y) - impact(x)).slice(0, CLOSE_LOOK_MAX_QUESTIONS).map((d) => d.id);
+        if (looked.length > 0) {
+          emit({ type: 'stage', stage: 'rating' });
+          secondLookCalls = await reScore(looked);
+          emit({ type: 'stage', stage: 'consolidating' });
+          const again = await reconsolidate(looked);
+          secondLookCalls += 1;
+          consolidatedDims = consolidatedDims.map((d) => again.dimensions.find((x) => x.id === d.id) ?? d);
+          if (consolidation) {
+            const sum = (a: number | null, b: number | null) => (a === null && b === null ? null : (a ?? 0) + (b ?? 0));
+            consolidation.call = { ...consolidation.call, attempts: consolidation.call.attempts + again.call.attempts, latencyMs: consolidation.call.latencyMs + again.call.latencyMs, inputTokens: sum(consolidation.call.inputTokens, again.call.inputTokens), outputTokens: sum(consolidation.call.outputTokens, again.call.outputTokens) };
+          }
+          emit({ type: 'stage', stage: 'reporting' });
+          assembled = assemble(consolidatedDims);
+        }
+      }
+      const finalScore = scoreOf(assembled.dimensions);
+      // The range: the questions still in dispute all going the lowest way, and all going the highest way.
+      const stillDisputed = disputedNow();
+      const extreme = (pick: (marks: number[]) => number) =>
+        scoreOf(assemble(consolidatedDims.map((d) => (stillDisputed.includes(d) ? { ...d, consolidated: pick(Object.values(d.raterScores).filter((v): v is number => v !== null)) } : d))).dimensions);
+      const lowScore = Math.min(finalScore, extreme((m) => Math.min(...m)));
+      const highScore = Math.max(finalScore, extreme((m) => Math.max(...m)));
+      if (Math.abs(finalScore - lineOf(finalScore)) <= CLOSE_TO_LINE) {
+        closeLook = { line: lineOf(finalScore), first: firstScore, final: finalScore, low: lowScore, high: highScore, questions: looked, calls: secondLookCalls, stillDisputed: stillDisputed.map((d) => d.id) };
+      }
+    }
+  }
+  const { floored, exact, dimensions, capNotes } = assembled;
+  // What code did with the examiners' marks, one line per question, for the run log; the report notes carry the totals.
+  const markLog = dimensions.flatMap((d) => (d.criteria ?? [d]).flatMap((c) => (c.markNotes ?? []).map((n) => `${c.id}: ${n}`)));
+  const setAside = markLog.filter((m) => m.includes('was set aside')).length;
+  const refused = markLog.filter((m) => m.includes('no cell that code could confirm')).length;
+  const movedFull = markLog.filter((m) => m.includes('moved the mark from the median')).length;
+  const movedOne = markLog.filter((m) => m.includes('moved one point only')).length;
+  const markSummary =
+    markLog.length > 0
+      ? [`Final marks are the median of the examiners' marks, set by code. ${setAside} stray mark${setAside === 1 ? '' : 's'} set aside for lack of proof; the final reviewer moved ${movedFull + movedOne} mark${movedFull + movedOne === 1 ? '' : 's'} (${movedFull} in full, ${movedOne} by one point) and was refused ${refused} time${refused === 1 ? '' : 's'} for citing no checked cell. Every case is in run-log.json.`]
+      : [];
   // The examiners' findings are fact-checked against the file and their duplicates merged; code findings are exact and pass as they are.
   // A question the file cannot measure (an interview, a second run) is left out of the score. A complaint that its evidence is missing is not
   // a defect in the file, so it must not block green either.
@@ -455,7 +567,7 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
     else if (o.discarded.length > 0) notes.push(`Rater ${o.model.id} had ${o.discarded.length} claim(s) discarded for missing or unsupported evidence.`);
   }
   if (consolidation?.consolidatorFailed) {
-    notes.push(`The consolidator failed (${consolidation.call.error}). The lower rater score was used wherever raters differed, and those items are flagged as uncertain.`);
+    notes.push(`The consolidator failed (${consolidation.call.error}). The middle of the examiners' marks (the lower one when two were left) was used wherever they differed, and those items are flagged as uncertain.`);
   }
   if (rated.length === 0) notes.push('This scorecard has no rater dimensions, so only code checks were run.');
   if (repeatStats.mode === 'adaptive' && repeats > 1 && rated.length > 0) {
@@ -493,7 +605,8 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
     findings,
     strengths: consolidation?.strengths ?? [],
     consolidatorFailed: consolidation?.consolidatorFailed ?? false,
-    notes: [...notes, ...floored.notes, ...exact.notes, ...capNotes, ...checked.notes],
+    notes: [...notes, ...floored.notes, ...exact.notes, ...capNotes, ...checked.notes, ...markSummary],
+    ...(closeLook ? { closeLook } : {}),
     ...(checked.dropped.length > 0 ? { droppedFindings: checked.dropped } : {}),
     usage: usageOf(calls, verification, usedConsolidator, presenceTokens),
   };
@@ -503,12 +616,14 @@ export async function evaluate(args: EvaluateArgs): Promise<EvaluationOutput> {
     nodeVersion: process.version,
     promptVersion: PROMPT_VERSION,
     promptHashes: Object.fromEntries(calls.map((c) => [c.model.id, c.promptHash])),
-    settings,
+    settings: { ...settings, ...(repeatSettings.temperature !== settings.temperature ? { repeatTemperature: repeatSettings.temperature } : {}) },
     models: [...usedRaters, usedConsolidator],
     artifactHash,
     scorecardHash: args.scorecardHash,
     timings: { totalMs: finishedAt.getTime() - startedAt.getTime(), checksMs, ratingMs, consolidationMs },
     ...(rated.length > 0 ? { repeats: repeatStats } : {}),
+    ...(markLog.length > 0 ? { markLog } : {}),
+    ...(closeLook ? { secondLook: { line: closeLook.line, questions: closeLook.questions, calls: closeLook.calls } } : {}),
     ...(verification && verification.checked > 0
       ? { verification: { ...verification, droppedFindings: verifiedDrops.map((d) => ({ title: d.title, dimensionId: d.dimensionId, reason: d.reason })) } }
       : {}),

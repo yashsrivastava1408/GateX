@@ -59,7 +59,7 @@ Status values: **Done** (built and tested), **GateX choice** (a deliberate choic
 | The Final reviewer reconciles, and does not mark from scratch | Done | `agent/consolidate.ts`; code limits it to the Examiners' range | › refuses a consolidator score outside the range |
 | Agree within one point: take the evidence-backed mark | Done | `consolidate.ts` | |
 | Differ by more than one: check claims against the file text | Done | The Final reviewer's mark needs cited, validated evidence | › accepts the consolidator's score only when it cites real evidence |
-| Unresolved: the lower mark stands | Done | `lower_stands` | › keeps the lower score and flags it |
+| Unresolved: the lower mark stands (now the median, the lower middle on ties) | Done | `lower_stands` | › keeps the median mark and flags it |
 | Merge repeated issues, apply the decision rule, write the report | Done | `consolidate.ts`, `verdict.ts`, `report/` | |
 | Examiner spread reported per question | Done | Report sections 3 and 6 | `report.test.ts` |
 
@@ -100,7 +100,7 @@ The colour rule is the same for every scorecard: below 60 red, 60 to 74 amber, 7
 | Freeze: file and scorecard fixed and hashed before marking | Done | `orchestrator.ts` hashes first and last | › Freeze |
 | Blind marking | Done | One shared prompt, no marks in it | › keeps raters blind |
 | Evidence: unsupported claims are set aside | Done | `evidence.ts`, `rater.ts` | › discards scores that cite no evidence |
-| Lower mark stands | Done | `consolidate.ts` | › keeps the lower score… |
+| Lower mark stands (median of the marks, lower middle on ties) | Done | `consolidate.ts`, `finalMark.ts` | › keeps the median mark… |
 | Read-only: never edits the file | Done | Reader only reads; file hashed after | › never touches the workbook |
 | Reproducible: prompts, model versions, settings logged | Done | `model_calls`, `run_log`, `PROMPT_VERSION` | `api.test.ts` |
 | Confidentiality: only approved models receive project documents | Done | `approved` list in `models.json` | › Confidentiality |

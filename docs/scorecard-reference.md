@@ -298,6 +298,15 @@ More counts that are made exact when the criterion says them: "ids follow NFR-nn
 read as filled-cell counts. Wording that sets a limit or a choice ("at most 40 columns", "or a schema-wide rule covers it") or describes what a gate detects is
 never a count. See [agent.md](agent.md#3-inputs-and-outputs) for what each one counts.
 
+### How the final mark of a criterion is set
+
+Each judged criterion gets three Examiner marks. Code sets the final mark: the **median** of the marks that count (the lower middle when two are left). A **0**, or a
+mark 2 or more points from two Examiners who agree, counts only if the cell the Examiner cited holds the words it quoted; otherwise it is set aside for that question and
+listed in the report's notes. The Final reviewer can move the median only with cells that code checks, all the way when an Examiner who gave that mark cited the same cell,
+one point otherwise. So write each rung so that an Examiner can quote a cell that shows it, especially a 0 ("0 absent" is shown by the cell that should hold it, "0 contradicted"
+by the cell that contradicts). Heavy criteria (those of the top-weight dimensions) are marked again whenever the Examiners are not all the same, and every criterion where they differ
+by 2 or more. See [agent.md](agent.md#step-4--the-final-reviewer-compares--consolidatets-finalmarkts-promptsconsolidatorts).
+
 ### Writing a scale so the lowest rung is kept
 
 If the lowest rung you describe is 1 ("1 prose only"), a score of 0 for a file that has that prose is raised to 1 when the cells the examiners cite exist and hold

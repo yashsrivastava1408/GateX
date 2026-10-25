@@ -65,7 +65,7 @@ function criterionQuestion(dim: DimensionSpec, c: CriterionSpec): DimensionSpec 
     ...(dim.measure || dim.description ? { description: [dim.measure, dim.description].filter(Boolean).join(' ') } : {}),
     ...(dim.returnTo ? { returnTo: dim.returnTo } : {}),
     ...(dim.reads ? { reads: dim.reads } : {}),
-    criterionOf: { id: dim.id, name: dim.name },
+    criterionOf: { id: dim.id, name: dim.name, weight: dim.weight, ...(c.outside ? { outside: true } : {}) },
   };
   if (c.kind === 'counted' && c.check) return { ...base, measuredBy: 'code', check: c.check };
   return { ...base, measuredBy: 'raters', anchors: c.anchors ?? dim.anchors ?? STANDARD_NUMERIC };
@@ -175,6 +175,7 @@ function toCriterionResult(spec: CriterionSpec, r: DimensionResult | undefined):
     evidence: r?.evidence ?? [],
     ...(r?.codeDetail ? { codeDetail: r.codeDetail } : {}),
     ...(spec.outside ? { outside: true } : {}),
+    ...(r?.markNotes?.length ? { markNotes: r.markNotes } : {}),
   };
 }
 
@@ -221,6 +222,7 @@ function collapseOne(dim: DimensionSpec, byId: Map<string, DimensionResult>, rul
         : `${describeRule(rule)}${capNote}${leftNote} ${criteria.map((c) => `${c.id} ${c.name}: ${scoreText(c)}`).join(' · ')}.`,
     evidence: criteria.flatMap((c) => c.evidence).slice(0, 5),
     criteria,
+    ...(criteria.some((c) => c.markNotes?.length) ? { markNotes: criteria.flatMap((c) => c.markNotes ?? []) } : {}),
   };
 }
 

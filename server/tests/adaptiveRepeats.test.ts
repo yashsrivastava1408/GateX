@@ -2,7 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import { parseScorecard } from '../src/scorecard/parse.js';
 import { evaluate } from '../src/agent/orchestrator.js';
-import { idsToRepeat } from '../src/agent/repeats.js';
+import { heavyQuestionIds, idsToRepeat } from '../src/agent/repeats.js';
+import { expandCriteria, retypeOutsideCriteria } from '../src/agent/aggregate.js';
 import type { RaterDimension, RaterOutcome } from '../src/agent/types.js';
 import type { ModelsConfig } from '../src/config.js';
 import { MockProvider } from '../src/llm/mock.js';
@@ -111,9 +112,13 @@ describe('adaptive repeats', () => {
     expect(single.out.core.notes.join(' ')).not.toMatch(/Adaptive repeats/);
 
     const failing = await run(withRepeats(3, 'adaptive', ['mock-mid', 'mock-down', 'mock-strict']));
-    // mid (4) and strict (3) are within a point, and mock-down never answers: nothing to repeat.
+    // mid (4) and strict (3) are a point apart, and mock-down never answers: only the heavy questions are asked again.
     expect(failing.calls.filter((c) => c.model === 'mock-down')).toHaveLength(0); // it throws before the recorder sees it
-    expect(failing.out.runLog.repeats!.repeated).toEqual([]);
+    const parsed = await loadTalentraScorecard();
+    const heavy = heavyQuestionIds(expandCriteria(retypeOutsideCriteria(parsed.scorecard).scorecard).dimensions.filter((d) => d.measuredBy === 'raters'));
+    expect(heavy.size).toBeGreaterThan(0);
+    expect(failing.out.runLog.repeats!.repeated.length).toBeGreaterThan(0);
+    for (const id of failing.out.runLog.repeats!.repeated) expect(heavy.has(id)).toBe(true);
   });
 
   it('defaults to adaptive when the settings do not say', () => {
@@ -130,6 +135,22 @@ describe('which questions are worth asking again', () => {
   it('repeats a spread over one point, and leaves a spread of one alone', () => {
     const first = [outcome([dim('A', 2), dim('B', 3)]), outcome([dim('A', 4), dim('B', 4)])];
     expect(idsToRepeat(['A', 'B'], first)).toEqual(['A']);
+  });
+
+  it('also repeats a heavy question when the examiners differ by a single point, but not a light one', () => {
+    const first = [outcome([dim('A', 4), dim('B', 4), dim('C', 5)]), outcome([dim('A', 5), dim('B', 5), dim('C', 5)])];
+    expect(idsToRepeat(['A', 'B', 'C'], first)).toEqual([]);
+    expect(idsToRepeat(['A', 'B', 'C'], first, new Set(['A', 'C']))).toEqual(['A']); // C is heavy but the examiners agree
+  });
+
+  it('calls the heaviest quarter of the dimensions heavy, ties included, and nothing heavy on a small scorecard', () => {
+    const q = (id: string, parent: string, weight: number) => ({ id, weight: 1, criterionOf: { id: parent, weight } });
+    const many = [q('G1-C1', 'G1', 5), q('G1-C2', 'G1', 5), q('G2-C1', 'G2', 14), q('G3-C1', 'G3', 10), q('G4-C1', 'G4', 10), q('G5-C1', 'G5', 6), q('G6-C1', 'G6', 6), q('G7-C1', 'G7', 4), q('G8-C1', 'G8', 4)];
+    // eight dimensions: the top quarter is two, and the second weight (10) is tied between G3 and G4, so all three count
+    expect([...heavyQuestionIds(many)].sort()).toEqual(['G2-C1', 'G3-C1', 'G4-C1']);
+    const small = [q('A-C1', 'A', 9), q('B-C1', 'B', 5), q('C-C1', 'C', 1)];
+    expect(heavyQuestionIds(small).size).toBe(0);
+    expect(heavyQuestionIds([{ id: 'X', weight: 3 }, { id: 'Y', weight: 3 }, { id: 'Z', weight: 3 }, { id: 'W', weight: 3 }]).size).toBe(4); // equal weights: all tie
   });
 
   it('repeats a question an answering rater gave no usable score for, but not one it called not measurable', () => {

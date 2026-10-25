@@ -47,7 +47,10 @@ export const modelsConfigSchema = z.object({
   verifier: verifierSchema.optional(),
   settings: z
     .object({
+      /** Temperature of every model call (0: the most repeatable answer a model gives). */
       temperature: z.number().min(0).max(2).default(0),
+      /** Temperature for the repeat answers of an examiner only. Unset: the same as `temperature`. */
+      repeatTemperature: z.number().min(0).max(2).optional(),
       maxOutputTokens: z.number().int().positive().default(8192),
       timeoutMs: z.number().int().positive().default(120_000),
       retries: z.number().int().min(0).max(6).default(3),
@@ -61,10 +64,15 @@ export const modelsConfigSchema = z.object({
        * "all": every question is scored `repeats` times.
        */
       repeatMode: z.enum(['all', 'adaptive']).default('adaptive'),
+      /**
+       * Near a colour line (a score within 4 points of 75 or 60) the questions the examiners still disagree on by 2 or more are scored again and the
+       * result says it is close to the line. Needs repeats above 1. On by default; false turns the extra calls off (the note about the line stays).
+       */
+      closeLook: z.boolean().default(true),
       /** Double-check every examiner finding against the file with a separate model call (on by default; a quick check skips it). The VERIFY_FINDINGS=0 variable also turns it off. */
       verifyFindings: z.boolean().default(true),
     })
-    .default({ temperature: 0, maxOutputTokens: 8192, timeoutMs: 120_000, retries: 3, sectionConcurrency: 1, repeats: 1, repeatMode: 'adaptive', verifyFindings: true }),
+    .default({ temperature: 0, maxOutputTokens: 8192, timeoutMs: 120_000, retries: 3, sectionConcurrency: 1, repeats: 1, repeatMode: 'adaptive', closeLook: true, verifyFindings: true }),
 });
 
 export type ModelsConfig = z.infer<typeof modelsConfigSchema>;
