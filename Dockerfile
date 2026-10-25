@@ -29,6 +29,7 @@ RUN npm ci --omit=dev --workspace shared --workspace server && npm cache clean -
 COPY shared/src shared/src
 COPY server/src server/src
 COPY server/config server/config
+COPY server/scripts/doctor.ts server/scripts/doctor.ts
 COPY --from=build /app/web/dist web/dist
 
 # Uploads and report copies live here; compose mounts a folder over it.

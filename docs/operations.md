@@ -239,6 +239,7 @@ npm run doctor
 
 Says in plain words whether this machine is ready: Node version, whether `.env` exists (it shows setting **names** only, never values), whether the
 models file reads and has a key for every provider it uses, whether the database answers (when `DATABASE_URL` is set), and whether `data/` is writable.
+On a server running in Docker, use `docker compose exec app npm run doctor` (the settings reach the container as environment variables, so the `.env` line may say it is not a file; that is fine).
 Each line starts with `OK`, `CHECK` (worth a look) or `NEEDS FIX` (with the next step). It exits non-zero only when something needs fixing, and it makes no model call.
 
 ## When a run fails half-way
