@@ -10,5 +10,12 @@
 		-Server
 	}
 
+	# One shared login for the whole site. GATEX_USER and GATEX_PASS_HASH come from .env (make the hash with
+	# `docker run --rm caddy:2-alpine caddy hash-password --plaintext 'the password'`). If either is missing, Caddy refuses to start,
+	# so the site is never left open by mistake.
+	basic_auth {
+		{$GATEX_USER} {$GATEX_PASS_HASH}
+	}
+
 	reverse_proxy app:4000
 }

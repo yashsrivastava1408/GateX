@@ -77,7 +77,7 @@ A file is data from an author, and an author could write instructions into a cel
 
 ## Access control
 
-Access control is not enabled: anyone who can reach the address can use GateX. Keep it inside the company network or VPN. If a sign-in is needed later, the suggested route is basic-auth in the `Caddyfile` (Caddy's `basic_auth` directive with a hashed password from `caddy hash-password`).
+The app has no sign-in of its own. When it runs behind Caddy (`docker compose --profile https`), Caddy asks for one shared username and password before any page loads (`basic_auth` in the `Caddyfile`). `GATEX_USER` and `GATEX_PASS_HASH` live in `.env` (only a hash of the password, never the password), and Caddy refuses to start if either is missing, so the site is never left open by mistake. Use a long password (12 characters or more, not a dictionary word) and change it by making a new hash and restarting Caddy. Without Caddy, keep GateX inside the company network or VPN.
 
 ## Reporting a security concern
 

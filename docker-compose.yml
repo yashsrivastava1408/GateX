@@ -63,6 +63,8 @@ services:
       - app
     environment:
       DOMAIN: ${DOMAIN:-:80}
+      GATEX_USER: ${GATEX_USER:-}
+      GATEX_PASS_HASH: ${GATEX_PASS_HASH:-}
     ports:
       - "80:80"
       - "443:443"
